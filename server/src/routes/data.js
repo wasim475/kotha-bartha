@@ -67,6 +67,19 @@ async function serializeComment(comment) {
     author: safeUser(comment.authorId),
   };
 }
+function emitToUser(req, userId, event, payload) {
+  req.app.get("io")?.to(`user:${userId.toString()}`).emit(event, payload);
+}
+async function createNotification(req, { recipientId, actorId, type, entityType, entityId, payload, uniqueEventId }) {
+  const notification = await Notification.create({ recipientId, actorId, type, entityType, entityId, payload, uniqueEventId });
+  await notification.populate("actorId");
+  const data = {
+    id: notification._id.toString(), type: notification.type, read: false,
+    createdAt: notification.createdAt, actor: safeUser(notification.actorId), payload: notification.payload,
+  };
+  emitToUser(req, recipientId, "notification:new", data);
+  return data;
+}
 
 router.get("/users/search", async (req, res, next) => {
   try {
@@ -325,12 +338,39 @@ router.delete("/friends/requests/:receiverId", async (req, res, next) => {
       receiverId: req.params.receiverId,
       status: "pending",
     });
+    await createNotification(req, {
+      recipientId: receiver._id, actorId: req.user._id, type: "friend_request",
+      entityType: "friend_request", entityId: request._id,
+      payload: { message: `${req.user.fullName} sent you a friend request.` },
+      uniqueEventId: `friend-request:${request._id}`,
+    });
     if (!request)
       return res.status(404).json({ error: { code: "NOT_FOUND", message: "Friend request not found." } });
     res.json({ data: { cancelled: true } });
   } catch (error) {
     next(error);
   }
+});
+
+router.post("/friends/requests/:requestId/accept", async (req, res, next) => {
+  try {
+    const request = await FriendRequest.findOne({ _id: req.params.requestId, receiverId: req.user._id, status: "pending" });
+    if (!request) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Friend request not found." } });
+    request.status = "accepted";
+    await request.save();
+    await Friendship.updateOne(
+      { pairKey: pairKey(request.senderId, request.receiverId) },
+      { $setOnInsert: { userIds: [request.senderId, request.receiverId], pairKey: pairKey(request.senderId, request.receiverId) } },
+      { upsert: true },
+    );
+    await createNotification(req, {
+      recipientId: request.senderId, actorId: req.user._id, type: "friend_accepted",
+      entityType: "user", entityId: req.user._id,
+      payload: { message: `${req.user.fullName} accepted your friend request.` },
+      uniqueEventId: `friend-accepted:${request._id}`,
+    });
+    res.json({ data: { accepted: true } });
+  } catch (error) { next(error); }
 });
 
 router.post("/conversations", async (req, res, next) => {
@@ -394,6 +434,8 @@ router.get("/conversations/:conversationId/messages", async (req, res, next) => 
     });
     if (!conversation)
       return res.status(404).json({ error: { code: "NOT_FOUND", message: "Conversation not found." } });
+    conversation.unreadCounts?.set(req.user._id.toString(), 0);
+    await conversation.save();
     const messages = await Message.find({ conversationId: conversation._id, deletedAt: null })
       .sort({ createdAt: 1 })
       .lean();
@@ -438,7 +480,15 @@ router.post(
       });
       conversation.lastMessage = body;
       conversation.lastMessageAt = message.createdAt;
+      conversation.unreadCounts?.set(
+        recipientId.toString(),
+        (conversation.unreadCounts?.get(recipientId.toString()) || 0) + 1,
+      );
       await conversation.save();
+      emitToUser(req, recipientId, "message:new", {
+        id: message._id.toString(), conversationId: conversation._id.toString(),
+        body: message.body, createdAt: message.createdAt, senderId: req.user._id.toString(),
+      });
       res.status(201).json({ data: message });
     } catch (error) {
       next(error);

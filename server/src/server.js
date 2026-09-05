@@ -2,6 +2,7 @@ require("dotenv").config();
 const http = require("http");
 const mongoose = require("mongoose");
 const { Server } = require("socket.io");
+const jwt = require("jsonwebtoken");
 const app = require("./app");
 
 const port = process.env.PORT || 5000;
@@ -12,8 +13,22 @@ const io = new Server(httpServer, {
     credentials: true,
   },
 });
+app.set("io", io);
+
+io.use((socket, next) => {
+  try {
+    const cookie = socket.handshake.headers.cookie || "";
+    const token = cookie.split(";").map((part) => part.trim())
+      .find((part) => part.startsWith("kotha_token="))?.slice("kotha_token=".length);
+    socket.userId = jwt.verify(token, process.env.JWT_SECRET).sub;
+    next();
+  } catch {
+    next(new Error("Unauthorized"));
+  }
+});
 
 io.on("connection", (socket) => {
+  socket.join(`user:${socket.userId}`);
   socket.on("disconnect", () => {});
 });
 

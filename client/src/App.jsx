@@ -16,6 +16,7 @@ import {
   WbSunny,
 } from "@mui/icons-material";
 import axios from "axios";
+import { io } from "socket.io-client";
 import { useEffect, useState } from "react";
 import {
   BrowserRouter,
@@ -32,6 +33,14 @@ const api = axios.create({
   baseURL: "https://kotha-bartha.onrender.com/api/v1",
   withCredentials: true,
 });
+const realtime = new EventTarget();
+const socketUrl = api.defaults.baseURL.replace(/\/api\/v1$/, "");
+function useRealtime(eventName, handler) {
+  useEffect(() => {
+    realtime.addEventListener(eventName, handler);
+    return () => realtime.removeEventListener(eventName, handler);
+  }, [eventName, handler]);
+}
 const navItems = [
   { label: "Feed", path: "/app/feed", icon: Home },
   { label: "Friends", path: "/app/friends", icon: PeopleAlt },
@@ -261,6 +270,14 @@ function Shell({ user, onLogout, theme, setTheme }) {
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   useEffect(() => {
+    const socket = io(socketUrl, { withCredentials: true });
+    const forward = (eventName) => (payload) =>
+      realtime.dispatchEvent(new CustomEvent(eventName, { detail: payload }));
+    socket.on("message:new", forward("message:new"));
+    socket.on("notification:new", forward("notification:new"));
+    return () => socket.disconnect();
+  }, [user.id]);
+  useEffect(() => {
     if (!search.trim()) return undefined;
     const timer = setTimeout(
       () =>
@@ -308,6 +325,7 @@ function Shell({ user, onLogout, theme, setTheme }) {
                   onClick={() => {
                     navigate(`/app/profile/${result.id}`);
                     setSearch("");
+                    setSearchResults([]);
                   }}
                 >
                   <span className={`avatar avatar-${colorFor(result.id)}`}>
@@ -582,8 +600,19 @@ function Feed({ user }) {
   );
 }
 function Friends() {
-  const [tab, setTab] = useState("friends");
+  const location = useLocation();
+  const [tab, setTab] = useState(
+    new URLSearchParams(location.search).get("tab") === "requests" ? "requests" : "friends",
+  );
   const resource = useResource(`/friends?tab=${tab}`);
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("tab") === "requests") setTab("requests");
+  }, [location.search]);
+  useRealtime("notification:new", resource.reload);
+  const accept = async (requestId) => {
+    await api.post(`/friends/requests/${requestId}/accept`);
+    resource.reload();
+  };
   return (
     <>
       <div className="page-heading">
@@ -630,7 +659,7 @@ function Friends() {
                 </div>
                 <strong>{person.fullName}</strong>
                 <span>{entry.status || "Friend"}</span>
-                <button className="outline-button">
+                <button className="outline-button" onClick={() => tab === "requests" && accept(entry.id)}>
                   {tab === "friends"
                     ? "Message"
                     : tab === "requests"
@@ -662,6 +691,10 @@ function Messages({ user }) {
     thread.reload();
     conversations.reload();
   };
+  useRealtime("message:new", (event) => {
+    conversations.reload();
+    if (event.detail.conversationId === conversationId) thread.reload();
+  });
   return (
     <>
       <div className="page-heading">
@@ -724,7 +757,9 @@ function Messages({ user }) {
   );
 }
 function Notifications() {
+  const navigate = useNavigate();
   const resource = useResource("/notifications");
+  useRealtime("notification:new", resource.reload);
   const markAllRead = async () => {
     await api.post("/notifications/read-all");
     resource.reload();
@@ -747,9 +782,13 @@ function Notifications() {
       >
         <div className="notification-list">
           {resource.data?.map((notification) => (
-            <div
+            <button
               className={`notification ${notification.read ? "" : "unread"}`}
               key={notification.id}
+              onClick={() => {
+                if (notification.type === "friend_request") navigate("/app/friends?tab=requests");
+                if (notification.type === "friend_accepted" && notification.actor?.id) navigate(`/app/profile/${notification.actor.id}`);
+              }}
             >
               <div
                 className={`avatar avatar-${colorFor(notification.actor?.id)}`}
@@ -763,7 +802,7 @@ function Notifications() {
                 <span>{formatTime(notification.createdAt)}</span>
               </div>
               {!notification.read && <i />}
-            </div>
+            </button>
           ))}
         </div>
       </ResourceState>
