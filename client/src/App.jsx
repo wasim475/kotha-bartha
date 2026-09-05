@@ -24,6 +24,7 @@ import {
   Routes,
   useLocation,
   useNavigate,
+  useParams,
 } from "react-router-dom";
 import "./App.css";
 
@@ -456,6 +457,62 @@ function ResourceState({ loading, error, empty, children }) {
     );
   return children;
 }
+function Avatar({ person, className = "" }) {
+  if (person?.avatar?.secureUrl)
+    return <img className={`avatar ${className}`} src={person.avatar.secureUrl} alt="" />;
+  return (
+    <div className={`avatar avatar-${colorFor(person?.id)} ${className}`}>
+      {person?.initials || person?.fullName?.slice(0, 2).toUpperCase()}
+    </div>
+  );
+}
+function PostCard({ post, onChanged }) {
+  const navigate = useNavigate();
+  const [showComments, setShowComments] = useState(false);
+  const [comments, setComments] = useState([]);
+  const [comment, setComment] = useState("");
+  const loadComments = async () => {
+    const { data } = await api.get(`/posts/${post.id}/comments`);
+    setComments(data.data);
+  };
+  const toggleComments = async () => {
+    if (!showComments) await loadComments();
+    setShowComments(!showComments);
+  };
+  const addComment = async (event) => {
+    event.preventDefault();
+    if (!comment.trim()) return;
+    await api.post(`/posts/${post.id}/comments`, { body: comment.trim() });
+    setComment("");
+    await loadComments();
+    onChanged();
+  };
+  const toggleLike = async () => {
+    await api.put(`/posts/${post.id}/like`, { liked: !post.liked });
+    onChanged();
+  };
+  return (
+    <article className="post-card">
+      <div className="post-header">
+        <button onClick={() => navigate(`/app/profile/${post.author.id}`)}><Avatar person={post.author} /></button>
+        <div><button className="profile-link" onClick={() => navigate(`/app/profile/${post.author.id}`)}><strong>{post.author.fullName}</strong></button><span>{formatTime(post.createdAt)}</span></div>
+        <button className="more-button"><MoreHoriz /></button>
+      </div>
+      <p className="post-body">{post.body}</p>
+      {post.media?.secureUrl && <img className="post-media" src={post.media.secureUrl} alt="Post attachment" />}
+      <div className="post-stats"><span><ThumbUpAlt fontSize="inherit" /> {post.likes}</span><span>{post.comments} comments</span></div>
+      <div className="post-actions">
+        <button className={post.liked ? "selected" : ""} onClick={toggleLike}><ThumbUpAlt fontSize="small" /> Like</button>
+        <button onClick={toggleComments}><ChatBubble fontSize="small" /> Comment</button>
+        <button><Send fontSize="small" /> Share</button>
+      </div>
+      {showComments && <div className="comments">
+        {comments.map((entry) => <div className="comment" key={entry.id}><button onClick={() => navigate(`/app/profile/${entry.author.id}`)}><Avatar person={entry.author} /></button><div><button className="profile-link" onClick={() => navigate(`/app/profile/${entry.author.id}`)}><strong>{entry.author.fullName}</strong></button><p>{entry.body}</p></div></div>)}
+        <form className="comment-form" onSubmit={addComment}><input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Write a comment..." /><button className="primary-button small">Comment</button></form>
+      </div>}
+    </article>
+  );
+}
 function Feed({ user }) {
   const resource = useResource("/posts/feed");
   const [composer, setComposer] = useState("");
@@ -479,10 +536,6 @@ function Feed({ user }) {
     } finally {
       setBusy(false);
     }
-  };
-  const toggleLike = async (post) => {
-    await api.put(`/posts/${post.id}/like`, { liked: !post.liked });
-    resource.reload();
   };
   return (
     <>
@@ -522,50 +575,7 @@ function Feed({ user }) {
         error={resource.error}
         empty="No posts yet. Add a friend or share the first post."
       >
-        {resource.data?.map((post) => (
-          <article className="post-card" key={post.id}>
-            <div className="post-header">
-              <div className={`avatar avatar-${colorFor(post.author.id)}`}>
-                {post.author.initials}
-              </div>
-              <div>
-                <strong>{post.author.fullName}</strong>
-                <span>{formatTime(post.createdAt)}</span>
-              </div>
-              <button className="more-button">
-                <MoreHoriz />
-              </button>
-            </div>
-            <p className="post-body">{post.body}</p>
-            {post.media?.secureUrl && (
-              <img
-                className="post-media"
-                src={post.media.secureUrl}
-                alt="Post attachment"
-              />
-            )}
-            <div className="post-stats">
-              <span>
-                <ThumbUpAlt fontSize="inherit" /> {post.likes}
-              </span>
-              <span>{post.comments} comments</span>
-            </div>
-            <div className="post-actions">
-              <button
-                className={post.liked ? "selected" : ""}
-                onClick={() => toggleLike(post)}
-              >
-                <ThumbUpAlt fontSize="small" /> Like
-              </button>
-              <button>
-                <ChatBubble fontSize="small" /> Comment
-              </button>
-              <button>
-                <Send fontSize="small" /> Share
-              </button>
-            </div>
-          </article>
-        ))}
+        {resource.data?.map((post) => <PostCard key={post.id} post={post} onChanged={resource.reload} />)}
       </ResourceState>
     </>
   );
@@ -727,32 +737,51 @@ function Notifications() {
   );
 }
 function Profile({ user }) {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const profileId = id === "me" ? user.id : id;
+  const profile = useResource(`/users/${profileId}`);
+  const posts = useResource(`/users/${profileId}/posts`);
+  const isOwnProfile = profileId === user.id;
   const [editing, setEditing] = useState(false);
-  const [bio, setBio] = useState(user.bio || "");
-  const [savedBio, setSavedBio] = useState(user.bio || "");
+  const [bio, setBio] = useState("");
+  useEffect(() => {
+    setBio(profile.data?.bio || "");
+    setEditing(false);
+  }, [profileId, profile.data?.bio]);
   const save = async () => {
     const { data } = await api.patch("/users/me", { bio });
-    setSavedBio(data.data.bio);
+    profile.reload();
     setEditing(false);
   };
+  const addFriend = async () => {
+    await api.post("/friends/requests", { receiverId: profileId });
+    profile.reload();
+  };
+  const startMessage = async () => {
+    await api.post("/conversations", { userId: profileId });
+    navigate("/app/messages");
+  };
+  if (profile.loading) return <ResourceState loading />;
+  if (profile.error) return <ResourceState error={profile.error} />;
+  const person = profile.data;
   return (
     <>
-      <div className="profile-cover">
+      <div className="profile-cover" style={person.cover?.secureUrl ? { backgroundImage: `url(${person.cover.secureUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
         <div className="cover-text">
-          {user.fullName.toLowerCase()} / in public
+          {person.fullName.toLowerCase()} / in public
         </div>
       </div>
       <div className="profile-identity">
-        <div className="avatar avatar-coral profile-avatar">
-          {user.fullName.slice(0, 2).toUpperCase()}
-        </div>
+        <Avatar person={person} className="profile-avatar" />
         <div>
-          <h1>{user.fullName}</h1>
-          <p>{savedBio || "No bio yet."}</p>
+          <h1>{person.fullName}</h1>
+          <p>{person.bio || "No bio yet."}</p>
         </div>
-        <button className="outline-button" onClick={() => setEditing(!editing)}>
-          Edit profile
-        </button>
+        {isOwnProfile ? <button className="outline-button" onClick={() => setEditing(!editing)}>Edit profile</button> : <div className="profile-actions">
+          <button className="primary-button small" disabled={person.isFriend || person.friendRequestSent} onClick={addFriend}>{person.isFriend ? "Friends" : person.friendRequestSent ? "Request sent" : "Add Friend"}</button>
+          <button className="outline-button" onClick={startMessage}>Message</button>
+        </div>}
       </div>
       {editing && (
         <div className="composer profile-editor">
@@ -772,7 +801,14 @@ function Profile({ user }) {
       <div className="profile-grid">
         <div className="profile-about">
           <span className="eyebrow">About</span>
-          <p>{savedBio || "This user has not added a bio yet."}</p>
+          <p>{person.bio || "This user has not added a bio yet."}</p>
+          <div className="about-row"><strong>{person.friendCount}</strong><span>Friends</span></div>
+        </div>
+        <div className="profile-posts">
+          <span className="eyebrow">Posts</span>
+          <ResourceState loading={posts.loading} error={posts.error} empty={`${person.fullName} has not posted yet.`}>
+            {posts.data?.map((post) => <PostCard key={post.id} post={post} onChanged={posts.reload} />)}
+          </ResourceState>
         </div>
       </div>
     </>

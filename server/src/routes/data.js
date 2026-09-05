@@ -9,6 +9,7 @@ const Conversation = require("../models/Conversation");
 const Message = require("../models/Message");
 const Notification = require("../models/Notification");
 const Reaction = require("../models/Reaction");
+const Comment = require("../models/Comment");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -33,6 +34,7 @@ function safeUser(user) {
     fullName: user.fullName,
     bio: user.bio,
     avatar: user.avatar,
+    cover: user.cover,
     initials: initials(user.fullName),
     lastSeenAt: user.lastSeenAt,
   };
@@ -51,10 +53,18 @@ async function serializePost(post, viewerId) {
     createdAt: post.createdAt,
     author: safeUser(post.authorId),
     likes: reactions.length,
-    comments: 0,
+    comments: await Comment.countDocuments({ postId: post._id }),
     liked: reactions.some(
       (reaction) => reaction.userId.toString() === viewerId.toString(),
     ),
+  };
+}
+async function serializeComment(comment) {
+  return {
+    id: comment._id.toString(),
+    body: comment.body,
+    createdAt: comment.createdAt,
+    author: safeUser(comment.authorId),
   };
 }
 
@@ -106,7 +116,23 @@ router.get("/users/:userId", async (req, res, next) => {
         .status(404)
         .json({ error: { code: "NOT_FOUND", message: "User not found." } });
     const friendCount = await Friendship.countDocuments({ userIds: user._id });
-    res.json({ data: { ...safeUser(user), friendCount } });
+    const friendship = await Friendship.exists({ userIds: { $all: [req.user._id, user._id] } });
+    const sentRequest = await FriendRequest.exists({ senderId: req.user._id, receiverId: user._id, status: "pending" });
+    const receivedRequest = await FriendRequest.exists({ senderId: user._id, receiverId: req.user._id, status: "pending" });
+    res.json({ data: { ...safeUser(user), friendCount, isFriend: Boolean(friendship), friendRequestSent: Boolean(sentRequest), friendRequestReceived: Boolean(receivedRequest) } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/users/:userId/posts", async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.userId))
+      return res.status(400).json({ error: { code: "INVALID_ID", message: "Invalid user id." } });
+    const posts = await Post.find({ authorId: req.params.userId, deletedAt: null })
+      .populate("authorId")
+      .sort({ createdAt: -1 });
+    res.json({ data: await Promise.all(posts.map((post) => serializePost(post, req.user._id))) });
   } catch (error) {
     next(error);
   }
@@ -191,6 +217,27 @@ router.put("/posts/:postId/like", async (req, res, next) => {
   }
 });
 
+router.get("/posts/:postId/comments", async (req, res, next) => {
+  try {
+    const comments = await Comment.find({ postId: req.params.postId })
+      .populate("authorId")
+      .sort({ createdAt: 1 });
+    res.json({ data: await Promise.all(comments.map(serializeComment)) });
+  } catch (error) { next(error); }
+});
+
+router.post("/posts/:postId/comments", async (req, res, next) => {
+  try {
+    const body = String(req.body.body || "").trim();
+    const post = await Post.findOne({ _id: req.params.postId, deletedAt: null });
+    if (!post || !body)
+      return res.status(400).json({ error: { code: "INVALID_COMMENT", message: "Comment text is required." } });
+    const comment = await Comment.create({ postId: post._id, authorId: req.user._id, body });
+    await comment.populate("authorId");
+    res.status(201).json({ data: await serializeComment(comment) });
+  } catch (error) { next(error); }
+});
+
 router.get("/friends", async (req, res, next) => {
   try {
     const tab = ["friends", "requests", "sent"].includes(req.query.tab)
@@ -269,6 +316,22 @@ router.post("/friends/requests", async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+router.post("/conversations", async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.body.userId) || req.body.userId === req.user._id.toString())
+      return res.status(400).json({ error: { code: "INVALID_USER", message: "Choose another user to message." } });
+    const other = await User.findById(req.body.userId);
+    if (!other) return res.status(404).json({ error: { code: "NOT_FOUND", message: "User not found." } });
+    const key = pairKey(req.user._id, other._id);
+    const conversation = await Conversation.findOneAndUpdate(
+      { pairKey: key },
+      { $setOnInsert: { participantIds: [req.user._id, other._id], pairKey: key } },
+      { new: true, upsert: true },
+    );
+    res.status(201).json({ data: { id: conversation._id.toString() } });
+  } catch (error) { next(error); }
 });
 
 router.get("/conversations", async (req, res, next) => {

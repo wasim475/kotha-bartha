@@ -340,6 +340,10 @@ button {
 .avatar-mint {
   background: #72a48e;
 }
+.avatar[src] {
+  object-fit: cover;
+  background: var(--soft);
+}
 .app-body {
   display: grid;
   grid-template-columns: 220px minmax(0, 680px);
@@ -584,6 +588,50 @@ button {
 .post-actions button.selected {
   color: var(--accent);
 }
+.profile-link {
+  padding: 0;
+  text-align: left;
+}
+.comments {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.comment {
+  display: flex;
+  gap: 9px;
+}
+.comment .avatar {
+  width: 29px;
+  height: 29px;
+  font-size: 9px;
+}
+.comment > div {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: var(--soft);
+}
+.comment p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.comment-form {
+  display: flex;
+  gap: 8px;
+}
+.comment-form input {
+  min-width: 0;
+  flex: 1;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+}
 .tabs,
 .profile-tabs {
   display: flex;
@@ -755,10 +803,25 @@ button {
 .profile-identity .outline-button {
   margin-left: auto;
 }
+.profile-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.profile-actions .outline-button {
+  margin-left: 0;
+}
 .profile-grid {
   display: grid;
   grid-template-columns: 0.8fr 1.2fr;
   gap: 14px;
+}
+.profile-posts .eyebrow {
+  display: block;
+  margin: 4px 0 13px;
+}
+.profile-posts .empty-note {
+  margin-top: 25px;
 }
 .profile-about,
 .profile-preview {
