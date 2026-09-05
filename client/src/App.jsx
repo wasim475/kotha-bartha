@@ -29,8 +29,13 @@ import {
 } from "react-router-dom";
 import "./App.css";
 
+const apiBaseUrl = import.meta.env.VITE_API_URL || (
+  import.meta.env.DEV
+    ? "http://localhost:5000/api/v1"
+    : "https://kotha-bartha.onrender.com/api/v1"
+);
 const api = axios.create({
-  baseURL: "https://kotha-bartha.onrender.com/api/v1",
+  baseURL: apiBaseUrl,
   withCredentials: true,
 });
 const realtime = new EventTarget();
@@ -613,6 +618,10 @@ function Friends() {
     await api.post(`/friends/requests/${requestId}/accept`);
     resource.reload();
   };
+  const cancel = async (receiverId) => {
+    await api.delete(`/friends/requests/${receiverId}`);
+    resource.reload();
+  };
   return (
     <>
       <div className="page-heading">
@@ -659,7 +668,10 @@ function Friends() {
                 </div>
                 <strong>{person.fullName}</strong>
                 <span>{entry.status || "Friend"}</span>
-                <button className="outline-button" onClick={() => tab === "requests" && accept(entry.id)}>
+                <button className="outline-button" onClick={() => {
+                  if (tab === "requests") accept(entry.id);
+                  if (tab === "sent") cancel(person.id);
+                }}>
                   {tab === "friends"
                     ? "Message"
                     : tab === "requests"

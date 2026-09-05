@@ -323,6 +323,15 @@ router.post("/friends/requests", async (req, res, next) => {
       senderId: req.user._id,
       receiverId: receiver._id,
     });
+    await createNotification(req, {
+      recipientId: receiver._id,
+      actorId: req.user._id,
+      type: "friend_request",
+      entityType: "friend_request",
+      entityId: request._id,
+      payload: { message: `${req.user.fullName} sent you a friend request.` },
+      uniqueEventId: `friend-request:${request._id}`,
+    });
     res
       .status(201)
       .json({ data: { id: request._id.toString(), status: request.status } });
@@ -337,12 +346,6 @@ router.delete("/friends/requests/:receiverId", async (req, res, next) => {
       senderId: req.user._id,
       receiverId: req.params.receiverId,
       status: "pending",
-    });
-    await createNotification(req, {
-      recipientId: receiver._id, actorId: req.user._id, type: "friend_request",
-      entityType: "friend_request", entityId: request._id,
-      payload: { message: `${req.user.fullName} sent you a friend request.` },
-      uniqueEventId: `friend-request:${request._id}`,
     });
     if (!request)
       return res.status(404).json({ error: { code: "NOT_FOUND", message: "Friend request not found." } });
