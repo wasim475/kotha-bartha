@@ -20,6 +20,10 @@ app.use(
   rateLimit({ windowMs: 15 * 60 * 1000, limit: 300, standardHeaders: true }),
 );
 
+app.get("/", (req, res) => {
+  res.send("KOTHA-BARTA API is running");
+});
+
 app.get("/api/v1/health", (req, res) =>
   res.json({ data: { status: "ok", service: "kotha-bartha-api" } }),
 );
