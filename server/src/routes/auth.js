@@ -7,13 +7,18 @@ const { requireAuth } = require("../middleware/auth");
 const router = express.Router();
 
 function issueSession(res, user) {
-  const token = jwt.sign({ sub: user._id.toString() }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
-  });
+  const token = jwt.sign(
+    { sub: user._id.toString() },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+    },
+  );
+
   res.cookie("kotha_token", token, {
     httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    sameSite: "none",
+    secure: true,
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 }
@@ -86,7 +91,11 @@ router.post("/login", async (req, res, next) => {
 });
 
 router.post("/logout", (req, res) => {
-  res.clearCookie("kotha_token");
+  res.clearCookie("kotha_token", {
+  httpOnly: true,
+  sameSite: "none",
+  secure: true,
+});
   res.json({ data: { loggedOut: true } });
 });
 
