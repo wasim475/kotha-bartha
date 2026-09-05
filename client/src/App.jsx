@@ -278,6 +278,7 @@ function Shell({ user, onLogout, theme, setTheme }) {
     const socket = io(socketUrl, { withCredentials: true });
     const forward = (eventName) => (payload) =>
       realtime.dispatchEvent(new CustomEvent(eventName, { detail: payload }));
+    socket.on("connect", forward("realtime:connected"));
     socket.on("message:new", forward("message:new"));
     socket.on("notification:new", forward("notification:new"));
     return () => socket.disconnect();
@@ -614,6 +615,7 @@ function Friends() {
     if (new URLSearchParams(location.search).get("tab") === "requests") setTab("requests");
   }, [location.search]);
   useRealtime("notification:new", resource.reload);
+  useRealtime("realtime:connected", resource.reload);
   const accept = async (requestId) => {
     await api.post(`/friends/requests/${requestId}/accept`);
     resource.reload();
@@ -707,6 +709,10 @@ function Messages({ user }) {
     conversations.reload();
     if (event.detail.conversationId === conversationId) thread.reload();
   });
+  useRealtime("realtime:connected", () => {
+    conversations.reload();
+    if (conversationId) thread.reload();
+  });
   return (
     <>
       <div className="page-heading">
@@ -772,6 +778,7 @@ function Notifications() {
   const navigate = useNavigate();
   const resource = useResource("/notifications");
   useRealtime("notification:new", resource.reload);
+  useRealtime("realtime:connected", resource.reload);
   const markAllRead = async () => {
     await api.post("/notifications/read-all");
     resource.reload();

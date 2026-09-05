@@ -7,9 +7,10 @@ const app = require("./app");
 
 const port = process.env.PORT || 5000;
 const httpServer = http.createServer(app);
+const allowedOrigins = [process.env.CLIENT_ORIGIN, "http://localhost:5173"].filter(Boolean);
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
+    origin: allowedOrigins,
     credentials: true,
   },
 });

@@ -7,10 +7,15 @@ const authRoutes = require("./routes/auth");
 const dataRoutes = require("./routes/data");
 
 const app = express();
+const allowedOrigins = [process.env.CLIENT_ORIGIN, "http://localhost:5173"].filter(Boolean);
+const corsOrigin = (origin, callback) => {
+  if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+  return callback(new Error("Origin is not allowed by CORS"));
+};
 app.use(helmet());
 app.use(
   cors({
-    origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
+    origin: corsOrigin,
     credentials: true,
   }),
 );
