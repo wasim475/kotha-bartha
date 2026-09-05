@@ -318,6 +318,21 @@ router.post("/friends/requests", async (req, res, next) => {
   }
 });
 
+router.delete("/friends/requests/:receiverId", async (req, res, next) => {
+  try {
+    const request = await FriendRequest.findOneAndDelete({
+      senderId: req.user._id,
+      receiverId: req.params.receiverId,
+      status: "pending",
+    });
+    if (!request)
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Friend request not found." } });
+    res.json({ data: { cancelled: true } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post("/conversations", async (req, res, next) => {
   try {
     if (!mongoose.isValidObjectId(req.body.userId) || req.body.userId === req.user._id.toString())
@@ -366,6 +381,28 @@ router.get("/conversations", async (req, res, next) => {
       }),
       meta: { hasMore: false },
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/conversations/:conversationId/messages", async (req, res, next) => {
+  try {
+    const conversation = await Conversation.findOne({
+      _id: req.params.conversationId,
+      participantIds: req.user._id,
+    });
+    if (!conversation)
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Conversation not found." } });
+    const messages = await Message.find({ conversationId: conversation._id, deletedAt: null })
+      .sort({ createdAt: 1 })
+      .lean();
+    res.json({ data: messages.map((message) => ({
+      id: message._id.toString(),
+      body: message.body,
+      createdAt: message.createdAt,
+      senderId: message.senderId.toString(),
+    })) });
   } catch (error) {
     next(error);
   }

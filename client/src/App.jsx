@@ -365,7 +365,8 @@ function Shell({ user, onLogout, theme, setTheme }) {
           <Routes>
             <Route path="feed" element={<Feed user={user} />} />
             <Route path="friends" element={<Friends />} />
-            <Route path="messages" element={<Messages />} />
+            <Route path="messages" element={<Messages user={user} />} />
+            <Route path="messages/:conversationId" element={<Messages user={user} />} />
             <Route path="notifications" element={<Notifications />} />
             <Route path="profile/:id" element={<Profile user={user} />} />
             <Route path="*" element={<Navigate to="feed" replace />} />
@@ -644,8 +645,23 @@ function Friends() {
     </>
   );
 }
-function Messages() {
-  const resource = useResource("/conversations");
+function Messages({ user }) {
+  const { conversationId } = useParams();
+  const navigate = useNavigate();
+  const conversations = useResource("/conversations");
+  const thread = useResource(
+    conversationId ? `/conversations/${conversationId}/messages` : "/conversations",
+  );
+  const [body, setBody] = useState("");
+  const selected = conversations.data?.find((item) => item.id === conversationId);
+  const sendMessage = async (event) => {
+    event.preventDefault();
+    if (!body.trim()) return;
+    await api.post(`/conversations/${conversationId}/messages`, { body: body.trim() });
+    setBody("");
+    thread.reload();
+    conversations.reload();
+  };
   return (
     <>
       <div className="page-heading">
@@ -657,16 +673,34 @@ function Messages() {
           <Add />
         </button>
       </div>
-      <ResourceState
-        loading={resource.loading}
-        error={resource.error}
+      {conversationId ? <ResourceState
+        loading={conversations.loading || thread.loading}
+        error={conversations.error || thread.error}
+      >
+        <section className="chat-panel">
+          <div className="chat-header">
+            <button className="text-button" onClick={() => navigate("/app/messages")}>Back</button>
+            {selected && <><Avatar person={selected.user} /><strong>{selected.user.fullName}</strong></>}
+          </div>
+          <div className="message-thread">
+            {thread.data?.map((message) => <div key={message.id} className={`message-bubble ${message.senderId === user.id ? "own" : ""}`}>{message.body}</div>)}
+          </div>
+          <form className="message-composer" onSubmit={sendMessage}>
+            <input value={body} onChange={(event) => setBody(event.target.value)} placeholder="Write a message..." autoFocus />
+            <button className="primary-button small"><Send fontSize="small" /> Send</button>
+          </form>
+        </section>
+      </ResourceState> : <ResourceState
+        loading={conversations.loading}
+        error={conversations.error}
         empty="No conversations yet. Message a friend to start chatting."
       >
         <div className="message-list">
-          {resource.data?.map((conversation) => (
+          {conversations.data?.map((conversation) => (
             <button
               className={`conversation ${conversation.unreadCount ? "unread" : ""}`}
               key={conversation.id}
+              onClick={() => navigate(`/app/messages/${conversation.id}`)}
             >
               <div
                 className={`avatar avatar-${colorFor(conversation.user.id)}`}
@@ -685,7 +719,7 @@ function Messages() {
             </button>
           ))}
         </div>
-      </ResourceState>
+      </ResourceState>}
     </>
   );
 }
@@ -745,9 +779,11 @@ function Profile({ user }) {
   const isOwnProfile = profileId === user.id;
   const [editing, setEditing] = useState(false);
   const [bio, setBio] = useState("");
+  const [activeTab, setActiveTab] = useState("posts");
   useEffect(() => {
     setBio(profile.data?.bio || "");
     setEditing(false);
+    setActiveTab("posts");
   }, [profileId, profile.data?.bio]);
   const save = async () => {
     const { data } = await api.patch("/users/me", { bio });
@@ -758,9 +794,13 @@ function Profile({ user }) {
     await api.post("/friends/requests", { receiverId: profileId });
     profile.reload();
   };
+  const cancelFriendRequest = async () => {
+    await api.delete(`/friends/requests/${profileId}`);
+    profile.reload();
+  };
   const startMessage = async () => {
-    await api.post("/conversations", { userId: profileId });
-    navigate("/app/messages");
+    const { data } = await api.post("/conversations", { userId: profileId });
+    navigate(`/app/messages/${data.data.id}`);
   };
   if (profile.loading) return <ResourceState loading />;
   if (profile.error) return <ResourceState error={profile.error} />;
@@ -779,7 +819,7 @@ function Profile({ user }) {
           <p>{person.bio || "No bio yet."}</p>
         </div>
         {isOwnProfile ? <button className="outline-button" onClick={() => setEditing(!editing)}>Edit profile</button> : <div className="profile-actions">
-          <button className="primary-button small" disabled={person.isFriend || person.friendRequestSent} onClick={addFriend}>{person.isFriend ? "Friends" : person.friendRequestSent ? "Request sent" : "Add Friend"}</button>
+          <button className="primary-button small" disabled={person.isFriend} onClick={person.friendRequestSent ? cancelFriendRequest : addFriend}>{person.isFriend ? "Friends" : person.friendRequestSent ? "Sent Friend Request" : "Add Friend"}</button>
           <button className="outline-button" onClick={startMessage}>Message</button>
         </div>}
       </div>
@@ -796,21 +836,22 @@ function Profile({ user }) {
         </div>
       )}
       <div className="profile-tabs">
-        <button className="tab-active">About</button>
+        <button className={activeTab === "about" ? "tab-active" : ""} onClick={() => setActiveTab("about")}>About</button>
+        <button className={activeTab === "posts" ? "tab-active" : ""} onClick={() => setActiveTab("posts")}>Posts</button>
       </div>
-      <div className="profile-grid">
+      {activeTab === "about" && <div className="profile-grid">
         <div className="profile-about">
           <span className="eyebrow">About</span>
           <p>{person.bio || "This user has not added a bio yet."}</p>
           <div className="about-row"><strong>{person.friendCount}</strong><span>Friends</span></div>
         </div>
-        <div className="profile-posts">
-          <span className="eyebrow">Posts</span>
-          <ResourceState loading={posts.loading} error={posts.error} empty={`${person.fullName} has not posted yet.`}>
-            {posts.data?.map((post) => <PostCard key={post.id} post={post} onChanged={posts.reload} />)}
-          </ResourceState>
-        </div>
-      </div>
+      </div>}
+      {activeTab === "posts" && <div className="profile-posts">
+        <span className="eyebrow">Posts</span>
+        <ResourceState loading={posts.loading} error={posts.error} empty={`${person.fullName} has not posted yet.`}>
+          {posts.data?.map((post) => <PostCard key={post.id} post={post} onChanged={posts.reload} />)}
+        </ResourceState>
+      </div>}
     </>
   );
 }
