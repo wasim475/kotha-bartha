@@ -131,8 +131,8 @@ router.get("/users/:userId", async (req, res, next) => {
     const friendCount = await Friendship.countDocuments({ userIds: user._id });
     const friendship = await Friendship.exists({ userIds: { $all: [req.user._id, user._id] } });
     const sentRequest = await FriendRequest.exists({ senderId: req.user._id, receiverId: user._id, status: "pending" });
-    const receivedRequest = await FriendRequest.exists({ senderId: user._id, receiverId: req.user._id, status: "pending" });
-    res.json({ data: { ...safeUser(user), friendCount, isFriend: Boolean(friendship), friendRequestSent: Boolean(sentRequest), friendRequestReceived: Boolean(receivedRequest) } });
+    const receivedRequest = await FriendRequest.findOne({ senderId: user._id, receiverId: req.user._id, status: "pending" }).select("_id").lean();
+    res.json({ data: { ...safeUser(user), friendCount, isFriend: Boolean(friendship), friendRequestSent: Boolean(sentRequest), friendRequestReceived: Boolean(receivedRequest), receivedFriendRequestId: receivedRequest?._id?.toString() } });
   } catch (error) {
     next(error);
   }
@@ -533,3 +533,6 @@ router.post("/notifications/read-all", async (req, res, next) => {
 });
 
 module.exports = router;
+
+
+// data.js

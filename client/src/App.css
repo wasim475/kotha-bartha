@@ -751,6 +751,24 @@ button {
   margin-left: auto;
   font-size: 9px;
 }
+.chat-header .icon-button {
+  margin-left: 4px;
+}
+.call-banner {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 14px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 12px;
+}
+.call-banner .primary-button,
+.call-banner .outline-button {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 10px;
+}
 .message-thread {
   display: flex;
   flex-direction: column;

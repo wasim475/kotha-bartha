@@ -30,6 +30,10 @@ io.use((socket, next) => {
 
 io.on("connection", (socket) => {
   socket.join(`user:${socket.userId}`);
+  socket.on("call:signal", ({ to, signal }) => {
+    if (typeof to === "string" && signal)
+      io.to(`user:${to}`).emit("call:signal", { from: socket.userId, signal });
+  });
   socket.on("disconnect", () => {});
 });
 
@@ -44,3 +48,6 @@ start().catch((error) => {
   console.error("Unable to start API", error);
   process.exit(1);
 });
+
+
+// server.js

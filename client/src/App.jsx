@@ -1,5 +1,7 @@
 import {
   Add,
+  Call,
+  CallEnd,
   ChatBubble,
   DarkMode,
   Home,
@@ -17,7 +19,7 @@ import {
 } from "@mui/icons-material";
 import axios from "axios";
 import { io } from "socket.io-client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -39,7 +41,9 @@ const api = axios.create({
   withCredentials: true,
 });
 const realtime = new EventTarget();
+let activeSocket;
 const socketUrl = api.defaults.baseURL.replace(/\/api\/v1$/, "");
+const sendSignal = (to, signal) => activeSocket?.emit("call:signal", { to, signal });
 function useRealtime(eventName, handler) {
   useEffect(() => {
     realtime.addEventListener(eventName, handler);
@@ -276,12 +280,17 @@ function Shell({ user, onLogout, theme, setTheme }) {
   const [searchResults, setSearchResults] = useState([]);
   useEffect(() => {
     const socket = io(socketUrl, { withCredentials: true });
+    activeSocket = socket;
     const forward = (eventName) => (payload) =>
       realtime.dispatchEvent(new CustomEvent(eventName, { detail: payload }));
     socket.on("connect", forward("realtime:connected"));
     socket.on("message:new", forward("message:new"));
     socket.on("notification:new", forward("notification:new"));
-    return () => socket.disconnect();
+    socket.on("call:signal", forward("call:signal"));
+    return () => {
+      if (activeSocket === socket) activeSocket = undefined;
+      socket.disconnect();
+    };
   }, [user.id]);
   useEffect(() => {
     if (!search.trim()) return undefined;
@@ -696,7 +705,64 @@ function Messages({ user }) {
     conversationId ? `/conversations/${conversationId}/messages` : "/conversations",
   );
   const [body, setBody] = useState("");
+  const [callState, setCallState] = useState("idle");
+  const [incomingCall, setIncomingCall] = useState(null);
+  const remoteAudio = useRef(null);
+  const peer = useRef(null);
+  const localStream = useRef(null);
   const selected = conversations.data?.find((item) => item.id === conversationId);
+  const finishCall = (notify = true) => {
+    if (notify && selected) sendSignal(selected.user.id, { type: "end" });
+    peer.current?.close();
+    peer.current = null;
+    localStream.current?.getTracks().forEach((track) => track.stop());
+    localStream.current = null;
+    if (remoteAudio.current) remoteAudio.current.srcObject = null;
+    setIncomingCall(null);
+    setCallState("idle");
+  };
+  const createPeer = async (targetId) => {
+    localStream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const connection = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+    peer.current = connection;
+    localStream.current.getTracks().forEach((track) => connection.addTrack(track, localStream.current));
+    connection.onicecandidate = ({ candidate }) => {
+      if (candidate) sendSignal(targetId, { type: "ice", candidate });
+    };
+    connection.ontrack = ({ streams }) => {
+      if (remoteAudio.current) remoteAudio.current.srcObject = streams[0];
+    };
+    connection.onconnectionstatechange = () => {
+      if (["failed", "closed", "disconnected"].includes(connection.connectionState)) finishCall(false);
+    };
+    return connection;
+  };
+  const startCall = async () => {
+    if (!selected) return;
+    try {
+      setCallState("calling");
+      const connection = await createPeer(selected.user.id);
+      const offer = await connection.createOffer();
+      await connection.setLocalDescription(offer);
+      sendSignal(selected.user.id, { type: "offer", sdp: offer });
+    } catch {
+      finishCall(false);
+    }
+  };
+  const acceptCall = async () => {
+    if (!incomingCall) return;
+    try {
+      setCallState("active");
+      const connection = await createPeer(incomingCall.from);
+      await connection.setRemoteDescription(incomingCall.signal.sdp);
+      const answer = await connection.createAnswer();
+      await connection.setLocalDescription(answer);
+      sendSignal(incomingCall.from, { type: "answer", sdp: answer });
+      setIncomingCall(null);
+    } catch {
+      finishCall(false);
+    }
+  };
   const sendMessage = async (event) => {
     event.preventDefault();
     if (!body.trim()) return;
@@ -713,6 +779,24 @@ function Messages({ user }) {
     conversations.reload();
     if (conversationId) thread.reload();
   });
+  useEffect(() => {
+    const timer = setInterval(conversations.reload, 5000);
+    return () => clearInterval(timer);
+  }, [conversationId]);
+  useRealtime("call:signal", async (event) => {
+    const { from, signal } = event.detail;
+    if (from !== selected?.user.id) return;
+    if (signal.type === "offer") {
+      setIncomingCall({ from, signal });
+      setCallState("incoming");
+    } else if (signal.type === "answer" && peer.current) {
+      await peer.current.setRemoteDescription(signal.sdp);
+      setCallState("active");
+    } else if (signal.type === "ice" && peer.current) {
+      await peer.current.addIceCandidate(signal.candidate);
+    } else if (signal.type === "end") finishCall(false);
+  });
+  useEffect(() => () => finishCall(false), [conversationId]);
   return (
     <>
       <div className="page-heading">
@@ -732,7 +816,14 @@ function Messages({ user }) {
           <div className="chat-header">
             <button className="text-button" onClick={() => navigate("/app/messages")}>Back</button>
             {selected && <><Avatar person={selected.user} /><strong>{selected.user.fullName}</strong></>}
+            <button className="icon-button" onClick={callState === "idle" ? startCall : () => finishCall()} aria-label="Voice call">
+              {callState === "idle" ? <Call /> : <CallEnd />}
+            </button>
           </div>
+          {incomingCall && <div className="call-banner"><span>{selected?.user.fullName} is calling</span><button className="primary-button small" onClick={acceptCall}>Answer</button><button className="outline-button" onClick={() => finishCall()}>Decline</button></div>}
+          {callState === "calling" && <div className="call-banner">Calling {selected?.user.fullName}…</div>}
+          {callState === "active" && <div className="call-banner">Voice call in progress</div>}
+          <audio ref={remoteAudio} autoPlay />
           <div className="message-thread">
             {thread.data?.map((message) => <div key={message.id} className={`message-bubble ${message.senderId === user.id ? "own" : ""}`}>{message.body}</div>)}
           </div>
@@ -838,6 +929,7 @@ function Profile({ user }) {
   const [editing, setEditing] = useState(false);
   const [bio, setBio] = useState("");
   const [activeTab, setActiveTab] = useState("posts");
+  useRealtime("notification:new", profile.reload);
   useEffect(() => {
     setBio(profile.data?.bio || "");
     setEditing(false);
@@ -854,6 +946,10 @@ function Profile({ user }) {
   };
   const cancelFriendRequest = async () => {
     await api.delete(`/friends/requests/${profileId}`);
+    profile.reload();
+  };
+  const acceptFriendRequest = async () => {
+    await api.post(`/friends/requests/${person.receivedFriendRequestId}/accept`);
     profile.reload();
   };
   const startMessage = async () => {
@@ -877,7 +973,7 @@ function Profile({ user }) {
           <p>{person.bio || "No bio yet."}</p>
         </div>
         {isOwnProfile ? <button className="outline-button" onClick={() => setEditing(!editing)}>Edit profile</button> : <div className="profile-actions">
-          <button className="primary-button small" disabled={person.isFriend} onClick={person.friendRequestSent ? cancelFriendRequest : addFriend}>{person.isFriend ? "Friends" : person.friendRequestSent ? "Sent Friend Request" : "Add Friend"}</button>
+          <button className="primary-button small" disabled={person.isFriend} onClick={person.friendRequestReceived ? acceptFriendRequest : person.friendRequestSent ? cancelFriendRequest : addFriend}>{person.isFriend ? "Friend" : person.friendRequestReceived ? "Accept Request" : person.friendRequestSent ? "Sent Friend Request" : "Add Friend"}</button>
           <button className="outline-button" onClick={startMessage}>Message</button>
         </div>}
       </div>
