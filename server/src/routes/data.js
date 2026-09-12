@@ -221,27 +221,62 @@ router.put("/posts/:postId/like", async (req, res, next) => {
       _id: req.params.postId,
       deletedAt: null,
     });
+
     if (!post)
-      return res
-        .status(404)
-        .json({ error: { code: "NOT_FOUND", message: "Post not found." } });
-    if (req.body.liked)
+      return res.status(404).json({
+        error: {
+          code: "NOT_FOUND",
+          message: "Post not found.",
+        },
+      });
+
+    if (req.body.liked) {
       await Reaction.updateOne(
-        { userId: req.user._id, targetType: "post", targetId: post._id },
+        {
+          userId: req.user._id,
+          targetType: "post",
+          targetId: post._id,
+        },
         { $set: { type: "like" } },
-        { upsert: true },
+        { upsert: true }
       );
-    else
+    } else {
       await Reaction.deleteOne({
         userId: req.user._id,
         targetType: "post",
         targetId: post._id,
       });
+    }
+
+    // Like notification
+    if (
+      req.body.liked &&
+      post.authorId.toString() !== req.user._id.toString()
+    ) {
+      await createNotification(req, {
+        recipientId: post.authorId,
+        actorId: req.user._id,
+        type: "post_like",
+        entityType: "post",
+        entityId: post._id,
+        payload: {
+          message: `${req.user.fullName} liked your post.`,
+        },
+        uniqueEventId: `post-like:${post._id}:${req.user._id}`,
+      });
+    }
+
     const likes = await Reaction.countDocuments({
       targetType: "post",
       targetId: post._id,
     });
-    res.json({ data: { liked: Boolean(req.body.liked), likes } });
+
+    res.json({
+      data: {
+        liked: Boolean(req.body.liked),
+        likes,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -259,13 +294,51 @@ router.get("/posts/:postId/comments", async (req, res, next) => {
 router.post("/posts/:postId/comments", async (req, res, next) => {
   try {
     const body = String(req.body.body || "").trim();
-    const post = await Post.findOne({ _id: req.params.postId, deletedAt: null });
+
+    const post = await Post.findOne({
+      _id: req.params.postId,
+      deletedAt: null,
+    });
+
     if (!post || !body)
-      return res.status(400).json({ error: { code: "INVALID_COMMENT", message: "Comment text is required." } });
-    const comment = await Comment.create({ postId: post._id, authorId: req.user._id, body });
+      return res.status(400).json({
+        error: {
+          code: "INVALID_COMMENT",
+          message: "Comment text is required.",
+        },
+      });
+
+    const comment = await Comment.create({
+      postId: post._id,
+      authorId: req.user._id,
+      body,
+    });
+
     await comment.populate("authorId");
-    res.status(201).json({ data: await serializeComment(comment) });
-  } catch (error) { next(error); }
+
+    // Comment notification
+    if (
+      post.authorId.toString() !== req.user._id.toString()
+    ) {
+      await createNotification(req, {
+        recipientId: post.authorId,
+        actorId: req.user._id,
+        type: "post_comment",
+        entityType: "post",
+        entityId: post._id,
+        payload: {
+          message: `${req.user.fullName} commented on your post.`,
+        },
+        uniqueEventId: `post-comment:${comment._id}`,
+      });
+    }
+
+    res.status(201).json({
+      data: await serializeComment(comment),
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 router.get("/friends", async (req, res, next) => {
@@ -356,6 +429,7 @@ router.post("/friends/requests", async (req, res, next) => {
     next(error);
   }
 });
+
 
 router.delete("/friends/requests/:receiverId", async (req, res, next) => {
   try {
