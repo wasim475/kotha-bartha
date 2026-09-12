@@ -1,5 +1,6 @@
 import { Add, ChatBubble, Send, ThumbUpAlt } from "@mui/icons-material";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../../utility/api";
 import {
   Avatar,
@@ -45,7 +46,10 @@ function PostCard({ post, onChanged }) {
   };
 
   return (
-    <article className="post-card">
+    <article
+      className="post-card"
+      id={`post-${post.id}`}
+    >
       <div className="post-header">
         <Avatar person={post.author} />
 
@@ -82,7 +86,6 @@ function PostCard({ post, onChanged }) {
         <div className="comments">
           {comments.map((entry) => (
             <div className="comment" key={entry.id}>
-              <Avatar person={entry.author} />
 
               <div>
                 <strong>{entry.author.fullName}</strong>
@@ -110,8 +113,25 @@ function PostCard({ post, onChanged }) {
 
 export default function Feed({ user }) {
   const posts = useResource("/posts/feed");
+
+  const [searchParams] = useSearchParams();
+  const postId = searchParams.get("post");
+
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!postId || posts.loading || !posts.data?.length) return;
+
+    const postElement = document.getElementById(`post-${postId}`);
+
+    if (postElement) {
+      postElement.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+  }, [postId, posts.loading, posts.data]);
 
   const createPost = async () => {
     if (!body.trim() || busy) return;
