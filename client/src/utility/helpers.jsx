@@ -20,8 +20,41 @@ export const colorFor = (id = "") =>
 
 export const formatTime = (date) => {
   if (!date) return "";
-  const diffMinutes = -Math.round((Date.now() - new Date(date).getTime()) / 60000);
-  return new Intl.RelativeTimeFormat("en", { numeric: "auto" }).format(diffMinutes, "minute");
+
+  const diffMs = Date.now() - new Date(date).getTime();
+
+  const diffMinutes = Math.round(diffMs / 60000);
+  const diffHours = Math.round(diffMs / 3600000);
+  const diffDays = Math.round(diffMs / 86400000);
+  const diffWeeks = Math.round(diffMs / 604800000);
+  const diffMonths = Math.round(diffMs / 2592000000);
+  const diffYears = Math.round(diffMs / 31536000000);
+
+  const formatter = new Intl.RelativeTimeFormat("en", {
+    numeric: "auto",
+  });
+
+  if (diffMinutes < 60) {
+    return formatter.format(-diffMinutes, "minute");
+  }
+
+  if (diffHours < 24) {
+    return formatter.format(-diffHours, "hour");
+  }
+
+  if (diffDays < 7) {
+    return formatter.format(-diffDays, "day");
+  }
+
+  if (diffDays < 30) {
+    return formatter.format(-diffWeeks, "week");
+  }
+
+  if (diffMonths < 12) {
+    return formatter.format(-diffMonths, "month");
+  }
+
+  return formatter.format(-diffYears, "year");
 };
 
 export function ResourceState({ loading, error, empty, children }) {

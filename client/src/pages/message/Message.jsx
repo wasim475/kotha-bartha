@@ -10,7 +10,7 @@ const Message = ({ user }) => {
 
   const conversations = useResource("/conversations");
 
-  console.log(conversations.data)
+  // console.log(conversations.data)
 
   const thread = useResource(
     conversationId
@@ -243,7 +243,7 @@ const Message = ({ user }) => {
         </ResourceState>
       ) : (
         <ResourceState 
-        loading={false}  
+        loading={conversations.loading}  
         error={conversations.error} 
          empty={
     !conversations.data?.length
@@ -252,7 +252,7 @@ const Message = ({ user }) => {
   }
         >
           <div className="message-list">
-            {console.log("concersations",conversations)}
+            {/* {console.log("concersations",conversations)} */}
             {conversations?.data?.map((conversation) => (
               <button
                 className={`conversation ${conversation?.unreadCount ? "unread" : ""}`}

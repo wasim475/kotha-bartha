@@ -2,10 +2,11 @@ import { PersonAddAlt } from "@mui/icons-material";
 import { useState } from "react";
 import { api } from "../../utility/api";
 import { Avatar, ResourceState, useResource } from "../../utility/helpers";
+import { useNavigate } from "react-router-dom";
 
 export default function Friends() {
   const [tab, setTab] = useState("friends");
-
+  const navigate = useNavigate();
   const people = useResource(`/friends?tab=${tab}`);
 
   const act = async (entry) => {
@@ -24,9 +25,9 @@ export default function Friends() {
     { id: "sent", label: "Sent Requests" },
   ];
 
-  const allUsers = useResource(`/users`)
+  // const allUsers = useResource(`/users`);
 
-  console.log(allUsers.data)
+  // console.log(allUsers.data);
 
   const handleFindPeople = () => {
     // এখানে Find people বাটনের জন্য কাজ করতে পারেন, যেমন নতুন পেজে নিয়ে যাওয়া।
@@ -61,21 +62,23 @@ export default function Friends() {
       <ResourceState
         loading={people.loading}
         error={people.error}
-        empty={`No ${tab} to show.`}
+        empty={people.data?.length ? "" : `No ${tab} to show.`}
       >
         <div className="friend-grid">
           {people.data?.map((entry) => {
             const person = entry.user || entry;
             return (
-              <div className="friend-card" key={entry.id || person.id}>
+              <div
+                className="friend-card flex"
+                key={entry.id || person.id}
+                onClick={() => navigate(`/app/profile/${person.id}`)}
+                style={{ cursor: "pointer" }}
+              >
                 <Avatar person={person} />
                 <strong>{person.fullName}</strong>
                 <span>{entry.status || "Friend"}</span>
                 {tab !== "friends" && (
-                  <button
-                    className="outline-button"
-                    onClick={() => act(entry)}
-                  >
+                  <button className="outline-button" onClick={() => act(entry)}>
                     {tab === "requests" ? "Accept" : "Cancel"}
                   </button>
                 )}
