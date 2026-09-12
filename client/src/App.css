@@ -1090,3 +1090,153 @@ button {
     gap: 20px;
   }
 }
+
+.emoji-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.emoji-button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+}
+
+.emoji-picker {
+  position: absolute;
+  bottom: 48px;
+  left: 0;
+  z-index: 1000;
+}
+
+
+.message-row {
+  position: relative;
+  display: flex;
+  width: 100%;
+}
+
+.message-row.own {
+  justify-content: flex-end;
+}
+
+.message-bubble {
+  position: relative;
+}
+
+.message-menu-wrapper {
+  position: absolute;
+  top: 4px;
+  right: -38px;
+}
+
+.message-menu-button {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.message-menu-button:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.message-popup {
+  position: absolute;
+  top: 32px;
+  right: 0;
+  min-width: 130px;
+  background: white;
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+}
+
+.message-popup button {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 9px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  border-radius: 7px;
+  text-align: left;
+}
+
+.message-popup button:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.message-popup .delete-option {
+  color: #d32f2f;
+}
+
+.message-edit-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.message-edit-box input {
+  border: none;
+  outline: none;
+  background: transparent;
+  min-width: 150px;
+  font-size: inherit;
+}
+
+.message-edit-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.message-edit-actions button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 50%;
+}
+
+.message-edit-actions button:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.emoji-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.emoji-button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+}
+
+.emoji-picker {
+  position: absolute;
+  bottom: 48px;
+  left: 0;
+  z-index: 1000;
+}

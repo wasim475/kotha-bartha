@@ -590,6 +590,179 @@ router.post(
   },
 );
 
+// Edit a message
+router.patch(
+  "/conversations/:conversationId/messages/:messageId",
+  async (req, res, next) => {
+    try {
+      const body = String(req.body.body || "").trim();
+
+      if (!body) {
+        return res.status(400).json({
+          error: {
+            code: "INVALID_MESSAGE",
+            message: "Message cannot be empty.",
+          },
+        });
+      }
+
+      const conversation = await Conversation.findOne({
+        _id: req.params.conversationId,
+        participantIds: req.user._id,
+      });
+
+      if (!conversation) {
+        return res.status(404).json({
+          error: {
+            code: "NOT_FOUND",
+            message: "Conversation not found.",
+          },
+        });
+      }
+
+      // শুধু নিজের message edit করা যাবে
+      const message = await Message.findOne({
+        _id: req.params.messageId,
+        conversationId: conversation._id,
+        senderId: req.user._id,
+        deletedAt: null,
+      });
+
+      if (!message) {
+        return res.status(404).json({
+          error: {
+            code: "NOT_FOUND",
+            message: "Message not found or you cannot edit this message.",
+          },
+        });
+      }
+
+      message.body = body;
+      message.editedAt = new Date();
+
+      await message.save();
+
+      // অপর user-কে realtime update পাঠানো
+      const recipientId = conversation.participantIds.find(
+        (id) => id.toString() !== req.user._id.toString()
+      );
+
+      emitToUser(req, recipientId, "message:updated", {
+        id: message._id.toString(),
+        conversationId: conversation._id.toString(),
+        body: message.body,
+        senderId: message.senderId.toString(),
+        editedAt: message.editedAt,
+      });
+
+      // conversation-এর lastMessage যদি এই message হয়,
+      // তাহলে সেটাও update হবে
+      if (
+        conversation.lastMessageAt &&
+        new Date(conversation.lastMessageAt).getTime() ===
+          new Date(message.createdAt).getTime()
+      ) {
+        conversation.lastMessage = body;
+        await conversation.save();
+      }
+
+      res.json({
+        data: {
+          id: message._id.toString(),
+          body: message.body,
+          createdAt: message.createdAt,
+          editedAt: message.editedAt,
+          senderId: message.senderId.toString(),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+
+// Delete a message
+router.delete(
+  "/conversations/:conversationId/messages/:messageId",
+  async (req, res, next) => {
+    try {
+      const conversation = await Conversation.findOne({
+        _id: req.params.conversationId,
+        participantIds: req.user._id,
+      });
+
+      if (!conversation) {
+        return res.status(404).json({
+          error: {
+            code: "NOT_FOUND",
+            message: "Conversation not found.",
+          },
+        });
+      }
+
+      // শুধু নিজের message delete করা যাবে
+      const message = await Message.findOne({
+        _id: req.params.messageId,
+        conversationId: conversation._id,
+        senderId: req.user._id,
+        deletedAt: null,
+      });
+
+      if (!message) {
+        return res.status(404).json({
+          error: {
+            code: "NOT_FOUND",
+            message: "Message not found or you cannot delete this message.",
+          },
+        });
+      }
+
+      // Hard delete না করে soft delete
+      message.deletedAt = new Date();
+
+      await message.save();
+
+      const recipientId = conversation.participantIds.find(
+        (id) => id.toString() !== req.user._id.toString()
+      );
+
+      emitToUser(req, recipientId, "message:deleted", {
+        id: message._id.toString(),
+        conversationId: conversation._id.toString(),
+        senderId: message.senderId.toString(),
+      });
+
+      // যদি deleted message-টাই conversation-এর last message হয়,
+      // তাহলে সর্বশেষ valid message বের করে update করব
+      if (
+        conversation.lastMessageAt &&
+        new Date(conversation.lastMessageAt).getTime() ===
+          new Date(message.createdAt).getTime()
+      ) {
+        const lastMessage = await Message.findOne({
+          conversationId: conversation._id,
+          deletedAt: null,
+        }).sort({ createdAt: -1 });
+
+        conversation.lastMessage = lastMessage?.body || "";
+        conversation.lastMessageAt = lastMessage?.createdAt || null;
+
+        await conversation.save();
+      }
+
+      res.json({
+        data: {
+          id: message._id.toString(),
+          deleted: true,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 router.get("/notifications", async (req, res, next) => {
   try {
     const notifications = await Notification.find({ recipientId: req.user._id })
