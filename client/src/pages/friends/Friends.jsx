@@ -26,7 +26,7 @@ export default function Friends() {
 
   const allUsers = useResource(`/users`)
 
-  console.log(allUsers)
+  console.log(allUsers.data)
 
   const handleFindPeople = () => {
     // এখানে Find people বাটনের জন্য কাজ করতে পারেন, যেমন নতুন পেজে নিয়ে যাওয়া।

@@ -10,6 +10,8 @@ const Message = ({ user }) => {
 
   const conversations = useResource("/conversations");
 
+  console.log(conversations.data)
+
   const thread = useResource(
     conversationId
       ? `/conversations/${conversationId}/messages`
@@ -240,11 +242,20 @@ const Message = ({ user }) => {
           </section>
         </ResourceState>
       ) : (
-        <ResourceState loading={conversations.loading} error={conversations.error} empty="No conversations yet. Message a friend to start chatting.">
+        <ResourceState 
+        loading={false}  
+        error={conversations.error} 
+         empty={
+    !conversations.data?.length
+      ? "No conversations yet. Message a friend to start chatting."
+      : ""
+  }
+        >
           <div className="message-list">
-            {conversations.data?.map((conversation) => (
+            {console.log("concersations",conversations)}
+            {conversations?.data?.map((conversation) => (
               <button
-                className={`conversation ${conversation.unreadCount ? "unread" : ""}`}
+                className={`conversation ${conversation?.unreadCount ? "unread" : ""}`}
                 key={conversation.id}
                 onClick={() => navigate(`/app/messages/${conversation.id}`)}
               >
@@ -254,6 +265,7 @@ const Message = ({ user }) => {
                 </div>
 
                 <div>
+                
                   <strong>{conversation.user.fullName}</strong>
                   <span>{conversation.lastMessage || "No messages yet"}</span>
                 </div>

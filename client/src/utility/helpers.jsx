@@ -28,7 +28,7 @@ export function ResourceState({ loading, error, empty, children }) {
   if (loading)
     return (
       <div className="empty-note">
-        <p>Loading...</p>
+        <p>Please wait...</p>
       </div>
     );
 
@@ -77,17 +77,29 @@ export function useResource(url) {
     error: "",
   });
 
-  const reload = async () => {
-    setState(current => ({ ...current, loading: true, error: "" }));
-    try {
-      const { data } = await api.get(url);
-      setState({ data: data.data, loading: false, error: "" });
-      return data.data;
-    } catch (error) {
-      setState({ data: null, loading: false, error: error.response?.data?.error?.message || "Unable to load data." });
-      return null;
-    }
-  };
+ const reload = async () => {
+  try {
+    const { data } = await api.get(url);
+
+    setState({
+      data: data.data,
+      loading: false,
+      error: "",
+    });
+
+    return data.data;
+  } catch (error) {
+    setState(current => ({
+      ...current,
+      loading: false,
+      error:
+        error.response?.data?.error?.message ||
+        "Unable to load data.",
+    }));
+
+    return null;
+  }
+};
 
   useEffect(() => {
     let active = true;
