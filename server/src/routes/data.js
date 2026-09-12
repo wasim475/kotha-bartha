@@ -81,6 +81,23 @@ async function createNotification(req, { recipientId, actorId, type, entityType,
   return data;
 }
 
+router.get("/users", async (req, res, next) => {
+  try {
+    const users = await User.find({
+      _id: { $ne: req.user._id },
+    }).sort({ fullName: 1 });
+
+    res.json({
+      data: users.map(safeUser),
+      meta: {
+        count: users.length,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get("/users/search", async (req, res, next) => {
   try {
     const query = String(req.query.q || "").trim();

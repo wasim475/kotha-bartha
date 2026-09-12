@@ -1,0 +1,16 @@
+import { useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { api } from "../../utility/api";
+import { Avatar, ResourceState, useResource } from "../../utility/helpers";
+
+export default function Profile({ user }) {
+  const { id } = useParams(); const navigate = useNavigate(); const profileId = id === "me" ? user.id : id;
+  const profile = useResource(`/users/${profileId}`); const posts = useResource(`/users/${profileId}/posts`); const [editing, setEditing] = useState(false); const [bio, setBio] = useState("");
+  if (profile.loading) return <ResourceState loading />; if (profile.error) return <ResourceState error={profile.error} />;
+  const person = profile.data; const own = profileId === user.id;
+  const save = async () => { await api.patch("/users/me", { bio }); setEditing(false); profile.reload(); };
+  const startMessage = async () => { const { data } = await api.post("/conversations", { userId: profileId }); navigate(`/app/messages/${data.data.id}`); };
+  const addFriend = async () => { await api.post("/friends/requests", { receiverId: profileId }); profile.reload(); };
+  const editProfile = () => { setBio(person.bio || ""); setEditing(!editing); };
+  return <><div className="profile-cover"><div className="cover-text">{person.fullName.toLowerCase()} / in public</div></div><div className="profile-identity"><Avatar person={person} className="profile-avatar" /><div><h1>{person.fullName}</h1><p>{person.bio || "No bio yet."}</p></div>{own ? <button className="outline-button" onClick={editProfile}>Edit profile</button> : <div className="profile-actions"><button className="primary-button small" disabled={person.isFriend} onClick={addFriend}>{person.isFriend ? "Friend" : "Add Friend"}</button><button className="outline-button" onClick={startMessage}>Message</button></div>}</div>{editing && <div className="composer profile-editor"><textarea value={bio} onChange={(event) => setBio(event.target.value)} rows="3" /><button className="primary-button small" onClick={save}>Save profile</button></div>}<div className="profile-posts"><span className="eyebrow">Posts</span><ResourceState loading={posts.loading} error={posts.error} empty={`${person.fullName} has not posted yet.`}>{posts.data?.map((post) => <article className="post-card" key={post.id}><p className="post-body">{post.body}</p></article>)}</ResourceState></div></>;
+}
