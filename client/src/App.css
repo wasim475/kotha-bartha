@@ -413,7 +413,7 @@ button {
 .page-heading h1 {
   margin: 9px 0 0;
   font:
-    600 42px/1 Fraunces,
+    600 24px/1 Fraunces,
     serif;
   letter-spacing: -0.03em;
 }
@@ -1114,7 +1114,6 @@ button {
   z-index: 1000;
 }
 
-
 .message-row {
   position: relative;
   display: flex;
@@ -1216,6 +1215,29 @@ button {
 
 .message-edit-actions button:hover {
   background: rgba(0, 0, 0, 0.08);
+}
+
+.message-edit-actions .outline-button,
+.message-edit-actions .primary-button {
+  min-height: 38px;
+  padding: 0 13px;
+  border-radius: 7px;
+}
+
+.message-edit-actions .outline-button {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: inherit;
+}
+
+.message-edit-actions .primary-button {
+  border: none;
+  background: var(--accent);
+  color: #fff;
+}
+
+.message-edit-actions .primary-button:hover {
+  background: var(--accent-deep);
 }
 
 .emoji-wrapper {

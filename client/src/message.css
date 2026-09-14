@@ -1,0 +1,336 @@
+.message-page-chat {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.chat-container {
+  display: flex;
+  min-width: 0;
+  height: calc(100dvh - 283px);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chat-container > .chat-panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chat-container > .empty-note {
+  width: 100%;
+  min-height: 0;
+}
+
+.chat-panel .chat-header,
+.chat-panel .call-banner,
+.chat-panel > audio,
+.message-composer-container,
+.message-error {
+  flex-shrink: 0;
+}
+
+.message-thread {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: flex-start;
+  min-width: 0;
+  min-height: 0;
+  padding: 18px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  overflow-anchor: none;
+}
+
+.message-composer-container {
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .chat-container {
+    height: calc(100dvh - 198px);
+  }
+}
+
+/* ================================
+   Message Row
+================================ */
+
+.message-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  width: 100%;
+}
+
+.own-message {
+  justify-content: flex-end;
+}
+
+.other-message {
+  justify-content: flex-start;
+}
+
+/* ================================
+   Message Bubble
+================================ */
+
+.message-bubble {
+  position: relative;
+  max-width: 70%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  word-break: break-word;
+}
+
+.message-bubble.own {
+  background: var(--primary-color, #2563eb);
+  color: white;
+}
+
+/* ================================
+   Three Dot Button
+   ONLY own message
+================================ */
+
+.message-menu-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  top: auto;
+  right: auto;
+}
+
+.message-row.own .message-menu-wrapper {
+  order: -1;
+}
+
+.message-menu-button {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+}
+
+.message-menu-button:hover {
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.message-menu-button svg {
+  font-size: 21px;
+}
+
+/* ================================
+   Popup Menu
+================================ */
+
+.message-menu {
+  position: absolute;
+  right: 0;
+  bottom: 38px;
+  min-width: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 5px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+  z-index: 50;
+  display: flex;
+  gap: 2px;
+}
+
+.message-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: none;
+  background: transparent;
+  padding: 9px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 14px;
+  text-align: left;
+  justify-content: center;
+}
+
+.message-menu-item:hover {
+  background: #f5f7fa;
+}
+
+.edit-item {
+  color: #2563eb;
+}
+
+.delete-item {
+  color: #dc2626;
+}
+
+/* ================================
+   Edit Box
+================================ */
+
+.message-edit-box {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.message-edit-box textarea {
+  width: 100%;
+  min-height: 60px;
+  resize: vertical;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.message-edit-box textarea:focus {
+  border-color: #2563eb;
+}
+
+/* ================================
+   Edit Actions
+================================ */
+
+.message-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.edit-cancel-button,
+.edit-save-button {
+  border: none;
+  border-radius: 7px;
+  padding: 7px 13px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.edit-cancel-button {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.edit-cancel-button:hover {
+  background: #e2e8f0;
+}
+
+/* Save must be clearly blue */
+
+.edit-save-button {
+  background: #0647d4;
+  color: rgb(9, 222, 12);
+}
+
+.edit-save-button:hover {
+  background: #1d4ed8;
+}
+
+.edit-save-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ================================
+   Edited Label
+================================ */
+
+.edited-label {
+  font-size: 10px;
+  opacity: 0.65;
+  margin-left: 7px;
+  font-style: italic;
+}
+
+.emoji-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.emoji-button {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+}
+
+.emoji-button:hover {
+  background: rgba(233, 100, 73, 0.1);
+  border-radius: 50%;
+}
+
+.emoji-picker {
+  position: absolute;
+  bottom: 48px;
+  left: 0;
+  z-index: 1000;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.emoji-picker aside {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+/* ================================
+   Mobile
+================================ */
+
+@media (max-width: 600px) {
+  .message-bubble {
+    max-width: 82%;
+  }
+
+  .message-edit-box {
+    min-width: 0;
+  }
+
+  .message-menu {
+    min-width: 120px;
+  }
+
+  .emoji-picker {
+    left: -8px;
+  }
+
+  .emoji-picker aside {
+    width: min(320px, calc(100vw - 32px)) !important;
+  }
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
