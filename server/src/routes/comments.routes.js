@@ -189,6 +189,20 @@ router.put("/comments/:commentId/reaction", async (req, res, next) => {
         { $set: { type } },
         { upsert: true },
       );
+
+      if (comment.authorId.toString() !== req.user._id.toString()) {
+        await createNotification(req, {
+          recipientId: comment.authorId,
+          actorId: req.user._id,
+          type: "comment_reaction",
+          entityType: "post",
+          entityId: comment.postId,
+          payload: {
+            message: `${req.user.fullName} reacted to your comment.`,
+          },
+          uniqueEventId: `comment-reaction:${comment._id}:${req.user._id}`,
+        });
+      }
     }
 
     const reactions = await Reaction.find({
@@ -215,7 +229,4 @@ router.put("/comments/:commentId/reaction", async (req, res, next) => {
   }
 });
 
-
 module.exports = router;
-
-

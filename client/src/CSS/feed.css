@@ -101,6 +101,64 @@
   margin-top: 7px;
 }
 
+.reaction-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+}
+
+.comment-reactions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+}
+
+.comment-reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.comment-reaction.like {
+  color: #2563eb;
+}
+
+.comment-reaction.haha {
+  color: #d97706;
+}
+
+.comment-reaction.sad {
+  color: #2563eb;
+}
+
+.comment-reaction.angry {
+  color: #dc2626;
+}
+
+.comment-reaction b {
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.comment-reaction-total {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.reaction-emoji {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.reaction-face {
+  display: block;
+  width: 17px;
+  height: 17px;
+}
+
 .comment-actions button {
   padding: 3px 5px;
   border-radius: 4px;

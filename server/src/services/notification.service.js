@@ -6,15 +6,22 @@ async function createNotification(
   req,
   { recipientId, actorId, type, entityType, entityId, payload, uniqueEventId },
 ) {
-  const notification = await Notification.create({
-    recipientId,
-    actorId,
-    type,
-    entityType,
-    entityId,
-    payload,
-    uniqueEventId,
-  });
+  const notification = await Notification.findOneAndUpdate(
+    { uniqueEventId },
+    {
+      $set: {
+        recipientId,
+        actorId,
+        type,
+        entityType,
+        entityId,
+        payload,
+        readAt: null,
+      },
+      $setOnInsert: { uniqueEventId },
+    },
+    { new: true, upsert: true, setDefaultsOnInsert: true },
+  );
 
   await notification.populate("actorId");
 
