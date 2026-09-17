@@ -1,9 +1,4 @@
-import {
-  Delete,
-  Edit,
-  EmojiEmotions,
-  MoreVert,
-} from "@mui/icons-material";
+import { Delete, Edit, EmojiEmotions, MoreVert } from "@mui/icons-material";
 import EmojiPicker from "emoji-picker-react";
 import { useEffect, useState } from "react";
 
@@ -25,9 +20,7 @@ const CommentSection = ({
   const [reactionOpen, setReactionOpen] = useState(null);
 
   const loadComments = async () => {
-    const { data } = await api.get(
-      `/posts/${postId}/comments`,
-    );
+    const { data } = await api.get(`/posts/${postId}/comments`);
 
     setComments(data.data);
   };
@@ -45,9 +38,9 @@ const CommentSection = ({
     const { data } = await api.patch(`/comments/${commentId}`, {
       body: editBody.trim(),
     });
-    setComments((current) => current.map((entry) =>
-      entry.id === commentId ? data.data : entry,
-    ));
+    setComments((current) =>
+      current.map((entry) => (entry.id === commentId ? data.data : entry)),
+    );
     setEditingId(null);
   };
 
@@ -61,10 +54,14 @@ const CommentSection = ({
   const reactToComment = async (commentId, type) => {
     const entry = comments.find((comment) => comment.id === commentId);
     const reaction = entry?.reaction === type ? null : type;
-    const { data } = await api.put(`/comments/${commentId}/reaction`, { type: reaction });
-    setComments((current) => current.map((comment) =>
-      comment.id === commentId ? { ...comment, ...data.data } : comment,
-    ));
+    const { data } = await api.put(`/comments/${commentId}/reaction`, {
+      type: reaction,
+    });
+    setComments((current) =>
+      current.map((comment) =>
+        comment.id === commentId ? { ...comment, ...data.data } : comment,
+      ),
+    );
     setReactionOpen(null);
   };
 
@@ -93,13 +90,24 @@ const CommentSection = ({
     <div className="comments">
       {comments.map((entry) => (
         <div className="comment" key={entry.id}>
-          <div className={entry.author.id === postAuthorId ? "comment-post-author" : ""}>
+          <div
+            className={
+              entry.author.id === postAuthorId ? "comment-post-author" : ""
+            }
+          >
             <strong>{entry.author.fullName}</strong>
             {editingId === entry.id ? (
               <div className="comment-edit-box">
-                <input value={editBody} onChange={(event) => setEditBody(event.target.value)} />
-                <button type="button" onClick={() => saveComment(entry.id)}>Save</button>
-                <button type="button" onClick={() => setEditingId(null)}>Cancel</button>
+                <input
+                  value={editBody}
+                  onChange={(event) => setEditBody(event.target.value)}
+                />
+                <button type="button" onClick={() => saveComment(entry.id)}>
+                  Save
+                </button>
+                <button type="button" onClick={() => setEditingId(null)}>
+                  Cancel
+                </button>
               </div>
             ) : (
               <p>{entry.body}</p>
@@ -107,13 +115,22 @@ const CommentSection = ({
 
             <div className="comment-actions">
               <div className="reaction-menu">
-                <button type="button" onClick={() => setReactionOpen(reactionOpen === entry.id ? null : entry.id)}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setReactionOpen(reactionOpen === entry.id ? null : entry.id)
+                  }
+                >
                   Like {entry.reaction ? `(${entry.reaction})` : ""}
                 </button>
                 {reactionOpen === entry.id && (
                   <div className="reaction-popover">
                     {["like", "haha", "sad", "angry"].map((type) => (
-                      <button type="button" key={type} onClick={() => reactToComment(entry.id, type)}>
+                      <button
+                        type="button"
+                        key={type}
+                        onClick={() => reactToComment(entry.id, type)}
+                      >
                         {type[0].toUpperCase() + type.slice(1)}
                       </button>
                     ))}
@@ -123,13 +140,34 @@ const CommentSection = ({
 
               {entry.editable && (
                 <div className="feed-menu">
-                  <button type="button" className="feed-menu-button" aria-label="Comment options" onClick={() => setMenuOpen(menuOpen === entry.id ? null : entry.id)}>
+                  <button
+                    type="button"
+                    className="feed-menu-button"
+                    aria-label="Comment options"
+                    onClick={() =>
+                      setMenuOpen(menuOpen === entry.id ? null : entry.id)
+                    }
+                  >
                     <MoreVert fontSize="small" />
                   </button>
                   {menuOpen === entry.id && (
                     <div className="feed-menu-popover">
-                      <button type="button" onClick={() => { setEditingId(entry.id); setEditBody(entry.body); setMenuOpen(null); }}><Edit fontSize="small" /> Edit</button>
-                      <button type="button" onClick={() => deleteComment(entry.id)}><Delete fontSize="small" /> Delete</button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingId(entry.id);
+                          setEditBody(entry.body);
+                          setMenuOpen(null);
+                        }}
+                      >
+                        <Edit fontSize="small" /> Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteComment(entry.id)}
+                      >
+                        <Delete fontSize="small" /> Delete
+                      </button>
                     </div>
                   )}
                 </div>
@@ -139,21 +177,14 @@ const CommentSection = ({
         </div>
       ))}
 
-      <form
-        className="comment-form"
-        onSubmit={addComment}
-      >
+      <form className="comment-form" onSubmit={addComment}>
         <div className="emoji-wrapper">
           <button
             type="button"
             className="emoji-button"
             aria-label="Choose emoji"
             title="Choose emoji"
-            onClick={() =>
-              setShowEmojiPicker(
-                (current) => !current,
-              )
-            }
+            onClick={() => setShowEmojiPicker((current) => !current)}
           >
             <EmojiEmotions fontSize="small" />
           </button>
@@ -162,10 +193,7 @@ const CommentSection = ({
             <div className="emoji-picker">
               <EmojiPicker
                 onEmojiClick={(emojiData) =>
-                  setComment(
-                    (current) =>
-                      `${current}${emojiData.emoji}`,
-                  )
+                  setComment((current) => `${current}${emojiData.emoji}`)
                 }
                 width={320}
                 height={400}
@@ -180,15 +208,11 @@ const CommentSection = ({
 
         <input
           value={comment}
-          onChange={(event) =>
-            setComment(event.target.value)
-          }
+          onChange={(event) => setComment(event.target.value)}
           placeholder="Write a comment..."
         />
 
-        <button className="primary-button small">
-          Comment
-        </button>
+        <button className="primary-button small">Comment</button>
       </form>
     </div>
   );

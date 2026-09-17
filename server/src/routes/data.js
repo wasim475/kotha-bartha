@@ -89,13 +89,16 @@ async function serializeComment(comment, viewerId) {
     updatedAt: comment.updatedAt,
     author: safeUser(comment.authorId),
     editable: comment.authorId._id.toString() === viewerId.toString(),
-    reaction: reactions.find(
-      (entry) => entry.userId.toString() === viewerId.toString(),
-    )?.type || null,
-    reactions: reactions.reduce((counts, entry) => ({
-      ...counts,
-      [entry.type]: (counts[entry.type] || 0) + 1,
-    }), {}),
+    reaction:
+      reactions.find((entry) => entry.userId.toString() === viewerId.toString())
+        ?.type || null,
+    reactions: reactions.reduce(
+      (counts, entry) => ({
+        ...counts,
+        [entry.type]: (counts[entry.type] || 0) + 1,
+      }),
+      {},
+    ),
   };
 }
 
@@ -686,7 +689,10 @@ router.patch("/comments/:commentId", async (req, res, next) => {
 
     if (!comment || !body) {
       return res.status(400).json({
-        error: { code: "INVALID_COMMENT", message: "Comment text is required." },
+        error: {
+          code: "INVALID_COMMENT",
+          message: "Comment text is required.",
+        },
       });
     }
 
@@ -726,7 +732,10 @@ router.put("/comments/:commentId/reaction", async (req, res, next) => {
 
     if (!comment || (type && !allowedTypes.includes(type))) {
       return res.status(400).json({
-        error: { code: "INVALID_REACTION", message: "Invalid comment reaction." },
+        error: {
+          code: "INVALID_REACTION",
+          message: "Invalid comment reaction.",
+        },
       });
     }
 
@@ -751,15 +760,20 @@ router.put("/comments/:commentId/reaction", async (req, res, next) => {
     const reactions = await Reaction.find({
       targetType: "comment",
       targetId: comment._id,
-    }).select("type").lean();
+    })
+      .select("type")
+      .lean();
 
     res.json({
       data: {
         reaction: type || null,
-        reactions: reactions.reduce((counts, entry) => ({
-          ...counts,
-          [entry.type]: (counts[entry.type] || 0) + 1,
-        }), {}),
+        reactions: reactions.reduce(
+          (counts, entry) => ({
+            ...counts,
+            [entry.type]: (counts[entry.type] || 0) + 1,
+          }),
+          {},
+        ),
       },
     });
   } catch (error) {

@@ -1,148 +1,148 @@
 .post-header {
-	position: relative;
+  position: relative;
 }
 
 .feed-menu {
-	position: relative;
-	margin-left: auto;
+  position: relative;
+  margin-left: auto;
 }
 
 .feed-menu-button {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 30px;
-	height: 30px;
-	padding: 0;
-	border-radius: 50%;
-	color: var(--muted);
-	background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  color: var(--muted);
+  background: transparent;
 }
 
 .feed-menu-button:hover,
 .feed-menu-button:focus-visible {
-	color: var(--ink);
-	background: var(--soft);
+  color: var(--ink);
+  background: var(--soft);
 }
 
 .feed-menu-popover,
 .reaction-popover {
-	position: absolute;
-	right: 0;
-	z-index: 10;
-	display: grid;
-	min-width: 120px;
-	padding: 5px;
-	border: 1px solid var(--line);
-	border-radius: 7px;
-	background: var(--panel);
-	box-shadow: var(--shadow);
+  position: absolute;
+  right: 0;
+  z-index: 10;
+  display: grid;
+  min-width: 120px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
 }
 
 .feed-menu-popover {
-	top: 34px;
+  top: 34px;
 }
 
 .feed-menu-popover button,
 .reaction-popover button,
 .comment-edit-box button,
 .feed-edit-form button {
-	display: inline-flex;
-	align-items: center;
-	gap: 7px;
-	padding: 8px 9px;
-	border-radius: 5px;
-	color: var(--ink);
-	background: transparent;
-	font-size: 12px;
-	text-align: left;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 9px;
+  border-radius: 5px;
+  color: var(--ink);
+  background: transparent;
+  font-size: 12px;
+  text-align: left;
 }
 
 .feed-menu-popover button:hover,
 .reaction-popover button:hover,
 .comment-edit-box button:hover,
 .feed-edit-form button:hover {
-	background: var(--soft);
+  background: var(--soft);
 }
 
 .feed-edit-form {
-	display: grid;
-	gap: 8px;
-	margin: 12px 0;
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
 }
 
 .feed-edit-form textarea,
 .comment-edit-box input {
-	width: 100%;
-	box-sizing: border-box;
-	padding: 9px 10px;
-	border: 1px solid var(--line);
-	border-radius: 6px;
-	color: var(--ink);
-	background: var(--panel);
-	font: inherit;
-	resize: vertical;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  background: var(--panel);
+  font: inherit;
+  resize: vertical;
 }
 
 .feed-edit-form > div {
-	display: flex;
-	justify-content: flex-end;
-	gap: 7px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
 }
 
 .comment-post-author {
-	background: #d7ed72 !important;
+  background: #d7ed72 !important;
 }
 
 .comment-actions {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	margin-top: 7px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
 }
 
 .comment-actions button {
-	padding: 3px 5px;
-	border-radius: 4px;
-	color: var(--muted);
-	background: transparent;
-	font-size: 11px;
+  padding: 3px 5px;
+  border-radius: 4px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 11px;
 }
 
 .comment-actions button:hover,
 .comment-actions button:focus-visible {
-	color: var(--accent);
-	background: var(--panel);
+  color: var(--accent);
+  background: var(--panel);
 }
 
 .reaction-menu {
-	position: relative;
+  position: relative;
 }
 
 .reaction-popover {
-	bottom: 27px;
-	left: 0;
-	right: auto;
-	min-width: 90px;
+  bottom: 27px;
+  left: 0;
+  right: auto;
+  min-width: 90px;
 }
 
 .comment-edit-box {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto auto;
-	gap: 5px;
-	margin-top: 6px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 5px;
+  margin-top: 6px;
 }
 
 .comment-edit-box button {
-	padding: 5px 7px;
+  padding: 5px 7px;
 }
 
 @media (max-width: 520px) {
-	.comment-edit-box {
-		grid-template-columns: 1fr 1fr;
-	}
+  .comment-edit-box {
+    grid-template-columns: 1fr 1fr;
+  }
 
-	.comment-edit-box input {
-		grid-column: 1 / -1;
-	}
+  .comment-edit-box input {
+    grid-column: 1 / -1;
+  }
 }

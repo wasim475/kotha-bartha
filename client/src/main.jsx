@@ -1,20 +1,20 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
 import "./App.css";
-import "./CSS/navbar.css";
-import "./message.css";
 import "./CSS/feed.css";
-import UtilityProvider from './provider/UtilityProvider.jsx';
-import AuthProvider from './provider/AuthProvider.jsx';
-import MainRouter from './Router/Main.jsx';
+import "./CSS/navbar.css";
+import "./index.css";
+import "./message.css";
+import AuthProvider from "./provider/AuthProvider.jsx";
+import UtilityProvider from "./provider/UtilityProvider.jsx";
+import MainRouter from "./Router/Main.jsx";
 
-createRoot(document.getElementById('root')).render(
+createRoot(document.getElementById("root")).render(
   <StrictMode>
     <AuthProvider>
-    <UtilityProvider>
-      <MainRouter />
-    </UtilityProvider>
+      <UtilityProvider>
+        <MainRouter />
+      </UtilityProvider>
     </AuthProvider>
-  </StrictMode>
-)
+  </StrictMode>,
+);
