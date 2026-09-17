@@ -54,15 +54,24 @@ const CommentSection = ({
   const reactToComment = async (commentId, type) => {
     const entry = comments.find((comment) => comment.id === commentId);
     const reaction = entry?.reaction === type ? null : type;
-    const { data } = await api.put(`/comments/${commentId}/reaction`, {
-      type: reaction,
-    });
-    setComments((current) =>
-      current.map((comment) =>
-        comment.id === commentId ? { ...comment, ...data.data } : comment,
-      ),
-    );
-    setReactionOpen(null);
+
+    try {
+      const { data } = await api.put(`/comments/${commentId}/reaction`, {
+        type: reaction,
+      });
+
+      setComments((current) =>
+        current.map((comment) =>
+          comment.id === commentId ? { ...comment, ...data.data } : comment,
+        ),
+      );
+    } catch (error) {
+      if (error.response?.status !== 404) {
+        console.error("Unable to react to comment:", error);
+      }
+    } finally {
+      setReactionOpen(null);
+    }
   };
 
   const addComment = async (event) => {
