@@ -1,11 +1,17 @@
-import { EmojiEmotions } from "@mui/icons-material";
+import {
+  Delete,
+  Edit,
+  EmojiEmotions,
+  MoreVert,
+} from "@mui/icons-material";
 import EmojiPicker from "emoji-picker-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { api } from "../../../utility/api";
 
 const CommentSection = ({
   postId,
+  postAuthorId,
   showComments,
   setShowComments,
   onChanged,
@@ -13,6 +19,10 @@ const CommentSection = ({
   const [comments, setComments] = useState([]);
   const [comment, setComment] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editBody, setEditBody] = useState("");
+  const [reactionOpen, setReactionOpen] = useState(null);
 
   const loadComments = async () => {
     const { data } = await api.get(
@@ -20,6 +30,42 @@ const CommentSection = ({
     );
 
     setComments(data.data);
+  };
+
+  useEffect(() => {
+    if (!showComments) return;
+
+    api.get(`/posts/${postId}/comments`).then(({ data }) => {
+      setComments(data.data);
+    });
+  }, [postId, showComments]);
+
+  const saveComment = async (commentId) => {
+    if (!editBody.trim()) return;
+    const { data } = await api.patch(`/comments/${commentId}`, {
+      body: editBody.trim(),
+    });
+    setComments((current) => current.map((entry) =>
+      entry.id === commentId ? data.data : entry,
+    ));
+    setEditingId(null);
+  };
+
+  const deleteComment = async (commentId) => {
+    if (!window.confirm("Delete this comment?")) return;
+    await api.delete(`/comments/${commentId}`);
+    setComments((current) => current.filter((entry) => entry.id !== commentId));
+    onChanged();
+  };
+
+  const reactToComment = async (commentId, type) => {
+    const entry = comments.find((comment) => comment.id === commentId);
+    const reaction = entry?.reaction === type ? null : type;
+    const { data } = await api.put(`/comments/${commentId}/reaction`, { type: reaction });
+    setComments((current) => current.map((comment) =>
+      comment.id === commentId ? { ...comment, ...data.data } : comment,
+    ));
+    setReactionOpen(null);
   };
 
   const addComment = async (event) => {
@@ -47,9 +93,48 @@ const CommentSection = ({
     <div className="comments">
       {comments.map((entry) => (
         <div className="comment" key={entry.id}>
-          <div>
+          <div className={entry.author.id === postAuthorId ? "comment-post-author" : ""}>
             <strong>{entry.author.fullName}</strong>
-            <p>{entry.body}</p>
+            {editingId === entry.id ? (
+              <div className="comment-edit-box">
+                <input value={editBody} onChange={(event) => setEditBody(event.target.value)} />
+                <button type="button" onClick={() => saveComment(entry.id)}>Save</button>
+                <button type="button" onClick={() => setEditingId(null)}>Cancel</button>
+              </div>
+            ) : (
+              <p>{entry.body}</p>
+            )}
+
+            <div className="comment-actions">
+              <div className="reaction-menu">
+                <button type="button" onClick={() => setReactionOpen(reactionOpen === entry.id ? null : entry.id)}>
+                  Like {entry.reaction ? `(${entry.reaction})` : ""}
+                </button>
+                {reactionOpen === entry.id && (
+                  <div className="reaction-popover">
+                    {["like", "haha", "sad", "angry"].map((type) => (
+                      <button type="button" key={type} onClick={() => reactToComment(entry.id, type)}>
+                        {type[0].toUpperCase() + type.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {entry.editable && (
+                <div className="feed-menu">
+                  <button type="button" className="feed-menu-button" aria-label="Comment options" onClick={() => setMenuOpen(menuOpen === entry.id ? null : entry.id)}>
+                    <MoreVert fontSize="small" />
+                  </button>
+                  {menuOpen === entry.id && (
+                    <div className="feed-menu-popover">
+                      <button type="button" onClick={() => { setEditingId(entry.id); setEditBody(entry.body); setMenuOpen(null); }}><Edit fontSize="small" /> Edit</button>
+                      <button type="button" onClick={() => deleteComment(entry.id)}><Delete fontSize="small" /> Delete</button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       ))}

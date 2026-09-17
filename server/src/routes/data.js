@@ -63,6 +63,7 @@ async function serializePost(post, viewerId) {
     media: post.media,
     createdAt: post.createdAt,
     author: safeUser(post.authorId),
+    editable: post.authorId._id.toString() === viewerId.toString(),
     likes: reactions.length,
     comments: await Comment.countDocuments({
       postId: post._id,
@@ -73,12 +74,28 @@ async function serializePost(post, viewerId) {
   };
 }
 
-async function serializeComment(comment) {
+async function serializeComment(comment, viewerId) {
+  const reactions = await Reaction.find({
+    targetType: "comment",
+    targetId: comment._id,
+  })
+    .select("userId type")
+    .lean();
+
   return {
     id: comment._id.toString(),
     body: comment.body,
     createdAt: comment.createdAt,
+    updatedAt: comment.updatedAt,
     author: safeUser(comment.authorId),
+    editable: comment.authorId._id.toString() === viewerId.toString(),
+    reaction: reactions.find(
+      (entry) => entry.userId.toString() === viewerId.toString(),
+    )?.type || null,
+    reactions: reactions.reduce((counts, entry) => ({
+      ...counts,
+      [entry.type]: (counts[entry.type] || 0) + 1,
+    }), {}),
   };
 }
 
@@ -519,7 +536,9 @@ router.get("/posts/:postId/comments", async (req, res, next) => {
       });
 
     res.json({
-      data: await Promise.all(comments.map(serializeComment)),
+      data: await Promise.all(
+        comments.map((comment) => serializeComment(comment, req.user._id)),
+      ),
     });
   } catch (error) {
     next(error);
@@ -556,6 +575,14 @@ router.post("/posts/:postId/comments", async (req, res, next) => {
 
     await comment.populate("authorId");
 
+    const previousCommenters = await Comment.find({
+      postId: post._id,
+      _id: { $ne: comment._id },
+    })
+      .sort({ createdAt: -1 })
+      .select("authorId")
+      .lean();
+
     // ------------------------------------------------------
     // Comment notification
     // ------------------------------------------------------
@@ -574,8 +601,166 @@ router.post("/posts/:postId/comments", async (req, res, next) => {
       });
     }
 
+    const recipients = new Set(
+      previousCommenters
+        .map((entry) => entry.authorId.toString())
+        .filter((id) => id !== req.user._id.toString()),
+    );
+
+    for (const recipientId of recipients) {
+      if (recipientId === post.authorId.toString()) continue;
+
+      await createNotification(req, {
+        recipientId,
+        actorId: req.user._id,
+        type: "post_comment",
+        entityType: "post",
+        entityId: post._id,
+        payload: {
+          message: `${req.user.fullName} also commented on a post you joined.`,
+        },
+        uniqueEventId: `post-comment:${comment._id}:${recipientId}`,
+      });
+    }
+
     res.status(201).json({
-      data: await serializeComment(comment),
+      data: await serializeComment(comment, req.user._id),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch("/posts/:postId", async (req, res, next) => {
+  try {
+    const body = String(req.body.body || "").trim();
+    const post = await Post.findOne({
+      _id: req.params.postId,
+      authorId: req.user._id,
+      deletedAt: null,
+    });
+
+    if (!post || !body) {
+      return res.status(400).json({
+        error: { code: "INVALID_POST", message: "Post text is required." },
+      });
+    }
+
+    post.body = body;
+    await post.save();
+    await post.populate("authorId");
+
+    res.json({ data: await serializePost(post, req.user._id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/posts/:postId", async (req, res, next) => {
+  try {
+    const post = await Post.findOneAndUpdate(
+      { _id: req.params.postId, authorId: req.user._id, deletedAt: null },
+      { $set: { deletedAt: new Date() } },
+      { new: true },
+    );
+
+    if (!post) {
+      return res.status(404).json({
+        error: { code: "NOT_FOUND", message: "Post not found." },
+      });
+    }
+
+    res.json({ data: { id: post._id.toString(), deleted: true } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch("/comments/:commentId", async (req, res, next) => {
+  try {
+    const body = String(req.body.body || "").trim();
+    const comment = await Comment.findOne({
+      _id: req.params.commentId,
+      authorId: req.user._id,
+    }).populate("authorId");
+
+    if (!comment || !body) {
+      return res.status(400).json({
+        error: { code: "INVALID_COMMENT", message: "Comment text is required." },
+      });
+    }
+
+    comment.body = body;
+    await comment.save();
+    res.json({ data: await serializeComment(comment, req.user._id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/comments/:commentId", async (req, res, next) => {
+  try {
+    const comment = await Comment.findOneAndDelete({
+      _id: req.params.commentId,
+      authorId: req.user._id,
+    });
+
+    if (!comment) {
+      return res.status(404).json({
+        error: { code: "NOT_FOUND", message: "Comment not found." },
+      });
+    }
+
+    await Reaction.deleteMany({ targetType: "comment", targetId: comment._id });
+    res.json({ data: { id: comment._id.toString(), deleted: true } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put("/comments/:commentId/reaction", async (req, res, next) => {
+  try {
+    const allowedTypes = ["like", "haha", "sad", "angry"];
+    const type = req.body.type;
+    const comment = await Comment.findById(req.params.commentId);
+
+    if (!comment || (type && !allowedTypes.includes(type))) {
+      return res.status(400).json({
+        error: { code: "INVALID_REACTION", message: "Invalid comment reaction." },
+      });
+    }
+
+    if (!type) {
+      await Reaction.deleteOne({
+        userId: req.user._id,
+        targetType: "comment",
+        targetId: comment._id,
+      });
+    } else {
+      await Reaction.updateOne(
+        {
+          userId: req.user._id,
+          targetType: "comment",
+          targetId: comment._id,
+        },
+        { $set: { type } },
+        { upsert: true },
+      );
+    }
+
+    const reactions = await Reaction.find({
+      targetType: "comment",
+      targetId: comment._id,
+    }).select("type").lean();
+
+    res.json({
+      data: {
+        reaction: type || null,
+        reactions: reactions.reduce((counts, entry) => ({
+          ...counts,
+          [entry.type]: (counts[entry.type] || 0) + 1,
+        }), {}),
+      },
     });
   } catch (error) {
     next(error);

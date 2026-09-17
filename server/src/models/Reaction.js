@@ -7,7 +7,7 @@ const reactionSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    targetType: { type: String, enum: ["post"], required: true },
+    targetType: { type: String, enum: ["post", "comment"], required: true },
     targetId: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,
@@ -15,7 +15,7 @@ const reactionSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["like", "love", "care", "haha"],
+      enum: ["like", "love", "care", "haha", "sad", "angry"],
       default: "like",
     },
   },

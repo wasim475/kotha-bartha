@@ -1,5 +1,8 @@
 import {
   ChatBubble,
+  Delete,
+  Edit,
+  MoreVert,
   ThumbUpAlt,
 } from "@mui/icons-material";
 import { useState } from "react";
@@ -18,6 +21,25 @@ export default function PostCard({
 }) {
   const [showComments, setShowComments] =
     useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [body, setBody] = useState(post.body);
+
+  const savePost = async (event) => {
+    event.preventDefault();
+    if (!body.trim()) return;
+
+    await api.patch(`/posts/${post.id}`, { body: body.trim() });
+    setEditing(false);
+    setMenuOpen(false);
+    onChanged();
+  };
+
+  const deletePost = async () => {
+    if (!window.confirm("Delete this post?")) return;
+    await api.delete(`/posts/${post.id}`);
+    onChanged();
+  };
 
   const toggleLike = async () => {
     await api.put(`/posts/${post.id}/like`, {
@@ -50,12 +72,44 @@ export default function PostCard({
             {formatTime(post.createdAt)}
           </span>
         </div>
+
+        {post.editable && (
+          <div className="feed-menu">
+            <button
+              type="button"
+              className="feed-menu-button"
+              aria-label="Post options"
+              title="Post options"
+              onClick={() => setMenuOpen((current) => !current)}
+            >
+              <MoreVert fontSize="small" />
+            </button>
+
+            {menuOpen && (
+              <div className="feed-menu-popover">
+                <button type="button" onClick={() => setEditing(true)}>
+                  <Edit fontSize="small" /> Edit
+                </button>
+                <button type="button" onClick={deletePost}>
+                  <Delete fontSize="small" /> Delete
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Post Body */}
-      <p className="post-body">
-        {post.body}
-      </p>
+      {editing ? (
+        <form className="feed-edit-form" onSubmit={savePost}>
+          <textarea value={body} onChange={(event) => setBody(event.target.value)} />
+          <div>
+            <button type="button" onClick={() => setEditing(false)}>Cancel</button>
+            <button type="submit" className="primary-button small">Save</button>
+          </div>
+        </form>
+      ) : (
+        <p className="post-body">{post.body}</p>
+      )}
 
       {/* Post Stats */}
       <div className="post-stats">
@@ -90,6 +144,7 @@ export default function PostCard({
       {/* Comment Section */}
       <CommentSection
         postId={post.id}
+        postAuthorId={post.author.id}
         showComments={showComments}
         setShowComments={setShowComments}
         onChanged={onChanged}
