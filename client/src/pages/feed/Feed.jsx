@@ -1,4 +1,11 @@
-import { Add, ChatBubble, Send, ThumbUpAlt } from "@mui/icons-material";
+import {
+  Add,
+  ChatBubble,
+  EmojiEmotions,
+  Send,
+  ThumbUpAlt,
+} from "@mui/icons-material";
+import EmojiPicker from "emoji-picker-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../../utility/api";
@@ -13,6 +20,7 @@ function PostCard({ post, onChanged }) {
   const [comments, setComments] = useState([]);
   const [showComments, setShowComments] = useState(false);
   const [comment, setComment] = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   const toggleLike = async () => {
     await api.put(`/posts/${post.id}/like`, {
@@ -41,7 +49,10 @@ function PostCard({ post, onChanged }) {
     });
 
     setComment("");
-    toggleComments();
+    setShowEmojiPicker(false);
+    const { data } = await api.get(`/posts/${post.id}/comments`);
+    setComments(data.data);
+    setShowComments(true);
     onChanged();
   };
 
@@ -95,6 +106,34 @@ function PostCard({ post, onChanged }) {
           ))}
 
           <form className="comment-form" onSubmit={addComment}>
+            <div className="emoji-wrapper">
+              <button
+                type="button"
+                className="emoji-button"
+                aria-label="Choose emoji"
+                title="Choose emoji"
+                onClick={() =>
+                  setShowEmojiPicker((current) => !current)
+                }
+              >
+                <EmojiEmotions fontSize="small" />
+              </button>
+
+              {showEmojiPicker && (
+                <div className="emoji-picker">
+                  <EmojiPicker
+                    onEmojiClick={(emojiData) =>
+                      setComment((current) => `${current}${emojiData.emoji}`)
+                    }
+                    width={320}
+                    height={400}
+                    previewConfig={{ showPreview: false }}
+                    lazyLoadEmojis
+                  />
+                </div>
+              )}
+            </div>
+
             <input
               value={comment}
               onChange={(event) => setComment(event.target.value)}
@@ -119,6 +158,10 @@ export default function Feed({ user }) {
 
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.post("/posts/feed/read").catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!postId || posts.loading || !posts.data?.length) return;

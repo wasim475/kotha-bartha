@@ -1,0 +1,116 @@
+/* =========================================
+   FRIEND CARD start
+   ========================================= */
+
+.friend-card {
+  padding: 16px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.friend-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+}
+
+
+/* Profile + Name */
+
+.friend-card-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+
+/* Name + Bottom Content */
+
+.friend-card-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.friend-card-info strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+
+/* Friend Status */
+
+.friend-card-status {
+  font-size: 13px;
+  color: #9ca3af;
+}
+
+
+/* Buttons */
+
+.friend-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+
+/* Confirm */
+
+.friend-confirm-button {
+  border: none;
+  background: #2563eb;
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+
+/* Delete */
+
+.friend-delete-button {
+  border: none;
+  background: #e5e7eb;
+  color: #111827;
+  padding: 6px 14px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+
+/* Sent Request */
+
+.friend-cancel-button {
+  border: none;
+  background: #e5e7eb;
+  color: #111827;
+  padding: 6px 14px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+
+/* Hover */
+
+.friend-confirm-button:hover {
+  background: #1d4ed8;
+}
+
+.friend-delete-button:hover,
+.friend-cancel-button:hover {
+  background: #d1d5db;
+}
+
+/* Friend card */
+

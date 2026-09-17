@@ -1671,38 +1671,21 @@ router.get(
           .select("unreadCounts")
           .lean();
 
-      const messages =
-        conversations.reduce(
-          (total, conversation) => {
-            let unread = 0;
+      const messages = conversations.reduce(
+        (total, conversation) => {
+          let unread = 0;
 
-            // Depending on whether mongoose returns
-            // Map or plain object
-            if (
-              conversation.unreadCounts
-                ?.get
-            ) {
-              unread =
-                conversation.unreadCounts.get(
-                  userIdString,
-                ) || 0;
-            } else if (
-              conversation.unreadCounts
-            ) {
-              unread =
-                conversation
-                  .unreadCounts[
-                  userIdString
-                ] || 0;
-            }
+          if (conversation.unreadCounts?.get) {
+            unread =
+              conversation.unreadCounts.get(userIdString) || 0;
+          } else if (conversation.unreadCounts) {
+            unread = conversation.unreadCounts[userIdString] || 0;
+          }
 
-            return (
-              total +
-              Number(unread || 0)
-            );
-          },
-          0,
-        );
+          return total + (Number(unread) > 0 ? 1 : 0);
+        },
+        0,
+      );
 
       // ------------------------------------------------------
       // 4. Feed
@@ -1839,7 +1822,7 @@ router.get(
       res.json({
         data: notifications.map(
           (notification) => ({
-            id: notification._id,
+            id: notification._id.toString(),
             type:
               notification.type,
             read:
@@ -1890,7 +1873,6 @@ router.post(
                 .notificationId,
             recipientId:
               req.user._id,
-            readAt: null,
           },
           {
             $set: {

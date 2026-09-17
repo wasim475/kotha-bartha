@@ -21,7 +21,19 @@ export default function Notifications() {
     notifications.reload();
   };
 
-  const handleNotificationClick = (notification) => {
+  const handleNotificationClick = async (notification) => {
+    if (!notification.read) {
+      try {
+        await api.post(
+          `/notifications/${notification.id}/read`,
+        );
+      } catch (error) {
+        console.error("Unable to mark notification as read:", error);
+      } finally {
+        notifications.reload();
+      }
+    }
+
     if (notification.type === "friend_request") {
       navigate("/app/friends");
       return;

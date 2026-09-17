@@ -4,13 +4,14 @@ import {
   Logout,
   NotificationsNone,
   PeopleAlt,
-  PersonAddAlt,
+  Person,
   Settings,
 } from "@mui/icons-material";
 
 import React, {
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -20,11 +21,13 @@ import {
 } from "react-router-dom";
 
 import { Utility } from "../../provider/UtilityProvider";
-
 import { api } from "../../utility/api";
-
 import { useRealtime } from "../../utility/helpers";
 
+
+/* ============================================================
+   NAV ITEMS
+   ============================================================ */
 
 const navItems = [
   {
@@ -51,14 +54,12 @@ const navItems = [
     icon: NotificationsNone,
     key: "notifications",
   },
-  {
-    label: "Profile",
-    path: "/app/profile/me",
-    icon: PersonAddAlt,
-    key: "profile",
-  },
 ];
 
+
+/* ============================================================
+   NAV ITEM
+   ============================================================ */
 
 function NavItem({
   item,
@@ -70,6 +71,7 @@ function NavItem({
 
   return (
     <button
+      type="button"
       className={`nav-item ${
         active ? "active" : ""
       }`}
@@ -91,18 +93,59 @@ function NavItem({
 }
 
 
+/* ============================================================
+   PROFILE POPUP
+   ============================================================ */
+
+function ProfilePopup({
+  onProfile,
+  onLogout,
+}) {
+  return (
+    <div className="profile-popup">
+      <button
+        type="button"
+        className="profile-popup-item"
+        onClick={onProfile}
+      >
+        <Person fontSize="small" />
+
+        <span>Profile</span>
+      </button>
+
+      <button
+        type="button"
+        className="profile-popup-item logout-item"
+        onClick={onLogout}
+      >
+        <Logout fontSize="small" />
+
+        <span>Log out</span>
+      </button>
+    </div>
+  );
+}
+
+
+/* ============================================================
+   NAVBAR
+   ============================================================ */
+
 const Navbar = ({ onLogout }) => {
   const { theme, setTheme } =
     useContext(Utility);
 
   const location = useLocation();
-
   const navigate = useNavigate();
 
+  const profileRef = useRef(null);
 
-  // ============================================================
-  // UNREAD COUNTS
-  // ============================================================
+  const [profileOpen, setProfileOpen] =
+    useState(false);
+
+  /* ============================================================
+     UNREAD COUNTS
+     ============================================================ */
 
   const [counts, setCounts] = useState({
     feed: 0,
@@ -112,64 +155,61 @@ const Navbar = ({ onLogout }) => {
   });
 
 
-  // ============================================================
-  // LOAD UNREAD COUNTS
-  // ============================================================
+  /* ============================================================
+     LOAD UNREAD COUNTS
+     ============================================================ */
 
   const loadCounts = async () => {
     try {
       const { data } = await api.get(
-        "/notifications/unread-counts"
+        "/notifications/unread-counts",
       );
 
       setCounts({
-        feed: Number(data.data?.feed || 0),
+        feed: Number(
+          data.data?.feed || 0,
+        ),
 
         friends: Number(
-          data.data?.friends || 0
+          data.data?.friends || 0,
         ),
 
         messages: Number(
-          data.data?.messages || 0
+          data.data?.messages || 0,
         ),
 
         notifications: Number(
-          data.data?.notifications || 0
+          data.data?.notifications || 0,
         ),
       });
     } catch (error) {
       console.error(
         "Unable to load unread counts:",
-        error
+        error,
       );
     }
   };
 
 
-  // ============================================================
-  // INITIAL LOAD
-  // ============================================================
+  /* ============================================================
+     INITIAL LOAD
+     ============================================================ */
 
   useEffect(() => {
     loadCounts();
   }, []);
 
 
-  // ============================================================
-  // NEW MESSAGE
-  // ============================================================
+  /* ============================================================
+     NEW MESSAGE
+     ============================================================ */
 
-  useRealtime("message:new", () => {
-    setCounts((current) => ({
-      ...current,
-      messages: current.messages + 1,
-    }));
-  });
+  useRealtime("message:new", loadCounts);
 
 
-  // ============================================================
-  // NEW NOTIFICATION
-  // ============================================================
+  /* ============================================================
+     NEW NOTIFICATION
+     ============================================================ */
 
   useRealtime("notification:new", () => {
     setCounts((current) => ({
@@ -180,9 +220,9 @@ const Navbar = ({ onLogout }) => {
   });
 
 
-  // ============================================================
-  // NEW FEED / POST
-  // ============================================================
+  /* ============================================================
+     NEW FEED / POST
+     ============================================================ */
 
   useRealtime("post:new", () => {
     setCounts((current) => ({
@@ -192,40 +232,66 @@ const Navbar = ({ onLogout }) => {
   });
 
 
-  // ============================================================
-  // FRIEND REQUEST
-  // ============================================================
+  /* ============================================================
+     FRIEND REQUEST
+     ============================================================ */
 
   useRealtime("friend:new", () => {
     setCounts((current) => ({
       ...current,
-      friends: current.friends + 1,
+      friends:
+        current.friends + 1,
     }));
   });
 
 
-  // ============================================================
-  // REALTIME CONNECTED
-  // ============================================================
+  /* ============================================================
+     REALTIME CONNECTED
+     ============================================================ */
 
   useRealtime(
     "realtime:connected",
     () => {
       loadCounts();
-    }
+    },
   );
 
 
-  // ============================================================
-  // HANDLE NAVIGATION
-  // ============================================================
+  /* ============================================================
+     CLOSE PROFILE POPUP WHEN CLICKING OUTSIDE
+     ============================================================ */
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (
+        profileRef.current &&
+        !profileRef.current.contains(
+          event.target,
+        )
+      ) {
+        setProfileOpen(false);
+      }
+    };
+
+    document.addEventListener(
+      "mousedown",
+      handleOutsideClick,
+    );
+
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        handleOutsideClick,
+      );
+    };
+  }, []);
+
+
+  /* ============================================================
+     HANDLE NAVIGATION
+     ============================================================ */
 
   const handleNavigate = (item) => {
-    /*
-     * যেই section-এ click করা হয়েছে
-     * তার unread count 0 করে দিচ্ছি।
-     */
-
     if (item.key === "messages") {
       setCounts((current) => ({
         ...current,
@@ -258,21 +324,43 @@ const Navbar = ({ onLogout }) => {
   };
 
 
-  // ============================================================
-  // ACTIVE ITEM
-  // ============================================================
+  /* ============================================================
+     PROFILE
+     ============================================================ */
+
+  const handleProfile = () => {
+    setProfileOpen(false);
+
+    navigate("/app/profile/me");
+  };
+
+
+  /* ============================================================
+     LOGOUT
+     ============================================================ */
+
+  const handleLogout = () => {
+    setProfileOpen(false);
+
+    onLogout();
+  };
+
+
+  /* ============================================================
+     ACTIVE ITEM
+     ============================================================ */
 
   const active =
     navItems.find((item) =>
       location.pathname.startsWith(
-        item.path
-      )
-    ) || navItems[0];
+        item.path,
+      ),
+    ) || null;
 
 
-  // ============================================================
-  // BADGE VALUE
-  // ============================================================
+  /* ============================================================
+     BADGE VALUE
+     ============================================================ */
 
   const getBadge = (item) => {
     if (item.key === "feed") {
@@ -287,7 +375,9 @@ const Navbar = ({ onLogout }) => {
       return counts.messages;
     }
 
-    if (item.key === "notifications") {
+    if (
+      item.key === "notifications"
+    ) {
       return counts.notifications;
     }
 
@@ -295,23 +385,42 @@ const Navbar = ({ onLogout }) => {
   };
 
 
+  /* ============================================================
+     PROFILE ACTIVE
+     ============================================================ */
+
+  const profileActive =
+    location.pathname.startsWith(
+      "/app/profile",
+    );
+
+
   return (
     <>
       {/* ========================================================
           DESKTOP NAVBAR
-      ======================================================== */}
+          ======================================================== */}
 
-      <aside className="desktop-nav">
+      <aside
+        className={`desktop-nav ${
+          theme === "dark"
+            ? "nav-dark"
+            : "nav-light"
+        }`}
+      >
         <p className="nav-label">
           Your space
         </p>
+
+
+        {/* Main Navigation */}
 
         {navItems.map((item) => (
           <NavItem
             key={item.path}
             item={item}
             active={
-              active.path === item.path
+              active?.path === item.path
             }
             badge={getBadge(item)}
             onClick={() =>
@@ -319,6 +428,42 @@ const Navbar = ({ onLogout }) => {
             }
           />
         ))}
+
+
+        {/* Profile */}
+
+        <div
+          className="profile-nav-wrapper"
+          ref={profileRef}
+        >
+          <button
+            type="button"
+            className={`nav-item ${
+              profileActive
+                ? "active"
+                : ""
+            }`}
+            onClick={() =>
+              setProfileOpen(
+                (current) => !current,
+              )
+            }
+          >
+            <span className="nav-icon">
+              <Person fontSize="small" />
+            </span>
+
+            <span>Profile</span>
+          </button>
+
+
+          {profileOpen && (
+            <ProfilePopup
+              onProfile={handleProfile}
+              onLogout={handleLogout}
+            />
+          )}
+        </div>
 
 
         {/* Bottom */}
@@ -328,33 +473,22 @@ const Navbar = ({ onLogout }) => {
           {/* Theme */}
 
           <button
+            type="button"
             className="nav-item"
             onClick={() =>
               setTheme(
                 theme === "light"
                   ? "dark"
-                  : "light"
+                  : "light",
               )
             }
           >
             <Settings fontSize="small" />
 
             <span>
-              Preferences
-            </span>
-          </button>
-
-
-          {/* Logout */}
-
-          <button
-            className="nav-item"
-            onClick={onLogout}
-          >
-            <Logout fontSize="small" />
-
-            <span>
-              Log out
+              {theme === "light"
+                ? "Night mode"
+                : "Light mode"}
             </span>
           </button>
 
@@ -364,16 +498,22 @@ const Navbar = ({ onLogout }) => {
 
       {/* ========================================================
           MOBILE BOTTOM NAVBAR
-      ======================================================== */}
+          ======================================================== */}
 
-      <nav className="bottom-nav">
+      <nav
+        className={`bottom-nav ${
+          theme === "dark"
+            ? "nav-dark"
+            : "nav-light"
+        }`}
+      >
 
         {navItems.map((item) => (
           <NavItem
             key={item.path}
             item={item}
             active={
-              active.path === item.path
+              active?.path === item.path
             }
             badge={getBadge(item)}
             onClick={() =>
@@ -382,10 +522,49 @@ const Navbar = ({ onLogout }) => {
           />
         ))}
 
+
+        {/* Mobile Profile */}
+
+        <div
+          className="mobile-profile-wrapper"
+          ref={
+            profileOpen
+              ? profileRef
+              : null
+          }
+        >
+          <button
+            type="button"
+            className={`nav-item ${
+              profileActive
+                ? "active"
+                : ""
+            }`}
+            onClick={() =>
+              setProfileOpen(
+                (current) => !current,
+              )
+            }
+          >
+            <span className="nav-icon">
+              <Person fontSize="small" />
+            </span>
+
+            <span>Profile</span>
+          </button>
+
+
+          {profileOpen && (
+            <ProfilePopup
+              onProfile={handleProfile}
+              onLogout={handleLogout}
+            />
+          )}
+        </div>
+
       </nav>
     </>
   );
 };
-
 
 export default Navbar;

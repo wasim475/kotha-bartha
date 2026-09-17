@@ -674,21 +674,20 @@ button {
   grid-template-columns: repeat(3, 1fr);
   gap: 13px;
 }
-.friend-card {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-  padding: 20px 10px 15px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-}
+
 .friend-card .outline-button {
   width: 100%;
   min-height: 32px;
   margin-top: 7px;
   font-size: 10px;
 }
+
+
+
+
+
+
+
 .message-list,
 .notification-list {
   display: grid;
