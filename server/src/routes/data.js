@@ -68,8 +68,7 @@ async function serializePost(post, viewerId) {
       postId: post._id,
     }),
     liked: reactions.some(
-      (reaction) =>
-        reaction.userId.toString() === viewerId.toString(),
+      (reaction) => reaction.userId.toString() === viewerId.toString(),
     ),
   };
 }
@@ -84,10 +83,7 @@ async function serializeComment(comment) {
 }
 
 function emitToUser(req, userId, event, payload) {
-  req.app
-    .get("io")
-    ?.to(`user:${userId.toString()}`)
-    .emit(event, payload);
+  req.app.get("io")?.to(`user:${userId.toString()}`).emit(event, payload);
 }
 
 // ============================================================
@@ -96,15 +92,7 @@ function emitToUser(req, userId, event, payload) {
 
 async function createNotification(
   req,
-  {
-    recipientId,
-    actorId,
-    type,
-    entityType,
-    entityId,
-    payload,
-    uniqueEventId,
-  },
+  { recipientId, actorId, type, entityType, entityId, payload, uniqueEventId },
 ) {
   const notification = await Notification.create({
     recipientId,
@@ -123,18 +111,11 @@ async function createNotification(
     type: notification.type,
     read: false,
     createdAt: notification.createdAt,
-    actor: notification.actorId
-      ? safeUser(notification.actorId)
-      : null,
+    actor: notification.actorId ? safeUser(notification.actorId) : null,
     payload: notification.payload,
   };
 
-  emitToUser(
-    req,
-    recipientId,
-    "notification:new",
-    data,
-  );
+  emitToUser(req, recipientId, "notification:new", data);
 
   return data;
 }
@@ -214,19 +195,12 @@ router.patch("/users/me", async (req, res, next) => {
   try {
     const updates = {};
 
-    if (
-      typeof req.body.fullName === "string" &&
-      req.body.fullName.trim()
-    ) {
-      updates.fullName = req.body.fullName
-        .trim()
-        .slice(0, 80);
+    if (typeof req.body.fullName === "string" && req.body.fullName.trim()) {
+      updates.fullName = req.body.fullName.trim().slice(0, 80);
     }
 
     if (typeof req.body.bio === "string") {
-      updates.bio = req.body.bio
-        .trim()
-        .slice(0, 240);
+      updates.bio = req.body.bio.trim().slice(0, 240);
     }
 
     if (["light", "dark"].includes(req.body.theme)) {
@@ -284,10 +258,7 @@ router.get("/users/:userId", async (req, res, next) => {
 
     const friendship = await Friendship.exists({
       userIds: {
-        $all: [
-          req.user._id,
-          user._id,
-        ],
+        $all: [req.user._id, user._id],
       },
     });
 
@@ -297,14 +268,13 @@ router.get("/users/:userId", async (req, res, next) => {
       status: "pending",
     });
 
-    const receivedRequest =
-      await FriendRequest.findOne({
-        senderId: user._id,
-        receiverId: req.user._id,
-        status: "pending",
-      })
-        .select("_id")
-        .lean();
+    const receivedRequest = await FriendRequest.findOne({
+      senderId: user._id,
+      receiverId: req.user._id,
+      status: "pending",
+    })
+      .select("_id")
+      .lean();
 
     res.json({
       data: {
@@ -312,10 +282,8 @@ router.get("/users/:userId", async (req, res, next) => {
         friendCount,
         isFriend: Boolean(friendship),
         friendRequestSent: Boolean(sentRequest),
-        friendRequestReceived:
-          Boolean(receivedRequest),
-        receivedFriendRequestId:
-          receivedRequest?._id?.toString(),
+        friendRequestReceived: Boolean(receivedRequest),
+        receivedFriendRequestId: receivedRequest?._id?.toString(),
       },
     });
   } catch (error) {
@@ -327,47 +295,35 @@ router.get("/users/:userId", async (req, res, next) => {
 // USER POSTS
 // ============================================================
 
-router.get(
-  "/users/:userId/posts",
-  async (req, res, next) => {
-    try {
-      if (
-        !mongoose.isValidObjectId(
-          req.params.userId,
-        )
-      ) {
-        return res.status(400).json({
-          error: {
-            code: "INVALID_ID",
-            message: "Invalid user id.",
-          },
-        });
-      }
-
-      const posts = await Post.find({
-        authorId: req.params.userId,
-        deletedAt: null,
-      })
-        .populate("authorId")
-        .sort({
-          createdAt: -1,
-        });
-
-      res.json({
-        data: await Promise.all(
-          posts.map((post) =>
-            serializePost(
-              post,
-              req.user._id,
-            ),
-          ),
-        ),
+router.get("/users/:userId/posts", async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.userId)) {
+      return res.status(400).json({
+        error: {
+          code: "INVALID_ID",
+          message: "Invalid user id.",
+        },
       });
-    } catch (error) {
-      next(error);
     }
-  },
-);
+
+    const posts = await Post.find({
+      authorId: req.params.userId,
+      deletedAt: null,
+    })
+      .populate("authorId")
+      .sort({
+        createdAt: -1,
+      });
+
+    res.json({
+      data: await Promise.all(
+        posts.map((post) => serializePost(post, req.user._id)),
+      ),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // ============================================================
 // FEED
@@ -382,18 +338,10 @@ router.get("/posts/feed", async (req, res, next) => {
       .lean();
 
     const friendIds = friendships
-      .flatMap((friendship) =>
-        friendship.userIds.map(String),
-      )
-      .filter(
-        (id) =>
-          id !== req.user._id.toString(),
-      );
+      .flatMap((friendship) => friendship.userIds.map(String))
+      .filter((id) => id !== req.user._id.toString());
 
-    const allowedAuthors = [
-      req.user._id,
-      ...friendIds,
-    ];
+    const allowedAuthors = [req.user._id, ...friendIds];
 
     const posts = await Post.find({
       authorId: {
@@ -409,12 +357,7 @@ router.get("/posts/feed", async (req, res, next) => {
 
     res.json({
       data: await Promise.all(
-        posts.map((post) =>
-          serializePost(
-            post,
-            req.user._id,
-          ),
-        ),
+        posts.map((post) => serializePost(post, req.user._id)),
       ),
       meta: {
         hasMore: false,
@@ -431,9 +374,7 @@ router.get("/posts/feed", async (req, res, next) => {
 
 router.post("/posts", async (req, res, next) => {
   try {
-    const body = String(
-      req.body.body || "",
-    ).trim();
+    const body = String(req.body.body || "").trim();
 
     if (!body) {
       return res.status(400).json({
@@ -461,36 +402,21 @@ router.post("/posts", async (req, res, next) => {
       .lean();
 
     const friendIds = friendships
-      .flatMap((friendship) =>
-        friendship.userIds,
-      )
-      .filter(
-        (id) =>
-          id.toString() !==
-          req.user._id.toString(),
-      );
+      .flatMap((friendship) => friendship.userIds)
+      .filter((id) => id.toString() !== req.user._id.toString());
 
     for (const friendId of friendIds) {
-      emitToUser(
-        req,
-        friendId,
-        "post:new",
-        {
-          postId: post._id.toString(),
-          authorId:
-            req.user._id.toString(),
-          createdAt: post.createdAt,
-        },
-      );
+      emitToUser(req, friendId, "post:new", {
+        postId: post._id.toString(),
+        authorId: req.user._id.toString(),
+        createdAt: post.createdAt,
+      });
     }
 
     await post.populate("authorId");
 
     res.status(201).json({
-      data: await serializePost(
-        post,
-        req.user._id,
-      ),
+      data: await serializePost(post, req.user._id),
     });
   } catch (error) {
     next(error);
@@ -501,714 +427,538 @@ router.post("/posts", async (req, res, next) => {
 // LIKE POST
 // ============================================================
 
-router.put(
-  "/posts/:postId/like",
-  async (req, res, next) => {
-    try {
-      const post = await Post.findOne({
-        _id: req.params.postId,
-        deletedAt: null,
+router.put("/posts/:postId/like", async (req, res, next) => {
+  try {
+    const post = await Post.findOne({
+      _id: req.params.postId,
+      deletedAt: null,
+    });
+
+    if (!post) {
+      return res.status(404).json({
+        error: {
+          code: "NOT_FOUND",
+          message: "Post not found.",
+        },
       });
+    }
 
-      if (!post) {
-        return res.status(404).json({
-          error: {
-            code: "NOT_FOUND",
-            message: "Post not found.",
-          },
-        });
-      }
-
-      if (req.body.liked) {
-        await Reaction.updateOne(
-          {
-            userId: req.user._id,
-            targetType: "post",
-            targetId: post._id,
-          },
-          {
-            $set: {
-              type: "like",
-            },
-          },
-          {
-            upsert: true,
-          },
-        );
-      } else {
-        await Reaction.deleteOne({
+    if (req.body.liked) {
+      await Reaction.updateOne(
+        {
           userId: req.user._id,
           targetType: "post",
           targetId: post._id,
-        });
-      }
-
-      // ------------------------------------------------------
-      // Like notification
-      // ------------------------------------------------------
-
-      if (
-        req.body.liked &&
-        post.authorId.toString() !==
-          req.user._id.toString()
-      ) {
-        await createNotification(req, {
-          recipientId: post.authorId,
-          actorId: req.user._id,
-          type: "post_like",
-          entityType: "post",
-          entityId: post._id,
-          payload: {
-            message: `${req.user.fullName} liked your post.`,
-          },
-          uniqueEventId:
-            `post-like:${post._id}:${req.user._id}`,
-        });
-      }
-
-      const likes =
-        await Reaction.countDocuments({
-          targetType: "post",
-          targetId: post._id,
-        });
-
-      res.json({
-        data: {
-          liked: Boolean(req.body.liked),
-          likes,
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
-);
-
-// ============================================================
-// GET COMMENTS
-// ============================================================
-
-router.get(
-  "/posts/:postId/comments",
-  async (req, res, next) => {
-    try {
-      const comments =
-        await Comment.find({
-          postId: req.params.postId,
-        })
-          .populate("authorId")
-          .sort({
-            createdAt: 1,
-          });
-
-      res.json({
-        data: await Promise.all(
-          comments.map(
-            serializeComment,
-          ),
-        ),
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
-);
-
-// ============================================================
-// CREATE COMMENT
-// ============================================================
-
-router.post(
-  "/posts/:postId/comments",
-  async (req, res, next) => {
-    try {
-      const body = String(
-        req.body.body || "",
-      ).trim();
-
-      const post = await Post.findOne({
-        _id: req.params.postId,
-        deletedAt: null,
-      });
-
-      if (!post || !body) {
-        return res.status(400).json({
-          error: {
-            code: "INVALID_COMMENT",
-            message:
-              "Comment text is required.",
-          },
-        });
-      }
-
-      const comment =
-        await Comment.create({
-          postId: post._id,
-          authorId: req.user._id,
-          body,
-        });
-
-      await comment.populate(
-        "authorId",
-      );
-
-      // ------------------------------------------------------
-      // Comment notification
-      // ------------------------------------------------------
-
-      if (
-        post.authorId.toString() !==
-        req.user._id.toString()
-      ) {
-        await createNotification(req, {
-          recipientId: post.authorId,
-          actorId: req.user._id,
-          type: "post_comment",
-          entityType: "post",
-          entityId: post._id,
-          payload: {
-            message: `${req.user.fullName} commented on your post.`,
-          },
-          uniqueEventId:
-            `post-comment:${comment._id}`,
-        });
-      }
-
-      res.status(201).json({
-        data: await serializeComment(
-          comment,
-        ),
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
-);
-
-// ============================================================
-// FRIENDS
-// ============================================================
-
-router.get(
-  "/friends",
-  async (req, res, next) => {
-    try {
-      const tab = [
-        "friends",
-        "requests",
-        "sent",
-      ].includes(req.query.tab)
-        ? req.query.tab
-        : "friends";
-
-      if (tab === "friends") {
-        const records =
-          await Friendship.find({
-            userIds: req.user._id,
-          }).lean();
-
-        const ids = records
-          .flatMap(
-            (record) =>
-              record.userIds,
-          )
-          .filter(
-            (id) =>
-              id.toString() !==
-              req.user._id.toString(),
-          );
-
-        const users =
-          await User.find({
-            _id: {
-              $in: ids,
-            },
-          });
-
-        return res.json({
-          data: users.map(safeUser),
-          meta: {
-            count: users.length,
-          },
-        });
-      }
-
-      const filter =
-        tab === "requests"
-          ? {
-              receiverId:
-                req.user._id,
-              status: "pending",
-            }
-          : {
-              senderId:
-                req.user._id,
-              status: "pending",
-            };
-
-      const requests =
-        await FriendRequest.find(
-          filter,
-        )
-          .populate(
-            "senderId receiverId",
-          )
-          .sort({
-            createdAt: -1,
-          });
-
-      return res.json({
-        data: requests.map(
-          (request) => ({
-            id: request._id,
-            status:
-              request.status,
-            user: safeUser(
-              tab === "requests"
-                ? request.senderId
-                : request.receiverId,
-            ),
-          }),
-        ),
-        meta: {
-          count: requests.length,
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
-);
-
-// ============================================================
-// SEND FRIEND REQUEST
-// ============================================================
-
-router.post(
-  "/friends/requests",
-  async (req, res, next) => {
-    try {
-      if (
-        !mongoose.isValidObjectId(
-          req.body.receiverId,
-        ) ||
-        req.body.receiverId ===
-          req.user._id.toString()
-      ) {
-        return res.status(400).json({
-          error: {
-            code: "INVALID_REQUEST",
-            message:
-              "Invalid friend request.",
-          },
-        });
-      }
-
-      const receiver =
-        await User.findById(
-          req.body.receiverId,
-        );
-
-      if (!receiver) {
-        return res.status(404).json({
-          error: {
-            code: "NOT_FOUND",
-            message:
-              "User not found.",
-          },
-        });
-      }
-
-      // Already friends?
-      const alreadyFriends =
-        await Friendship.exists({
-          userIds: {
-            $all: [
-              req.user._id,
-              receiver._id,
-            ],
-          },
-        });
-
-      if (alreadyFriends) {
-        return res.status(409).json({
-          error: {
-            code: "ALREADY_FRIENDS",
-            message:
-              "You are already friends.",
-          },
-        });
-      }
-
-      const existing =
-        await FriendRequest.findOne({
-          senderId: req.user._id,
-          receiverId:
-            receiver._id,
-          status: "pending",
-        });
-
-      if (existing) {
-        return res.status(409).json({
-          error: {
-            code: "REQUEST_EXISTS",
-            message:
-              "Request already sent.",
-          },
-        });
-      }
-
-      const request =
-        await FriendRequest.create({
-          senderId:
-            req.user._id,
-          receiverId:
-            receiver._id,
-        });
-
-      // ------------------------------------------------------
-      // Friend request notification
-      // ------------------------------------------------------
-
-      await createNotification(req, {
-        recipientId:
-          receiver._id,
-        actorId:
-          req.user._id,
-        type:
-          "friend_request",
-        entityType:
-          "friend_request",
-        entityId:
-          request._id,
-        payload: {
-          message: `${req.user.fullName} sent you a friend request.`,
-        },
-        uniqueEventId:
-          `friend-request:${request._id}`,
-      });
-
-      // Extra realtime event for Friends badge
-      emitToUser(
-        req,
-        receiver._id,
-        "friend:new",
-        {
-          requestId:
-            request._id.toString(),
-          senderId:
-            req.user._id.toString(),
-        },
-      );
-
-      res.status(201).json({
-        data: {
-          id: request._id.toString(),
-          status:
-            request.status,
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
-);
-
-// ============================================================
-// CANCEL FRIEND REQUEST
-// ============================================================
-
-router.delete(
-  "/friends/requests/:receiverId",
-  async (req, res, next) => {
-    try {
-      const request =
-        await FriendRequest.findOneAndDelete(
-          {
-            senderId:
-              req.user._id,
-            receiverId:
-              req.params.receiverId,
-            status: "pending",
-          },
-        );
-
-      if (!request) {
-        return res.status(404).json({
-          error: {
-            code: "NOT_FOUND",
-            message:
-              "Friend request not found.",
-          },
-        });
-      }
-
-      res.json({
-        data: {
-          cancelled: true,
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
-);
-
-// ============================================================
-// ACCEPT FRIEND REQUEST
-// ============================================================
-
-router.post(
-  "/friends/requests/:requestId/accept",
-  async (req, res, next) => {
-    try {
-      const request =
-        await FriendRequest.findOne({
-          _id: req.params.requestId,
-          receiverId:
-            req.user._id,
-          status: "pending",
-        });
-
-      if (!request) {
-        return res.status(404).json({
-          error: {
-            code: "NOT_FOUND",
-            message:
-              "Friend request not found.",
-          },
-        });
-      }
-
-      request.status =
-        "accepted";
-
-      await request.save();
-
-      await Friendship.updateOne(
-        {
-          pairKey: pairKey(
-            request.senderId,
-            request.receiverId,
-          ),
         },
         {
-          $setOnInsert: {
-            userIds: [
-              request.senderId,
-              request.receiverId,
-            ],
-            pairKey: pairKey(
-              request.senderId,
-              request.receiverId,
-            ),
+          $set: {
+            type: "like",
           },
         },
         {
           upsert: true,
         },
       );
-
-      // ------------------------------------------------------
-      // Accepted notification
-      // ------------------------------------------------------
-
-      await createNotification(req, {
-        recipientId:
-          request.senderId,
-        actorId:
-          req.user._id,
-        type:
-          "friend_accepted",
-        entityType:
-          "user",
-        entityId:
-          req.user._id,
-        payload: {
-          message: `${req.user.fullName} accepted your friend request.`,
-        },
-        uniqueEventId:
-          `friend-accepted:${request._id}`,
+    } else {
+      await Reaction.deleteOne({
+        userId: req.user._id,
+        targetType: "post",
+        targetId: post._id,
       });
-
-      // Realtime friend update
-      emitToUser(
-        req,
-        request.senderId,
-        "friend:accepted",
-        {
-          userId:
-            req.user._id.toString(),
-        },
-      );
-
-      res.json({
-        data: {
-          accepted: true,
-        },
-      });
-    } catch (error) {
-      next(error);
     }
-  },
-);
+
+    // ------------------------------------------------------
+    // Like notification
+    // ------------------------------------------------------
+
+    if (
+      req.body.liked &&
+      post.authorId.toString() !== req.user._id.toString()
+    ) {
+      await createNotification(req, {
+        recipientId: post.authorId,
+        actorId: req.user._id,
+        type: "post_like",
+        entityType: "post",
+        entityId: post._id,
+        payload: {
+          message: `${req.user.fullName} liked your post.`,
+        },
+        uniqueEventId: `post-like:${post._id}:${req.user._id}`,
+      });
+    }
+
+    const likes = await Reaction.countDocuments({
+      targetType: "post",
+      targetId: post._id,
+    });
+
+    res.json({
+      data: {
+        liked: Boolean(req.body.liked),
+        likes,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
+// GET COMMENTS
+// ============================================================
+
+router.get("/posts/:postId/comments", async (req, res, next) => {
+  try {
+    const comments = await Comment.find({
+      postId: req.params.postId,
+    })
+      .populate("authorId")
+      .sort({
+        createdAt: 1,
+      });
+
+    res.json({
+      data: await Promise.all(comments.map(serializeComment)),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
+// CREATE COMMENT
+// ============================================================
+
+router.post("/posts/:postId/comments", async (req, res, next) => {
+  try {
+    const body = String(req.body.body || "").trim();
+
+    const post = await Post.findOne({
+      _id: req.params.postId,
+      deletedAt: null,
+    });
+
+    if (!post || !body) {
+      return res.status(400).json({
+        error: {
+          code: "INVALID_COMMENT",
+          message: "Comment text is required.",
+        },
+      });
+    }
+
+    const comment = await Comment.create({
+      postId: post._id,
+      authorId: req.user._id,
+      body,
+    });
+
+    await comment.populate("authorId");
+
+    // ------------------------------------------------------
+    // Comment notification
+    // ------------------------------------------------------
+
+    if (post.authorId.toString() !== req.user._id.toString()) {
+      await createNotification(req, {
+        recipientId: post.authorId,
+        actorId: req.user._id,
+        type: "post_comment",
+        entityType: "post",
+        entityId: post._id,
+        payload: {
+          message: `${req.user.fullName} commented on your post.`,
+        },
+        uniqueEventId: `post-comment:${comment._id}`,
+      });
+    }
+
+    res.status(201).json({
+      data: await serializeComment(comment),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
+// FRIENDS
+// ============================================================
+
+router.get("/friends", async (req, res, next) => {
+  try {
+    const tab = ["friends", "requests", "sent"].includes(req.query.tab)
+      ? req.query.tab
+      : "friends";
+
+    if (tab === "friends") {
+      const records = await Friendship.find({
+        userIds: req.user._id,
+      }).lean();
+
+      const ids = records
+        .flatMap((record) => record.userIds)
+        .filter((id) => id.toString() !== req.user._id.toString());
+
+      const users = await User.find({
+        _id: {
+          $in: ids,
+        },
+      });
+
+      return res.json({
+        data: users.map(safeUser),
+        meta: {
+          count: users.length,
+        },
+      });
+    }
+
+    const filter =
+      tab === "requests"
+        ? {
+            receiverId: req.user._id,
+            status: "pending",
+          }
+        : {
+            senderId: req.user._id,
+            status: "pending",
+          };
+
+    const requests = await FriendRequest.find(filter)
+      .populate("senderId receiverId")
+      .sort({
+        createdAt: -1,
+      });
+
+    return res.json({
+      data: requests.map((request) => ({
+        id: request._id,
+        status: request.status,
+        user: safeUser(
+          tab === "requests" ? request.senderId : request.receiverId,
+        ),
+      })),
+      meta: {
+        count: requests.length,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
+// SEND FRIEND REQUEST
+// ============================================================
+
+router.post("/friends/requests", async (req, res, next) => {
+  try {
+    if (
+      !mongoose.isValidObjectId(req.body.receiverId) ||
+      req.body.receiverId === req.user._id.toString()
+    ) {
+      return res.status(400).json({
+        error: {
+          code: "INVALID_REQUEST",
+          message: "Invalid friend request.",
+        },
+      });
+    }
+
+    const receiver = await User.findById(req.body.receiverId);
+
+    if (!receiver) {
+      return res.status(404).json({
+        error: {
+          code: "NOT_FOUND",
+          message: "User not found.",
+        },
+      });
+    }
+
+    // Already friends?
+    const alreadyFriends = await Friendship.exists({
+      userIds: {
+        $all: [req.user._id, receiver._id],
+      },
+    });
+
+    if (alreadyFriends) {
+      return res.status(409).json({
+        error: {
+          code: "ALREADY_FRIENDS",
+          message: "You are already friends.",
+        },
+      });
+    }
+
+    const existing = await FriendRequest.findOne({
+      senderId: req.user._id,
+      receiverId: receiver._id,
+      status: "pending",
+    });
+
+    if (existing) {
+      return res.status(409).json({
+        error: {
+          code: "REQUEST_EXISTS",
+          message: "Request already sent.",
+        },
+      });
+    }
+
+    const request = await FriendRequest.create({
+      senderId: req.user._id,
+      receiverId: receiver._id,
+    });
+
+    // ------------------------------------------------------
+    // Friend request notification
+    // ------------------------------------------------------
+
+    await createNotification(req, {
+      recipientId: receiver._id,
+      actorId: req.user._id,
+      type: "friend_request",
+      entityType: "friend_request",
+      entityId: request._id,
+      payload: {
+        message: `${req.user.fullName} sent you a friend request.`,
+      },
+      uniqueEventId: `friend-request:${request._id}`,
+    });
+
+    // Extra realtime event for Friends badge
+    emitToUser(req, receiver._id, "friend:new", {
+      requestId: request._id.toString(),
+      senderId: req.user._id.toString(),
+    });
+
+    res.status(201).json({
+      data: {
+        id: request._id.toString(),
+        status: request.status,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
+// CANCEL FRIEND REQUEST
+// ============================================================
+
+router.delete("/friends/requests/:receiverId", async (req, res, next) => {
+  try {
+    const request = await FriendRequest.findOneAndDelete({
+      senderId: req.user._id,
+      receiverId: req.params.receiverId,
+      status: "pending",
+    });
+
+    if (!request) {
+      return res.status(404).json({
+        error: {
+          code: "NOT_FOUND",
+          message: "Friend request not found.",
+        },
+      });
+    }
+
+    res.json({
+      data: {
+        cancelled: true,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
+// ACCEPT FRIEND REQUEST
+// ============================================================
+
+router.post("/friends/requests/:requestId/accept", async (req, res, next) => {
+  try {
+    const request = await FriendRequest.findOne({
+      _id: req.params.requestId,
+      receiverId: req.user._id,
+      status: "pending",
+    });
+
+    if (!request) {
+      return res.status(404).json({
+        error: {
+          code: "NOT_FOUND",
+          message: "Friend request not found.",
+        },
+      });
+    }
+
+    request.status = "accepted";
+
+    await request.save();
+
+    await Friendship.updateOne(
+      {
+        pairKey: pairKey(request.senderId, request.receiverId),
+      },
+      {
+        $setOnInsert: {
+          userIds: [request.senderId, request.receiverId],
+          pairKey: pairKey(request.senderId, request.receiverId),
+        },
+      },
+      {
+        upsert: true,
+      },
+    );
+
+    // ------------------------------------------------------
+    // Accepted notification
+    // ------------------------------------------------------
+
+    await createNotification(req, {
+      recipientId: request.senderId,
+      actorId: req.user._id,
+      type: "friend_accepted",
+      entityType: "user",
+      entityId: req.user._id,
+      payload: {
+        message: `${req.user.fullName} accepted your friend request.`,
+      },
+      uniqueEventId: `friend-accepted:${request._id}`,
+    });
+
+    // Realtime friend update
+    emitToUser(req, request.senderId, "friend:accepted", {
+      userId: req.user._id.toString(),
+    });
+
+    res.json({
+      data: {
+        accepted: true,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // ============================================================
 // CREATE / GET CONVERSATION
 // ============================================================
 
-router.post(
-  "/conversations",
-  async (req, res, next) => {
-    try {
-      if (
-        !mongoose.isValidObjectId(
-          req.body.userId,
-        ) ||
-        req.body.userId ===
-          req.user._id.toString()
-      ) {
-        return res.status(400).json({
-          error: {
-            code: "INVALID_USER",
-            message:
-              "Choose another user to message.",
-          },
-        });
-      }
-
-      const other =
-        await User.findById(
-          req.body.userId,
-        );
-
-      if (!other) {
-        return res.status(404).json({
-          error: {
-            code: "NOT_FOUND",
-            message:
-              "User not found.",
-          },
-        });
-      }
-
-      const key = pairKey(
-        req.user._id,
-        other._id,
-      );
-
-      const conversation =
-        await Conversation.findOneAndUpdate(
-          {
-            pairKey: key,
-          },
-          {
-            $setOnInsert: {
-              participantIds: [
-                req.user._id,
-                other._id,
-              ],
-              pairKey: key,
-            },
-          },
-          {
-            new: true,
-            upsert: true,
-          },
-        );
-
-      res.status(201).json({
-        data: {
-          id: conversation._id.toString(),
+router.post("/conversations", async (req, res, next) => {
+  try {
+    if (
+      !mongoose.isValidObjectId(req.body.userId) ||
+      req.body.userId === req.user._id.toString()
+    ) {
+      return res.status(400).json({
+        error: {
+          code: "INVALID_USER",
+          message: "Choose another user to message.",
         },
       });
-    } catch (error) {
-      next(error);
     }
-  },
-);
+
+    const other = await User.findById(req.body.userId);
+
+    if (!other) {
+      return res.status(404).json({
+        error: {
+          code: "NOT_FOUND",
+          message: "User not found.",
+        },
+      });
+    }
+
+    const key = pairKey(req.user._id, other._id);
+
+    const conversation = await Conversation.findOneAndUpdate(
+      {
+        pairKey: key,
+      },
+      {
+        $setOnInsert: {
+          participantIds: [req.user._id, other._id],
+          pairKey: key,
+        },
+      },
+      {
+        new: true,
+        upsert: true,
+      },
+    );
+
+    res.status(201).json({
+      data: {
+        id: conversation._id.toString(),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // ============================================================
 // CONVERSATIONS
 // ============================================================
 
-router.get(
-  "/conversations",
-  async (req, res, next) => {
-    try {
-      const conversations =
-        await Conversation.find({
-          participantIds:
-            req.user._id,
-        })
-          .sort({
-            updatedAt: -1,
-          })
-          .limit(50);
+router.get("/conversations", async (req, res, next) => {
+  try {
+    const conversations = await Conversation.find({
+      participantIds: req.user._id,
+    })
+      .sort({
+        updatedAt: -1,
+      })
+      .limit(50);
 
-      const otherIds =
-        conversations.map(
-          (conversation) =>
-            conversation.participantIds.find(
-              (id) =>
-                id.toString() !==
-                req.user._id.toString(),
-            ),
+    const otherIds = conversations.map((conversation) =>
+      conversation.participantIds.find(
+        (id) => id.toString() !== req.user._id.toString(),
+      ),
+    );
+
+    const users = await User.find({
+      _id: {
+        $in: otherIds,
+      },
+    });
+
+    const byId = new Map(users.map((user) => [user._id.toString(), user]));
+
+    res.json({
+      data: conversations.map((conversation) => {
+        const other = byId.get(
+          conversation.participantIds
+            .find((id) => id.toString() !== req.user._id.toString())
+            .toString(),
         );
 
-      const users =
-        await User.find({
-          _id: {
-            $in: otherIds,
-          },
-        });
-
-      const byId = new Map(
-        users.map((user) => [
-          user._id.toString(),
-          user,
-        ]),
-      );
-
-      res.json({
-        data: conversations.map(
-          (conversation) => {
-            const other =
-              byId.get(
-                conversation.participantIds
-                  .find(
-                    (id) =>
-                      id.toString() !==
-                      req.user._id.toString(),
-                  )
-                  .toString(),
-              );
-
-            return {
-              id: conversation._id,
-              user: safeUser(other),
-              lastMessage:
-                conversation.lastMessage,
-              lastMessageAt:
-                conversation.lastMessageAt,
-              unreadCount:
-                conversation
-                  .unreadCounts
-                  ?.get?.(
-                    req.user._id.toString(),
-                  ) || 0,
-            };
-          },
-        ),
-        meta: {
-          hasMore: false,
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
-);
+        return {
+          id: conversation._id,
+          user: safeUser(other),
+          lastMessage: conversation.lastMessage,
+          lastMessageAt: conversation.lastMessageAt,
+          unreadCount:
+            conversation.unreadCounts?.get?.(req.user._id.toString()) || 0,
+        };
+      }),
+      meta: {
+        hasMore: false,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // ============================================================
 // GET MESSAGES
@@ -1221,53 +971,41 @@ router.get(
   "/conversations/:conversationId/messages",
   async (req, res, next) => {
     try {
-      const conversation =
-        await Conversation.findOne({
-          _id: req.params.conversationId,
-          participantIds:
-            req.user._id,
-        });
+      const conversation = await Conversation.findOne({
+        _id: req.params.conversationId,
+        participantIds: req.user._id,
+      });
 
       if (!conversation) {
         return res.status(404).json({
           error: {
             code: "NOT_FOUND",
-            message:
-              "Conversation not found.",
+            message: "Conversation not found.",
           },
         });
       }
 
       // Mark conversation as read
-      conversation.unreadCounts?.set(
-        req.user._id.toString(),
-        0,
-      );
+      conversation.unreadCounts?.set(req.user._id.toString(), 0);
 
       await conversation.save();
 
-      const messages =
-        await Message.find({
-          conversationId:
-            conversation._id,
-          deletedAt: null,
+      const messages = await Message.find({
+        conversationId: conversation._id,
+        deletedAt: null,
+      })
+        .sort({
+          createdAt: 1,
         })
-          .sort({
-            createdAt: 1,
-          })
-          .lean();
+        .lean();
 
       res.json({
-        data: messages.map(
-          (message) => ({
-            id: message._id.toString(),
-            body: message.body,
-            createdAt:
-              message.createdAt,
-            senderId:
-              message.senderId.toString(),
-          }),
-        ),
+        data: messages.map((message) => ({
+          id: message._id.toString(),
+          body: message.body,
+          createdAt: message.createdAt,
+          senderId: message.senderId.toString(),
+        })),
       });
     } catch (error) {
       next(error);
@@ -1283,81 +1021,54 @@ router.post(
   "/conversations/:conversationId/messages",
   async (req, res, next) => {
     try {
-      const body = String(
-        req.body.body || "",
-      ).trim();
+      const body = String(req.body.body || "").trim();
 
-      const conversation =
-        await Conversation.findOne({
-          _id: req.params.conversationId,
-          participantIds:
-            req.user._id,
-        });
+      const conversation = await Conversation.findOne({
+        _id: req.params.conversationId,
+        participantIds: req.user._id,
+      });
 
       if (!conversation || !body) {
         return res.status(400).json({
           error: {
             code: "INVALID_MESSAGE",
-            message:
-              "Message cannot be empty.",
+            message: "Message cannot be empty.",
           },
         });
       }
 
-      const recipientId =
-        conversation.participantIds.find(
-          (id) =>
-            id.toString() !==
-            req.user._id.toString(),
-        );
+      const recipientId = conversation.participantIds.find(
+        (id) => id.toString() !== req.user._id.toString(),
+      );
 
-      const message =
-        await Message.create({
-          conversationId:
-            conversation._id,
-          senderId:
-            req.user._id,
-          recipientId,
-          body,
-          status:
-            "delivered",
-        });
+      const message = await Message.create({
+        conversationId: conversation._id,
+        senderId: req.user._id,
+        recipientId,
+        body,
+        status: "delivered",
+      });
 
-      conversation.lastMessage =
-        body;
+      conversation.lastMessage = body;
 
-      conversation.lastMessageAt =
-        message.createdAt;
+      conversation.lastMessageAt = message.createdAt;
 
       // Increase recipient unread count
       conversation.unreadCounts?.set(
         recipientId.toString(),
-        (
-          conversation.unreadCounts?.get(
-            recipientId.toString(),
-          ) || 0
-        ) + 1,
+        (conversation.unreadCounts?.get(recipientId.toString()) || 0) + 1,
       );
 
       await conversation.save();
 
       // Realtime new message
-      emitToUser(
-        req,
-        recipientId,
-        "message:new",
-        {
-          id: message._id.toString(),
-          conversationId:
-            conversation._id.toString(),
-          body:
-            message.body,
-          createdAt:
-            message.createdAt,
-          senderId:
-            req.user._id.toString(),
-        },
-      );
+      emitToUser(req, recipientId, "message:new", {
+        id: message._id.toString(),
+        conversationId: conversation._id.toString(),
+        body: message.body,
+        createdAt: message.createdAt,
+        senderId: req.user._id.toString(),
+      });
 
       res.status(201).json({
         data: message,
@@ -1376,103 +1087,74 @@ router.patch(
   "/conversations/:conversationId/messages/:messageId",
   async (req, res, next) => {
     try {
-      const body = String(
-        req.body.body || "",
-      ).trim();
+      const body = String(req.body.body || "").trim();
 
       if (!body) {
         return res.status(400).json({
           error: {
             code: "INVALID_MESSAGE",
-            message:
-              "Message cannot be empty.",
+            message: "Message cannot be empty.",
           },
         });
       }
 
-      const conversation =
-        await Conversation.findOne({
-          _id: req.params.conversationId,
-          participantIds:
-            req.user._id,
-        });
+      const conversation = await Conversation.findOne({
+        _id: req.params.conversationId,
+        participantIds: req.user._id,
+      });
 
       if (!conversation) {
         return res.status(404).json({
           error: {
             code: "NOT_FOUND",
-            message:
-              "Conversation not found.",
+            message: "Conversation not found.",
           },
         });
       }
 
       // Only own message can be edited
-      const message =
-        await Message.findOne({
-          _id: req.params.messageId,
-          conversationId:
-            conversation._id,
-          senderId:
-            req.user._id,
-          deletedAt: null,
-        });
+      const message = await Message.findOne({
+        _id: req.params.messageId,
+        conversationId: conversation._id,
+        senderId: req.user._id,
+        deletedAt: null,
+      });
 
       if (!message) {
         return res.status(404).json({
           error: {
             code: "NOT_FOUND",
-            message:
-              "Message not found or you cannot edit this message.",
+            message: "Message not found or you cannot edit this message.",
           },
         });
       }
 
-      message.body =
-        body;
+      message.body = body;
 
-      message.editedAt =
-        new Date();
+      message.editedAt = new Date();
 
       await message.save();
 
-      const recipientId =
-        conversation.participantIds.find(
-          (id) =>
-            id.toString() !==
-            req.user._id.toString(),
-        );
+      const recipientId = conversation.participantIds.find(
+        (id) => id.toString() !== req.user._id.toString(),
+      );
 
       // Realtime update
-      emitToUser(
-        req,
-        recipientId,
-        "message:updated",
-        {
-          id: message._id.toString(),
-          conversationId:
-            conversation._id.toString(),
-          body:
-            message.body,
-          senderId:
-            message.senderId.toString(),
-          editedAt:
-            message.editedAt,
-        },
-      );
+      emitToUser(req, recipientId, "message:updated", {
+        id: message._id.toString(),
+        conversationId: conversation._id.toString(),
+        body: message.body,
+        senderId: message.senderId.toString(),
+        editedAt: message.editedAt,
+      });
 
       // Update last message if needed
       if (
         conversation.lastMessageAt &&
-        new Date(
-          conversation.lastMessageAt,
-        ).getTime() ===
-          new Date(
-            message.createdAt,
-          ).getTime()
+        new Date(conversation.lastMessageAt).getTime() ===
+          new Date(message.createdAt).getTime()
       ) {
-        conversation.lastMessage =
-          body;
+        conversation.lastMessage = body;
 
         await conversation.save();
       }
@@ -1480,14 +1162,10 @@ router.patch(
       res.json({
         data: {
           id: message._id.toString(),
-          body:
-            message.body,
-          createdAt:
-            message.createdAt,
-          editedAt:
-            message.editedAt,
-          senderId:
-            message.senderId.toString(),
+          body: message.body,
+          createdAt: message.createdAt,
+          editedAt: message.editedAt,
+          senderId: message.senderId.toString(),
         },
       });
     } catch (error) {
@@ -1504,96 +1182,69 @@ router.delete(
   "/conversations/:conversationId/messages/:messageId",
   async (req, res, next) => {
     try {
-      const conversation =
-        await Conversation.findOne({
-          _id: req.params.conversationId,
-          participantIds:
-            req.user._id,
-        });
+      const conversation = await Conversation.findOne({
+        _id: req.params.conversationId,
+        participantIds: req.user._id,
+      });
 
       if (!conversation) {
         return res.status(404).json({
           error: {
             code: "NOT_FOUND",
-            message:
-              "Conversation not found.",
+            message: "Conversation not found.",
           },
         });
       }
 
       // Only own message can be deleted
-      const message =
-        await Message.findOne({
-          _id: req.params.messageId,
-          conversationId:
-            conversation._id,
-          senderId:
-            req.user._id,
-          deletedAt: null,
-        });
+      const message = await Message.findOne({
+        _id: req.params.messageId,
+        conversationId: conversation._id,
+        senderId: req.user._id,
+        deletedAt: null,
+      });
 
       if (!message) {
         return res.status(404).json({
           error: {
             code: "NOT_FOUND",
-            message:
-              "Message not found or you cannot delete this message.",
+            message: "Message not found or you cannot delete this message.",
           },
         });
       }
 
       // Soft delete
-      message.deletedAt =
-        new Date();
+      message.deletedAt = new Date();
 
       await message.save();
 
-      const recipientId =
-        conversation.participantIds.find(
-          (id) =>
-            id.toString() !==
-            req.user._id.toString(),
-        );
+      const recipientId = conversation.participantIds.find(
+        (id) => id.toString() !== req.user._id.toString(),
+      );
 
       // Realtime delete
-      emitToUser(
-        req,
-        recipientId,
-        "message:deleted",
-        {
-          id: message._id.toString(),
-          conversationId:
-            conversation._id.toString(),
-          senderId:
-            message.senderId.toString(),
-        },
-      );
+      emitToUser(req, recipientId, "message:deleted", {
+        id: message._id.toString(),
+        conversationId: conversation._id.toString(),
+        senderId: message.senderId.toString(),
+      });
 
       // Update last message
       if (
         conversation.lastMessageAt &&
-        new Date(
-          conversation.lastMessageAt,
-        ).getTime() ===
-          new Date(
-            message.createdAt,
-          ).getTime()
+        new Date(conversation.lastMessageAt).getTime() ===
+          new Date(message.createdAt).getTime()
       ) {
-        const lastMessage =
-          await Message.findOne({
-            conversationId:
-              conversation._id,
-            deletedAt: null,
-          }).sort({
-            createdAt: -1,
-          });
+        const lastMessage = await Message.findOne({
+          conversationId: conversation._id,
+          deletedAt: null,
+        }).sort({
+          createdAt: -1,
+        });
 
-        conversation.lastMessage =
-          lastMessage?.body || "";
+        conversation.lastMessage = lastMessage?.body || "";
 
-        conversation.lastMessageAt =
-          lastMessage?.createdAt ||
-          null;
+        conversation.lastMessageAt = lastMessage?.createdAt || null;
 
         await conversation.save();
       }
@@ -1628,131 +1279,96 @@ router.delete(
 // Navbar এই endpoint থেকে badge count পাবে.
 // ============================================================
 
-router.get(
-  "/notifications/unread-counts",
-  async (req, res, next) => {
-    try {
-      const userId =
-        req.user._id;
+router.get("/notifications/unread-counts", async (req, res, next) => {
+  try {
+    const userId = req.user._id;
 
-      const userIdString =
-        userId.toString();
+    const userIdString = userId.toString();
 
-      // ------------------------------------------------------
-      // 1. Notifications
-      // ------------------------------------------------------
+    // ------------------------------------------------------
+    // 1. Notifications
+    // ------------------------------------------------------
 
-      const notifications =
-        await Notification.countDocuments({
-          recipientId: userId,
-          readAt: null,
-        });
+    const notifications = await Notification.countDocuments({
+      recipientId: userId,
+      readAt: null,
+    });
 
-      // ------------------------------------------------------
-      // 2. Friend requests
-      // ------------------------------------------------------
+    // ------------------------------------------------------
+    // 2. Friend requests
+    // ------------------------------------------------------
 
-      const friends =
-        await FriendRequest.countDocuments(
-          {
-            receiverId: userId,
-            status: "pending",
-          },
-        );
+    const friends = await FriendRequest.countDocuments({
+      receiverId: userId,
+      status: "pending",
+    });
 
-      // ------------------------------------------------------
-      // 3. Messages
-      // ------------------------------------------------------
+    // ------------------------------------------------------
+    // 3. Messages
+    // ------------------------------------------------------
 
-      const conversations =
-        await Conversation.find({
-          participantIds: userId,
-        })
-          .select("unreadCounts")
-          .lean();
+    const conversations = await Conversation.find({
+      participantIds: userId,
+    })
+      .select("unreadCounts")
+      .lean();
 
-      const messages = conversations.reduce(
-        (total, conversation) => {
-          let unread = 0;
+    const messages = conversations.reduce((total, conversation) => {
+      let unread = 0;
 
-          if (conversation.unreadCounts?.get) {
-            unread =
-              conversation.unreadCounts.get(userIdString) || 0;
-          } else if (conversation.unreadCounts) {
-            unread = conversation.unreadCounts[userIdString] || 0;
-          }
+      if (conversation.unreadCounts?.get) {
+        unread = conversation.unreadCounts.get(userIdString) || 0;
+      } else if (conversation.unreadCounts) {
+        unread = conversation.unreadCounts[userIdString] || 0;
+      }
 
-          return total + (Number(unread) > 0 ? 1 : 0);
-        },
-        0,
-      );
+      return total + (Number(unread) > 0 ? 1 : 0);
+    }, 0);
 
-      // ------------------------------------------------------
-      // 4. Feed
-      // ------------------------------------------------------
+    // ------------------------------------------------------
+    // 4. Feed
+    // ------------------------------------------------------
 
-      const user =
-        await User.findById(
-          userId,
-        )
-          .select("settings")
-          .lean();
+    const user = await User.findById(userId).select("settings").lean();
 
-      const feedSeenAt =
-        user?.settings?.feedSeenAt
-          ? new Date(
-              user.settings.feedSeenAt,
-            )
-          : new Date(0);
+    const feedSeenAt = user?.settings?.feedSeenAt
+      ? new Date(user.settings.feedSeenAt)
+      : new Date(0);
 
-      const friendships =
-        await Friendship.find({
-          userIds: userId,
-        })
-          .select("userIds")
-          .lean();
+    const friendships = await Friendship.find({
+      userIds: userId,
+    })
+      .select("userIds")
+      .lean();
 
-      const friendIds =
-        friendships
-          .flatMap(
-            (friendship) =>
-              friendship.userIds,
-          )
-          .filter(
-            (id) =>
-              id.toString() !==
-              userIdString,
-          );
+    const friendIds = friendships
+      .flatMap((friendship) => friendship.userIds)
+      .filter((id) => id.toString() !== userIdString);
 
-      const allowedAuthors = [
-        userId,
-        ...friendIds,
-      ];
+    const allowedAuthors = [userId, ...friendIds];
 
-      const feed =
-        await Post.countDocuments({
-          authorId: {
-            $in: allowedAuthors,
-          },
-          createdAt: {
-            $gt: feedSeenAt,
-          },
-          deletedAt: null,
-        });
+    const feed = await Post.countDocuments({
+      authorId: {
+        $in: allowedAuthors,
+      },
+      createdAt: {
+        $gt: feedSeenAt,
+      },
+      deletedAt: null,
+    });
 
-      res.json({
-        data: {
-          feed,
-          friends,
-          messages,
-          notifications,
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
-);
+    res.json({
+      data: {
+        feed,
+        friends,
+        messages,
+        notifications,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // ============================================================
 // MARK FEED AS READ
@@ -1768,177 +1384,138 @@ router.get(
 //
 // ============================================================
 
-router.post(
-  "/posts/feed/read",
-  async (req, res, next) => {
-    try {
-      const now =
-        new Date();
+router.post("/posts/feed/read", async (req, res, next) => {
+  try {
+    const now = new Date();
 
-      await User.findByIdAndUpdate(
-        req.user._id,
-        {
-          $set: {
-            "settings.feedSeenAt":
-              now,
-          },
+    await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        $set: {
+          "settings.feedSeenAt": now,
         },
-        {
-          new: true,
-        },
-      );
+      },
+      {
+        new: true,
+      },
+    );
 
-      res.json({
-        data: {
-          read: true,
-          feedSeenAt: now,
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
-);
+    res.json({
+      data: {
+        read: true,
+        feedSeenAt: now,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // ============================================================
 // NOTIFICATIONS
 // ============================================================
 
-router.get(
-  "/notifications",
-  async (req, res, next) => {
-    try {
-      const notifications =
-        await Notification.find({
-          recipientId:
-            req.user._id,
-        })
-          .sort({
-            createdAt: -1,
-          })
-          .limit(50)
-          .populate("actorId");
+router.get("/notifications", async (req, res, next) => {
+  try {
+    const notifications = await Notification.find({
+      recipientId: req.user._id,
+    })
+      .sort({
+        createdAt: -1,
+      })
+      .limit(50)
+      .populate("actorId");
 
-      res.json({
-        data: notifications.map(
-          (notification) => ({
-            id: notification._id.toString(),
-            type:
-              notification.type,
-            read:
-              Boolean(
-                notification.readAt,
-              ),
-            createdAt:
-              notification.createdAt,
-            actor:
-              notification.actorId
-                ? safeUser(
-                    notification.actorId,
-                  )
-                : null,
-            payload:
-              notification.payload,
-            entityType:
-              notification.entityType,
-            entityId:
-              notification.entityId
-                ? notification.entityId.toString()
-                : null,
-          }),
-        ),
-        meta: {
-          hasMore: false,
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
-);
+    res.json({
+      data: notifications.map((notification) => ({
+        id: notification._id.toString(),
+        type: notification.type,
+        read: Boolean(notification.readAt),
+        createdAt: notification.createdAt,
+        actor: notification.actorId ? safeUser(notification.actorId) : null,
+        payload: notification.payload,
+        entityType: notification.entityType,
+        entityId: notification.entityId
+          ? notification.entityId.toString()
+          : null,
+      })),
+      meta: {
+        hasMore: false,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // ============================================================
 // MARK ONE NOTIFICATION AS READ
 // ============================================================
 
-router.post(
-  "/notifications/:notificationId/read",
-  async (req, res, next) => {
-    try {
-      const notification =
-        await Notification.findOneAndUpdate(
-          {
-            _id:
-              req.params
-                .notificationId,
-            recipientId:
-              req.user._id,
-          },
-          {
-            $set: {
-              readAt:
-                new Date(),
-            },
-          },
-          {
-            new: true,
-          },
-        );
+router.post("/notifications/:notificationId/read", async (req, res, next) => {
+  try {
+    const notification = await Notification.findOneAndUpdate(
+      {
+        _id: req.params.notificationId,
+        recipientId: req.user._id,
+      },
+      {
+        $set: {
+          readAt: new Date(),
+        },
+      },
+      {
+        new: true,
+      },
+    );
 
-      if (!notification) {
-        return res.status(404).json({
-          error: {
-            code: "NOT_FOUND",
-            message:
-              "Notification not found.",
-          },
-        });
-      }
-
-      res.json({
-        data: {
-          id: notification._id.toString(),
-          read: true,
+    if (!notification) {
+      return res.status(404).json({
+        error: {
+          code: "NOT_FOUND",
+          message: "Notification not found.",
         },
       });
-    } catch (error) {
-      next(error);
     }
-  },
-);
+
+    res.json({
+      data: {
+        id: notification._id.toString(),
+        read: true,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // ============================================================
 // MARK ALL NOTIFICATIONS AS READ
 // ============================================================
 
-router.post(
-  "/notifications/read-all",
-  async (req, res, next) => {
-    try {
-      await Notification.updateMany(
-        {
-          recipientId:
-            req.user._id,
-          readAt: null,
+router.post("/notifications/read-all", async (req, res, next) => {
+  try {
+    await Notification.updateMany(
+      {
+        recipientId: req.user._id,
+        readAt: null,
+      },
+      {
+        $set: {
+          readAt: new Date(),
         },
-        {
-          $set: {
-            readAt:
-              new Date(),
-          },
-        },
-      );
+      },
+    );
 
-      res.json({
-        data: {
-          updated: true,
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
-);
+    res.json({
+      data: {
+        updated: true,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // ============================================================
 // EXPORT

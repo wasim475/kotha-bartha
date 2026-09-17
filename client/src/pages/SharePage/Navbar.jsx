@@ -8,22 +8,13 @@ import {
   Settings,
 } from "@mui/icons-material";
 
-import React, {
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 
-import {
-  useLocation,
-  useNavigate,
-} from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { Utility } from "../../provider/UtilityProvider";
 import { api } from "../../utility/api";
 import { useRealtime } from "../../utility/helpers";
-
 
 /* ============================================================
    NAV ITEMS
@@ -56,35 +47,23 @@ const navItems = [
   },
 ];
 
-
 /* ============================================================
    NAV ITEM
    ============================================================ */
 
-function NavItem({
-  item,
-  active,
-  badge,
-  onClick,
-}) {
+function NavItem({ item, active, badge, onClick }) {
   const Icon = item.icon;
 
   return (
     <button
       type="button"
-      className={`nav-item ${
-        active ? "active" : ""
-      }`}
+      className={`nav-item ${active ? "active" : ""}`}
       onClick={onClick}
     >
       <span className="nav-icon">
         <Icon fontSize="small" />
 
-        {badge > 0 && (
-          <b className="nav-badge">
-            {badge > 99 ? "99+" : badge}
-          </b>
-        )}
+        {badge > 0 && <b className="nav-badge">{badge > 99 ? "99+" : badge}</b>}
       </span>
 
       <span>{item.label}</span>
@@ -92,22 +71,14 @@ function NavItem({
   );
 }
 
-
 /* ============================================================
    PROFILE POPUP
    ============================================================ */
 
-function ProfilePopup({
-  onProfile,
-  onLogout,
-}) {
+function ProfilePopup({ onProfile, onLogout }) {
   return (
     <div className="profile-popup">
-      <button
-        type="button"
-        className="profile-popup-item"
-        onClick={onProfile}
-      >
+      <button type="button" className="profile-popup-item" onClick={onProfile}>
         <Person fontSize="small" />
 
         <span>Profile</span>
@@ -126,22 +97,19 @@ function ProfilePopup({
   );
 }
 
-
 /* ============================================================
    NAVBAR
    ============================================================ */
 
 const Navbar = ({ onLogout }) => {
-  const { theme, setTheme } =
-    useContext(Utility);
+  const { theme, setTheme } = useContext(Utility);
 
   const location = useLocation();
   const navigate = useNavigate();
 
   const profileRef = useRef(null);
 
-  const [profileOpen, setProfileOpen] =
-    useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   /* ============================================================
      UNREAD COUNTS
@@ -154,42 +122,27 @@ const Navbar = ({ onLogout }) => {
     notifications: 0,
   });
 
-
   /* ============================================================
      LOAD UNREAD COUNTS
      ============================================================ */
 
   const loadCounts = async () => {
     try {
-      const { data } = await api.get(
-        "/notifications/unread-counts",
-      );
+      const { data } = await api.get("/notifications/unread-counts");
 
       setCounts({
-        feed: Number(
-          data.data?.feed || 0,
-        ),
+        feed: Number(data.data?.feed || 0),
 
-        friends: Number(
-          data.data?.friends || 0,
-        ),
+        friends: Number(data.data?.friends || 0),
 
-        messages: Number(
-          data.data?.messages || 0,
-        ),
+        messages: Number(data.data?.messages || 0),
 
-        notifications: Number(
-          data.data?.notifications || 0,
-        ),
+        notifications: Number(data.data?.notifications || 0),
       });
     } catch (error) {
-      console.error(
-        "Unable to load unread counts:",
-        error,
-      );
+      console.error("Unable to load unread counts:", error);
     }
   };
-
 
   /* ============================================================
      INITIAL LOAD
@@ -199,13 +152,11 @@ const Navbar = ({ onLogout }) => {
     loadCounts();
   }, []);
 
-
   /* ============================================================
      NEW MESSAGE
      ============================================================ */
 
   useRealtime("message:new", loadCounts);
-
 
   /* ============================================================
      NEW NOTIFICATION
@@ -214,11 +165,9 @@ const Navbar = ({ onLogout }) => {
   useRealtime("notification:new", () => {
     setCounts((current) => ({
       ...current,
-      notifications:
-        current.notifications + 1,
+      notifications: current.notifications + 1,
     }));
   });
-
 
   /* ============================================================
      NEW FEED / POST
@@ -231,7 +180,6 @@ const Navbar = ({ onLogout }) => {
     }));
   });
 
-
   /* ============================================================
      FRIEND REQUEST
      ============================================================ */
@@ -239,23 +187,17 @@ const Navbar = ({ onLogout }) => {
   useRealtime("friend:new", () => {
     setCounts((current) => ({
       ...current,
-      friends:
-        current.friends + 1,
+      friends: current.friends + 1,
     }));
   });
-
 
   /* ============================================================
      REALTIME CONNECTED
      ============================================================ */
 
-  useRealtime(
-    "realtime:connected",
-    () => {
-      loadCounts();
-    },
-  );
-
+  useRealtime("realtime:connected", () => {
+    loadCounts();
+  });
 
   /* ============================================================
      CLOSE PROFILE POPUP WHEN CLICKING OUTSIDE
@@ -263,29 +205,17 @@ const Navbar = ({ onLogout }) => {
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
-      if (
-        profileRef.current &&
-        !profileRef.current.contains(
-          event.target,
-        )
-      ) {
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
         setProfileOpen(false);
       }
     };
 
-    document.addEventListener(
-      "mousedown",
-      handleOutsideClick,
-    );
+    document.addEventListener("mousedown", handleOutsideClick);
 
     return () => {
-      document.removeEventListener(
-        "mousedown",
-        handleOutsideClick,
-      );
+      document.removeEventListener("mousedown", handleOutsideClick);
     };
   }, []);
-
 
   /* ============================================================
      HANDLE NAVIGATION
@@ -323,7 +253,6 @@ const Navbar = ({ onLogout }) => {
     navigate(item.path);
   };
 
-
   /* ============================================================
      PROFILE
      ============================================================ */
@@ -333,7 +262,6 @@ const Navbar = ({ onLogout }) => {
 
     navigate("/app/profile/me");
   };
-
 
   /* ============================================================
      LOGOUT
@@ -345,18 +273,12 @@ const Navbar = ({ onLogout }) => {
     onLogout();
   };
 
-
   /* ============================================================
      ACTIVE ITEM
      ============================================================ */
 
   const active =
-    navItems.find((item) =>
-      location.pathname.startsWith(
-        item.path,
-      ),
-    ) || null;
-
+    navItems.find((item) => location.pathname.startsWith(item.path)) || null;
 
   /* ============================================================
      BADGE VALUE
@@ -375,25 +297,18 @@ const Navbar = ({ onLogout }) => {
       return counts.messages;
     }
 
-    if (
-      item.key === "notifications"
-    ) {
+    if (item.key === "notifications") {
       return counts.notifications;
     }
 
     return 0;
   };
 
-
   /* ============================================================
      PROFILE ACTIVE
      ============================================================ */
 
-  const profileActive =
-    location.pathname.startsWith(
-      "/app/profile",
-    );
-
+  const profileActive = location.pathname.startsWith("/app/profile");
 
   return (
     <>
@@ -402,16 +317,9 @@ const Navbar = ({ onLogout }) => {
           ======================================================== */}
 
       <aside
-        className={`desktop-nav ${
-          theme === "dark"
-            ? "nav-dark"
-            : "nav-light"
-        }`}
+        className={`desktop-nav ${theme === "dark" ? "nav-dark" : "nav-light"}`}
       >
-        <p className="nav-label">
-          Your space
-        </p>
-
+        <p className="nav-label">Your space</p>
 
         {/* Main Navigation */}
 
@@ -419,35 +327,19 @@ const Navbar = ({ onLogout }) => {
           <NavItem
             key={item.path}
             item={item}
-            active={
-              active?.path === item.path
-            }
+            active={active?.path === item.path}
             badge={getBadge(item)}
-            onClick={() =>
-              handleNavigate(item)
-            }
+            onClick={() => handleNavigate(item)}
           />
         ))}
 
-
         {/* Profile */}
 
-        <div
-          className="profile-nav-wrapper"
-          ref={profileRef}
-        >
+        <div className="profile-nav-wrapper" ref={profileRef}>
           <button
             type="button"
-            className={`nav-item ${
-              profileActive
-                ? "active"
-                : ""
-            }`}
-            onClick={() =>
-              setProfileOpen(
-                (current) => !current,
-              )
-            }
+            className={`nav-item ${profileActive ? "active" : ""}`}
+            onClick={() => setProfileOpen((current) => !current)}
           >
             <span className="nav-icon">
               <Person fontSize="small" />
@@ -456,95 +348,55 @@ const Navbar = ({ onLogout }) => {
             <span>Profile</span>
           </button>
 
-
           {profileOpen && (
-            <ProfilePopup
-              onProfile={handleProfile}
-              onLogout={handleLogout}
-            />
+            <ProfilePopup onProfile={handleProfile} onLogout={handleLogout} />
           )}
         </div>
-
 
         {/* Bottom */}
 
         <div className="nav-bottom">
-
           {/* Theme */}
 
           <button
             type="button"
             className="nav-item"
-            onClick={() =>
-              setTheme(
-                theme === "light"
-                  ? "dark"
-                  : "light",
-              )
-            }
+            onClick={() => setTheme(theme === "light" ? "dark" : "light")}
           >
             <Settings fontSize="small" />
 
-            <span>
-              {theme === "light"
-                ? "Night mode"
-                : "Light mode"}
-            </span>
+            <span>{theme === "light" ? "Night mode" : "Light mode"}</span>
           </button>
-
         </div>
       </aside>
-
 
       {/* ========================================================
           MOBILE BOTTOM NAVBAR
           ======================================================== */}
 
       <nav
-        className={`bottom-nav ${
-          theme === "dark"
-            ? "nav-dark"
-            : "nav-light"
-        }`}
+        className={`bottom-nav ${theme === "dark" ? "nav-dark" : "nav-light"}`}
       >
-
         {navItems.map((item) => (
           <NavItem
             key={item.path}
             item={item}
-            active={
-              active?.path === item.path
-            }
+            active={active?.path === item.path}
             badge={getBadge(item)}
-            onClick={() =>
-              handleNavigate(item)
-            }
+            onClick={() => handleNavigate(item)}
           />
         ))}
-
 
         {/* Mobile Profile */}
 
         <div
           className="mobile-profile-wrapper"
-          ref={
-            profileOpen
-              ? profileRef
-              : null
-          }
+          ref={profileOpen ? profileRef : null}
         >
           <button
             type="button"
-            className={`nav-item ${
-              profileActive
-                ? "active"
-                : ""
-            }`}
-            onClick={() =>
-              setProfileOpen(
-                (current) => !current,
-              )
-            }
+            className={`nav-item ${profileActive ? "active" : ""}`}
+            onClick={() => setProfileOpen((current) => !current)}
           >
             <span className="nav-icon">
               <Person fontSize="small" />
@@ -553,15 +405,10 @@ const Navbar = ({ onLogout }) => {
             <span>Profile</span>
           </button>
 
-
           {profileOpen && (
-            <ProfilePopup
-              onProfile={handleProfile}
-              onLogout={handleLogout}
-            />
+            <ProfilePopup onProfile={handleProfile} onLogout={handleLogout} />
           )}
         </div>
-
       </nav>
     </>
   );

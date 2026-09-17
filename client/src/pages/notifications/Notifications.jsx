@@ -24,11 +24,11 @@ export default function Notifications() {
   const handleNotificationClick = async (notification) => {
     if (!notification.read) {
       try {
-        await api.post(
-          `/notifications/${notification.id}/read`,
-        );
+        await api.post(`/notifications/${notification.id}/read`);
       } catch (error) {
-        console.error("Unable to mark notification as read:", error);
+        if (error.response?.status !== 404) {
+          console.error("Unable to mark notification as read:", error);
+        }
       } finally {
         notifications.reload();
       }
@@ -63,34 +63,23 @@ export default function Notifications() {
       <ResourceState
         loading={notifications.loading}
         error={notifications.error}
-        empty={
-          !notifications.data?.length
-            ? "You are all caught up."
-            : ""
-        }
+        empty={!notifications.data?.length ? "You are all caught up." : ""}
       >
         <div className="notification-list">
           {notifications.data?.map((notification) => (
             <button
-              className={`notification ${
-                notification.read ? "" : "unread"
-              }`}
+              className={`notification ${notification.read ? "" : "unread"}`}
               key={notification.id}
-              onClick={() =>
-                handleNotificationClick(notification)
-              }
+              onClick={() => handleNotificationClick(notification)}
             >
               <Avatar person={notification.actor} />
 
               <div>
                 <strong>
-                  {notification.payload?.message ||
-                    notification.type}
+                  {notification.payload?.message || notification.type}
                 </strong>
 
-                <span>
-                  {formatTime(notification.createdAt)}
-                </span>
+                <span>{formatTime(notification.createdAt)}</span>
               </div>
 
               {!notification.read && <i />}

@@ -1,14 +1,6 @@
-import {
-  Avatar,
-  colorFor,
-  formatTime,
-  ResourceState,
-} from "../../../utility/helpers";
+import { colorFor, formatTime, ResourceState } from "../../../utility/helpers";
 
-const ConversationList = ({
-  conversations,
-  onOpenConversation,
-}) => {
+const ConversationList = ({ conversations, onOpenConversation }) => {
   return (
     <ResourceState
       loading={conversations.loading}
@@ -27,34 +19,23 @@ const ConversationList = ({
               conversation?.unreadCount ? "unread" : ""
             }`}
             key={conversation.id}
-            onClick={() =>
-              onOpenConversation(conversation.id)
-            }
+            onClick={() => onOpenConversation(conversation.id)}
           >
-            <div
-              className={`avatar avatar-${colorFor(
-                conversation.user.id,
-              )}`}
-            >
+            <div className={`avatar avatar-${colorFor(conversation.user.id)}`}>
               {conversation.user.initials}
 
               <i />
             </div>
 
             <div>
-              <strong>
-                {conversation.user.fullName}
-              </strong>
+              <strong>{conversation.user.fullName}</strong>
 
               <span>
-                {conversation?.lastMessage?.slice(0, 30) ||
-                  "No messages yet"}
+                {conversation?.lastMessage?.slice(0, 30) || "No messages yet"}
               </span>
             </div>
 
-            <time>
-              {formatTime(conversation.lastMessageAt)}
-            </time>
+            <time>{formatTime(conversation.lastMessageAt)}</time>
 
             {conversation.unreadCount > 0 && (
               <b

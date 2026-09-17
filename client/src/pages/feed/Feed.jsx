@@ -57,10 +57,7 @@ function PostCard({ post, onChanged }) {
   };
 
   return (
-    <article
-      className="post-card"
-      id={`post-${post.id}`}
-    >
+    <article className="post-card" id={`post-${post.id}`}>
       <div className="post-header">
         <Avatar person={post.author} />
 
@@ -81,10 +78,7 @@ function PostCard({ post, onChanged }) {
       </div>
 
       <div className="post-actions">
-        <button
-          className={post.liked ? "selected" : ""}
-          onClick={toggleLike}
-        >
+        <button className={post.liked ? "selected" : ""} onClick={toggleLike}>
           <ThumbUpAlt fontSize="small" /> Like
         </button>
 
@@ -97,7 +91,6 @@ function PostCard({ post, onChanged }) {
         <div className="comments">
           {comments.map((entry) => (
             <div className="comment" key={entry.id}>
-
               <div>
                 <strong>{entry.author.fullName}</strong>
                 <p>{entry.body}</p>
@@ -112,9 +105,7 @@ function PostCard({ post, onChanged }) {
                 className="emoji-button"
                 aria-label="Choose emoji"
                 title="Choose emoji"
-                onClick={() =>
-                  setShowEmojiPicker((current) => !current)
-                }
+                onClick={() => setShowEmojiPicker((current) => !current)}
               >
                 <EmojiEmotions fontSize="small" />
               </button>
@@ -140,9 +131,7 @@ function PostCard({ post, onChanged }) {
               placeholder="Write a comment..."
             />
 
-            <button className="primary-button small">
-              Comment
-            </button>
+            <button className="primary-button small">Comment</button>
           </form>
         </div>
       )}
@@ -158,10 +147,6 @@ export default function Feed({ user }) {
 
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    api.post("/posts/feed/read").catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (!postId || posts.loading || !posts.data?.length) return;
@@ -201,10 +186,7 @@ export default function Feed({ user }) {
           <h1>Your feed</h1>
         </div>
 
-        <button
-          className="primary-button small"
-          onClick={createPost}
-        >
+        <button className="primary-button small" onClick={createPost}>
           <Add fontSize="small" /> Create post
         </button>
       </div>
@@ -217,9 +199,7 @@ export default function Feed({ user }) {
         <textarea
           value={body}
           onChange={(event) => setBody(event.target.value)}
-          placeholder={`What is on your mind, ${
-            user.fullName.split(" ")[0]
-          }?`}
+          placeholder={`What is on your mind, ${user.fullName.split(" ")[0]}?`}
           rows="2"
         />
 
@@ -240,11 +220,7 @@ export default function Feed({ user }) {
         }
       >
         {posts.data?.map((post) => (
-          <PostCard
-            key={post.id}
-            post={post}
-            onChanged={posts.reload}
-          />
+          <PostCard key={post.id} post={post} onChanged={posts.reload} />
         ))}
       </ResourceState>
     </>
