@@ -215,10 +215,7 @@ router.put("/comments/:commentId/reaction", async (req, res, next) => {
   }
 });
 
-// ============================================================
-// FRIENDS
-// ============================================================
 
 module.exports = router;
 
-module.exports = router;
+
