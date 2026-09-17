@@ -986,10 +986,10 @@ button {
     font-size: 11px;
   }
   .top-actions {
-    gap: 4px;
+    gap: 7px;
   }
   .top-actions .icon-button {
-    display: none;
+    display: block;
   }
   .top-actions .avatar {
     width: 31px;

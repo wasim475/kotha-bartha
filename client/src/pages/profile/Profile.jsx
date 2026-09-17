@@ -4,41 +4,111 @@ import { api } from "../../utility/api";
 import { Avatar, ResourceState, useResource } from "../../utility/helpers";
 
 export default function Profile({ user }) {
-  const { id } = useParams(); const navigate = useNavigate(); const profileId = id === "me" ? user.id : id;
-  const profile = useResource(`/users/${profileId}`); const posts = useResource(`/users/${profileId}/posts`); const [editing, setEditing] = useState(false); const [bio, setBio] = useState("");
-  if (profile.loading) return <ResourceState loading />; if (profile.error) return <ResourceState error={profile.error} />;
-  const person = profile.data; const own = profileId === user.id;
-  const save = async () => { await api.patch("/users/me", { bio }); setEditing(false); profile.reload(); };
-  const startMessage = async () => { const { data } = await api.post("/conversations", { userId: profileId }); navigate(`/app/messages/${data.data.id}`); };
-  
-  const addFriend = async () => {
-  try {
-    await api.post("/friends/requests", {
-      receiverId: profileId,
-    });
-
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const profileId = id === "me" ? user.id : id;
+  const profile = useResource(`/users/${profileId}`);
+  const posts = useResource(`/users/${profileId}/posts`);
+  const [editing, setEditing] = useState(false);
+  const [bio, setBio] = useState("");
+  if (profile.loading) return <ResourceState loading />;
+  if (profile.error) return <ResourceState error={profile.error} />;
+  const person = profile.data;
+  const own = profileId === user.id;
+  const save = async () => {
+    await api.patch("/users/me", { bio });
+    setEditing(false);
     profile.reload();
-  } catch (error) {
-    console.log(
-      error.response?.data?.error?.message || "Unable to send friend request."
-    );
-  }
-};
+  };
+  const startMessage = async () => {
+    const { data } = await api.post("/conversations", { userId: profileId });
+    navigate(`/app/messages/${data.data.id}`);
+  };
 
-  const editProfile = () => { setBio(person.bio || ""); setEditing(!editing); };
-  return <><div className="profile-cover"><div className="cover-text">{person.fullName.toLowerCase()} / in public</div></div><div className="profile-identity"><Avatar person={person} className="profile-avatar" /><div><h1>{person.fullName}</h1><p>{person.bio || "No bio yet."}</p></div>{own ? <button className="outline-button" onClick={editProfile}>Edit profile</button> : <div className="profile-actions">
-    
-    <button
-  className="primary-button small"
-  disabled={person.isFriend || person.friendRequestSent}
-  onClick={addFriend}
->
-  {person.isFriend
-    ? "Friend"
-    : person.friendRequestSent
-    ? "Request Sent"
-    : "Add Friend"}
-</button>
-    
-    <button className="outline-button" onClick={startMessage}>Message</button></div>}</div>{editing && <div className="composer profile-editor"><textarea value={bio} onChange={(event) => setBio(event.target.value)} rows="3" /><button className="primary-button small" onClick={save}>Save profile</button></div>}<div className="profile-posts"><span className="eyebrow">Posts</span><ResourceState loading={posts.loading} error={posts.error} empty={`${person.fullName} has not posted yet.`}>{posts.data?.map((post) => <article className="post-card" key={post.id}><p className="post-body">{post.body}</p></article>)}</ResourceState></div></>;
+  const addFriend = async () => {
+    try {
+      await api.post("/friends/requests", {
+        receiverId: profileId,
+      });
+
+      profile.reload();
+    } catch (error) {
+      console.log(
+        error.response?.data?.error?.message ||
+          "Unable to send friend request.",
+      );
+    }
+  };
+
+  const editProfile = () => {
+    setBio(person.bio || "");
+    setEditing(!editing);
+  };
+  return (
+    <>
+      <div className="profile-cover">
+        <div className="cover-text">
+          {person.fullName.toLowerCase()} / in public
+        </div>
+      </div>
+      <div className="profile-identity">
+        <Avatar person={person} className="profile-avatar" />
+        <div>
+          <h1>{person.fullName}</h1>
+          <p>{person.bio || "No bio yet."}</p>
+        </div>
+        {own ? (
+          <button className="outline-button" onClick={editProfile}>
+            Edit profile
+          </button>
+        ) : (
+          <div className="profile-actions">
+            <button
+              className="primary-button small"
+              disabled={person.isFriend || person.friendRequestSent}
+              onClick={addFriend}
+            >
+              {person.isFriend
+                ? "Friend"
+                : person.friendRequestSent
+                  ? "Request Sent"
+                  : "Add Friend"}
+            </button>
+
+            <button className="outline-button" onClick={startMessage}>
+              Message
+            </button>
+          </div>
+        )}
+      </div>
+      {editing && (
+        <div className="composer profile-editor">
+          <textarea
+            value={bio}
+            onChange={(event) => setBio(event.target.value)}
+            rows="3"
+          />
+          <button className="primary-button small" onClick={save}>
+            Save profile
+          </button>
+        </div>
+      )}
+      <div className="profile-posts">
+        <span className="eyebrow">Posts</span>
+        <ResourceState
+          loading={posts.loading}
+          error={posts.error}
+          empty={
+            !posts.data?.length ? `${person.fullName} has not posted yet.` : ""
+          }
+        >
+          {posts.data?.map((post) => (
+            <article className="post-card" key={post.id}>
+              <p className="post-body">{post.body}</p>
+            </article>
+          ))}
+        </ResourceState>
+      </div>
+    </>
+  );
 }
