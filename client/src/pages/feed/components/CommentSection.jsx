@@ -150,9 +150,7 @@ const CommentSection = ({
       );
     } catch (error) {
       setComments((current) =>
-        current.map((comment) =>
-          comment.id === commentId ? entry : comment,
-        ),
+        current.map((comment) => (comment.id === commentId ? entry : comment)),
       );
 
       if (error.response?.status !== 404) {
