@@ -6,6 +6,12 @@ import {
   Reply,
 } from "@mui/icons-material";
 import EmojiPicker from "emoji-picker-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+
+const emojiPickerWidth = 280;
+const emojiPickerHeight = 360;
+const viewportGap = 8;
 
 const formatMessageTime = (date) => {
   if (!date) return "";
@@ -41,6 +47,98 @@ const MessageBubble = ({
   onOpenEmoji,
   onCloseInteraction,
 }) => {
+  const messageMenuRef = useRef(null);
+  const emojiButtonRef = useRef(null);
+  const emojiPickerRef = useRef(null);
+  const [emojiPickerPosition, setEmojiPickerPosition] = useState(null);
+
+  useEffect(() => {
+    if (openMenu !== message.id) return undefined;
+
+    const handleOutsideClick = (event) => {
+      if (!messageMenuRef.current?.contains(event.target)) {
+        onCloseInteraction();
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [message.id, onCloseInteraction, openMenu]);
+
+  useLayoutEffect(() => {
+    if (!emojiOpen || !emojiButtonRef.current) {
+      setEmojiPickerPosition(null);
+      return undefined;
+    }
+
+    const positionEmojiPicker = () => {
+      const buttonRect = emojiButtonRef.current?.getBoundingClientRect();
+      if (!buttonRect) return;
+
+      const pickerWidth = Math.min(
+        emojiPickerWidth,
+        window.innerWidth - viewportGap * 2,
+      );
+      const pickerHeight = Math.min(
+        emojiPickerHeight,
+        window.innerHeight - viewportGap * 2,
+      );
+
+      const leftSpace = buttonRect.left - viewportGap;
+      const rightSpace = window.innerWidth - buttonRect.right - viewportGap;
+      const topSpace = buttonRect.top - viewportGap;
+      const bottomSpace = window.innerHeight - buttonRect.bottom - viewportGap;
+
+      const left =
+        rightSpace >= pickerWidth || rightSpace >= leftSpace
+          ? buttonRect.left
+          : buttonRect.right - pickerWidth;
+      const top =
+        bottomSpace >= pickerHeight || bottomSpace >= topSpace
+          ? buttonRect.bottom + viewportGap
+          : buttonRect.top - pickerHeight - viewportGap;
+
+      setEmojiPickerPosition({
+        left: Math.max(
+          viewportGap,
+          Math.min(left, window.innerWidth - pickerWidth - viewportGap),
+        ),
+        top: Math.max(
+          viewportGap,
+          Math.min(top, window.innerHeight - pickerHeight - viewportGap),
+        ),
+        width: pickerWidth,
+        height: pickerHeight,
+      });
+    };
+
+    positionEmojiPicker();
+    window.addEventListener("resize", positionEmojiPicker);
+    window.addEventListener("scroll", positionEmojiPicker, true);
+
+    return () => {
+      window.removeEventListener("resize", positionEmojiPicker);
+      window.removeEventListener("scroll", positionEmojiPicker, true);
+    };
+  }, [emojiOpen]);
+
+  useEffect(() => {
+    if (!emojiOpen) return undefined;
+
+    const handleOutsideEmojiClick = (event) => {
+      if (
+        !emojiButtonRef.current?.contains(event.target) &&
+        !emojiPickerRef.current?.contains(event.target)
+      ) {
+        onCloseInteraction();
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideEmojiClick);
+    return () =>
+      document.removeEventListener("mousedown", handleOutsideEmojiClick);
+  }, [emojiOpen, onCloseInteraction]);
+
   return (
     <div className={`message-row ${isOwn ? "own" : ""}`}>
       {/* Editing */}
@@ -153,33 +251,42 @@ const MessageBubble = ({
               className="message-interaction-button"
               aria-label="React to message"
               title="React to message"
+              ref={emojiButtonRef}
               onClick={onOpenEmoji}
             >
               <EmojiEmotions fontSize="small" /> Emoji
             </button>
-
-            {emojiOpen && (
-              <div className="message-reaction-picker">
-                <EmojiPicker
-                  onEmojiClick={(emojiData) => {
-                    onCloseInteraction();
-                    onReact(message.id, emojiData.emoji);
-                  }}
-                  width={280}
-                  height={360}
-                  searchDisabled
-                  previewConfig={{ showPreview: false }}
-                  lazyLoadEmojis
-                />
-              </div>
-            )}
           </div>
         </div>
       )}
 
+      {emojiOpen &&
+        emojiPickerPosition &&
+        createPortal(
+          <div
+            ref={emojiPickerRef}
+            className="message-reaction-picker"
+            style={emojiPickerPosition}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <EmojiPicker
+              onEmojiClick={(emojiData) => {
+                onCloseInteraction();
+                onReact(message.id, emojiData.emoji);
+              }}
+              width={emojiPickerPosition.width}
+              height={emojiPickerHeight}
+              searchDisabled
+              previewConfig={{ showPreview: false }}
+              lazyLoadEmojis
+            />
+          </div>,
+          document.body,
+        )}
+
       {/* Message Menu */}
       {isOwn && (
-        <div className="message-menu-wrapper">
+        <div className="message-menu-wrapper" ref={messageMenuRef}>
           <button
             type="button"
             className="message-menu-button"
@@ -200,7 +307,10 @@ const MessageBubble = ({
                 className="message-menu-item edit-item"
                 aria-label="Edit message"
                 title="Edit message"
-                onClick={() => onEdit(message)}
+                onClick={() => {
+                  onCloseInteraction();
+                  onEdit(message);
+                }}
               >
                 <Edit fontSize="small" />
               </button>
@@ -210,7 +320,10 @@ const MessageBubble = ({
                 className="message-menu-item delete-item"
                 aria-label={isDeleting ? "Deleting message" : "Delete message"}
                 title={isDeleting ? "Deleting message" : "Delete message"}
-                onClick={() => onDelete(message.id)}
+                onClick={() => {
+                  onCloseInteraction();
+                  onDelete(message.id);
+                }}
                 disabled={isDeleting}
               >
                 <Delete fontSize="small" />

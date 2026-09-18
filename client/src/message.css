@@ -143,14 +143,17 @@
 }
 
 .message-reaction-picker {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 1000;
+  position: fixed;
+  z-index: 2000;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
 }
 
 .message-reaction-picker aside {
+  width: 100% !important;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
   border: 1px solid var(--line);
   border-radius: 8px;
 }
@@ -306,9 +309,9 @@
 
 .message-menu {
   position: absolute;
-  right: 0;
-  bottom: 38px;
-  min-width: 0;
+  top: 0;
+  left: calc(100% + 6px);
+  min-width: 92px;
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
@@ -316,6 +319,7 @@
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
   z-index: 50;
   display: flex;
+  flex-direction: column;
   gap: 2px;
 }
 
@@ -493,7 +497,10 @@
   }
 
   .message-menu {
-    min-width: 120px;
+    top: 0;
+    left: calc(100% + 4px);
+    min-width: 112px;
+    max-width: calc(100vw - 56px);
   }
 
   .message-menu-button {
@@ -510,17 +517,12 @@
   }
 
   .message-reaction-picker {
-    left: 0;
-    max-width: calc(100vw - 32px);
-  }
-
-  .message-row.own .message-reaction-picker {
-    right: 0;
-    left: auto;
+    max-width: calc(100vw - 16px);
   }
 
   .message-reaction-picker aside {
-    width: min(280px, calc(100vw - 32px)) !important;
+    width: 100% !important;
+    max-width: calc(100vw - 16px);
   }
 }
 .scrollbar-none {

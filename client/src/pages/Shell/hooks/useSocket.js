@@ -34,6 +34,16 @@ export default function useSocket(userId) {
         });
       }
 
+      if (
+        document.hidden &&
+        "Notification" in window &&
+        Notification.permission === "granted"
+      ) {
+        new Notification(payload?.sender?.fullName || "Kotha-Barta", {
+          body: payload?.body || "",
+        });
+      }
+
       forward("message:new")(payload);
     };
 

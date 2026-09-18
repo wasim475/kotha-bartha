@@ -353,6 +353,9 @@ router.post(
         body: message.body,
         createdAt: message.createdAt,
         senderId: req.user._id.toString(),
+        sender: {
+          fullName: req.user.fullName,
+        },
       });
 
       res.status(201).json({
