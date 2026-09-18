@@ -41,9 +41,6 @@ router.post("/conversations", async (req, res, next) => {
         pairKey: key,
       },
       {
-        $pull: {
-          hiddenFor: req.user._id,
-        },
         $setOnInsert: {
           participantIds: [req.user._id, other._id],
           pairKey: key,
@@ -71,16 +68,25 @@ router.post("/conversations", async (req, res, next) => {
 
 router.get("/conversations", async (req, res, next) => {
   try {
+    const userId = req.user._id.toString();
     const conversations = await Conversation.find({
       participantIds: req.user._id,
-      hiddenFor: { $ne: req.user._id },
     })
       .sort({
         updatedAt: -1,
       })
       .limit(50);
 
-    const otherIds = conversations.map((conversation) =>
+    const visibleConversations = conversations.filter((conversation) => {
+      if (!conversation.hiddenFor?.some((id) => id.toString() === userId)) {
+        return true;
+      }
+
+      const deletedAt = conversation.deletedAtBy?.get?.(userId);
+      return deletedAt && conversation.lastMessageAt > deletedAt;
+    });
+
+    const otherIds = visibleConversations.map((conversation) =>
       conversation.participantIds.find(
         (id) => id.toString() !== req.user._id.toString(),
       ),
@@ -95,7 +101,7 @@ router.get("/conversations", async (req, res, next) => {
     const byId = new Map(users.map((user) => [user._id.toString(), user]));
 
     res.json({
-      data: conversations.map((conversation) => {
+      data: visibleConversations.map((conversation) => {
         const other = byId.get(
           conversation.participantIds
             .find((id) => id.toString() !== req.user._id.toString())
@@ -139,7 +145,13 @@ router.delete("/conversations/:conversationId", async (req, res, next) => {
 
     await Conversation.updateOne(
       { _id: conversation._id },
-      { $addToSet: { hiddenFor: req.user._id } },
+      {
+        $addToSet: { hiddenFor: req.user._id },
+        $set: {
+          [`deletedAtBy.${req.user._id}`]: new Date(),
+          [`unreadCounts.${req.user._id}`]: 0,
+        },
+      },
     );
 
     res.json({ data: { id: conversation._id.toString() } });
@@ -162,10 +174,16 @@ router.get(
       const conversation = await Conversation.findOne({
         _id: req.params.conversationId,
         participantIds: req.user._id,
-        hiddenFor: { $ne: req.user._id },
       });
 
-      if (!conversation) {
+      const userId = req.user._id.toString();
+      const deletedAt = conversation?.deletedAtBy?.get?.(userId);
+
+      if (
+        !conversation ||
+        (conversation.hiddenFor?.some((id) => id.toString() === userId) &&
+          (!deletedAt || conversation.lastMessageAt <= deletedAt))
+      ) {
         return res.status(404).json({
           error: {
             code: "NOT_FOUND",
@@ -177,6 +195,7 @@ router.get(
       const unreadMessages = await Message.find({
         conversationId: conversation._id,
         recipientId: req.user._id,
+        ...(deletedAt ? { createdAt: { $gt: deletedAt } } : {}),
         status: { $ne: "read" },
         deletedAt: null,
       })
@@ -187,6 +206,7 @@ router.get(
         {
           conversationId: conversation._id,
           recipientId: req.user._id,
+          ...(deletedAt ? { createdAt: { $gt: deletedAt } } : {}),
           status: { $ne: "read" },
           deletedAt: null,
         },
@@ -208,6 +228,7 @@ router.get(
 
       const messages = await Message.find({
         conversationId: conversation._id,
+        ...(deletedAt ? { createdAt: { $gt: deletedAt } } : {}),
         deletedAt: null,
       })
         .populate("replyTo", "body senderId")
@@ -255,10 +276,19 @@ router.post(
       const conversation = await Conversation.findOne({
         _id: req.params.conversationId,
         participantIds: req.user._id,
-        hiddenFor: { $ne: req.user._id },
       });
 
-      if (!conversation || !body) {
+      const userId = req.user._id.toString();
+      const deletedAt = conversation?.deletedAtBy?.get?.(userId);
+      const isHidden = conversation?.hiddenFor?.some(
+        (id) => id.toString() === userId,
+      );
+
+      if (
+        !conversation ||
+        !body ||
+        (isHidden && (!deletedAt || conversation.lastMessageAt <= deletedAt))
+      ) {
         return res.status(400).json({
           error: {
             code: "INVALID_MESSAGE",
