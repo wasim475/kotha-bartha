@@ -184,14 +184,29 @@
   letter-spacing: 0;
 }
 
-.status-sent,
-.status-delivered {
+.status-sent {
   color: currentColor;
   opacity: 0.75;
 }
 
+.status-delivered {
+  color: #ffffff;
+  opacity: 1;
+}
+
 .status-read {
   color: #2196f3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid #ffffff;
+  border-radius: 50%;
+  background: #ffffff;
+  font-size: 10px;
+  line-height: 1;
+  vertical-align: middle;
 }
 
 .composer-reply-preview {
