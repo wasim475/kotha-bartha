@@ -6,6 +6,7 @@ import {
   Reply,
 } from "@mui/icons-material";
 import EmojiPicker from "emoji-picker-react";
+import { AnimatePresence, motion as Motion } from "framer-motion";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -51,6 +52,7 @@ const MessageBubble = ({
   const emojiButtonRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const [emojiPickerPosition, setEmojiPickerPosition] = useState(null);
+  const [isMessageHovered, setIsMessageHovered] = useState(false);
 
   useEffect(() => {
     if (openMenu !== message.id) return undefined;
@@ -140,7 +142,17 @@ const MessageBubble = ({
   }, [emojiOpen, onCloseInteraction]);
 
   return (
-    <div className={`message-row ${isOwn ? "own" : ""}`}>
+    <div
+      className={`message-row ${isOwn ? "own" : ""}`}
+      onMouseEnter={() => isOwn && setIsMessageHovered(true)}
+      onMouseLeave={() => isOwn && setIsMessageHovered(false)}
+      onFocus={() => isOwn && setIsMessageHovered(true)}
+      onBlur={(event) => {
+        if (isOwn && !event.currentTarget.contains(event.relatedTarget)) {
+          setIsMessageHovered(false);
+        }
+      }}
+    >
       {/* Editing */}
       {isEditing ? (
         <div className="message-edit-box">
@@ -283,6 +295,47 @@ const MessageBubble = ({
           </div>,
           document.body,
         )}
+
+      {isOwn && (
+        <AnimatePresence>
+          {isMessageHovered && (
+            <Motion.div
+              className="desktop-message-actions"
+              initial={{ opacity: 0, scale: 0.94, x: 8 }}
+              animate={{ opacity: 1, scale: 1, x: 0 }}
+              exit={{ opacity: 0, scale: 0.94, x: 8 }}
+              transition={{ duration: 0.16, ease: "easeOut" }}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="desktop-message-action edit-item"
+                aria-label="Edit message"
+                title="Edit message"
+                onClick={() => {
+                  onCloseInteraction();
+                  onEdit(message);
+                }}
+              >
+                <Edit fontSize="small" />
+              </button>
+              <button
+                type="button"
+                className="desktop-message-action delete-item"
+                aria-label={isDeleting ? "Deleting message" : "Delete message"}
+                title={isDeleting ? "Deleting message" : "Delete message"}
+                onClick={() => {
+                  onCloseInteraction();
+                  onDelete(message.id);
+                }}
+                disabled={isDeleting}
+              >
+                <Delete fontSize="small" />
+              </button>
+            </Motion.div>
+          )}
+        </AnimatePresence>
+      )}
 
       {/* Message Menu */}
       {isOwn && (

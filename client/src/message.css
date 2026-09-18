@@ -281,6 +281,41 @@
   margin-top: 2px;
 }
 
+.desktop-message-actions {
+  position: absolute;
+  top: 50%;
+  right: calc(70% + 6px);
+  z-index: 20;
+  display: none;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 5px 16px rgba(15, 23, 42, 0.14);
+  transform: translateY(-50%);
+  transform-origin: right center;
+}
+
+.desktop-message-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.desktop-message-action:hover,
+.desktop-message-action:focus-visible {
+  background: var(--soft);
+}
+
 .message-menu-button {
   width: 32px;
   height: 32px;
@@ -523,6 +558,23 @@
   .message-reaction-picker aside {
     width: 100% !important;
     max-width: calc(100vw - 16px);
+  }
+}
+
+@media (min-width: 601px) {
+  .message-menu-wrapper {
+    width: 0;
+    flex-basis: 0;
+    overflow: visible;
+  }
+
+  .message-menu-button,
+  .message-menu {
+    display: none;
+  }
+
+  .desktop-message-actions {
+    display: flex;
   }
 }
 .scrollbar-none {
