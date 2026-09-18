@@ -3,8 +3,8 @@
    ========================================= */
 
 .friend-card {
-  padding: 16px;
-  border-radius: 14px;
+  padding: 6px;
+  border-radius: 4px;
   background: #fff;
   border: 1px solid #e5e7eb;
   transition:
@@ -45,7 +45,7 @@
 /* Friend Status */
 
 .friend-card-status {
-  font-size: 13px;
+  font-size: 10px;
   color: #9ca3af;
 }
 

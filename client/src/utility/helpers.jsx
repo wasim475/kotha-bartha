@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from "react";
-
+import { useEffect, useState } from "react";
+import loadingSvg from "../assets/loading.svg";
 export const realtime = new EventTarget();
 export let activeSocket;
 export const setActiveSocket = (socket) => {
   activeSocket = socket;
 };
-export const sendSignal = (to, signal) => activeSocket?.emit("call:signal", { to, signal });
+export const sendSignal = (to, signal) =>
+  activeSocket?.emit("call:signal", { to, signal });
 
 export function useRealtime(eventName, handler) {
   useEffect(() => {
@@ -16,7 +17,8 @@ export function useRealtime(eventName, handler) {
 
 const colorNames = ["blue", "gold", "mint", "coral"];
 export const colorFor = (id = "") =>
-  colorNames[Number.parseInt(String(id).slice(-2), 16) % colorNames.length] || "blue";
+  colorNames[Number.parseInt(String(id).slice(-2), 16) % colorNames.length] ||
+  "blue";
 
 export const formatTime = (date) => {
   if (!date) return "";
@@ -61,7 +63,12 @@ export function ResourceState({ loading, error, empty, children }) {
   if (loading)
     return (
       <div className="empty-note">
-        <p>Please wait...</p>
+        <img
+          className="w-1/4 h-fit text-green-500"
+          src={loadingSvg}
+          alt=""
+          srcset=""
+        />
       </div>
     );
 
@@ -101,7 +108,7 @@ export function Avatar({ person, className = "" }) {
 
 // Below is a simple 'useResource' hook that you might need, based on your original code:
 
-import { api } from './api'; // adjust path to your api.js
+import { api } from "./api"; // adjust path to your api.js
 
 export function useResource(url) {
   const [state, setState] = useState({
@@ -110,53 +117,58 @@ export function useResource(url) {
     error: "",
   });
 
- const reload = async () => {
-  try {
-    const { data } = await api.get(url);
+  const reload = async () => {
+    try {
+      const { data } = await api.get(url);
 
-    setState({
-      data: data.data,
-      loading: false,
-      error: "",
-    });
+      setState({
+        data: data.data,
+        loading: false,
+        error: "",
+      });
 
-    return data.data;
-  } catch (error) {
-    setState(current => ({
-      ...current,
-      loading: false,
-      error:
-        error.response?.data?.error?.message ||
-        "Unable to load data.",
-    }));
+      return data.data;
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        loading: false,
+        error: error.response?.data?.error?.message || "Unable to load data.",
+      }));
 
-    return null;
-  }
-};
+      return null;
+    }
+  };
 
   useEffect(() => {
     let active = true;
-    api.get(url)
+    const controller = new AbortController();
+    api
+      .get(url, { signal: controller.signal })
       .then(({ data }) => {
         if (active) setState({ data: data.data, loading: false, error: "" });
       })
-      .catch(error => {
-        if (active)
+      .catch((error) => {
+        if (active && error.code !== "ERR_CANCELED")
           setState({
             data: null,
             loading: false,
-            error: error.response?.data?.error?.message || "Unable to load data.",
+            error:
+              error.response?.data?.error?.message || "Unable to load data.",
           });
       });
-    return () => { active = false; };
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [url]);
 
-  const setData = (updater) => setState(current => ({
-    ...current,
-    data: typeof updater === "function" ? updater(current.data) : updater,
-    loading: false,
-    error: "",
-  }));
+  const setData = (updater) =>
+    setState((current) => ({
+      ...current,
+      data: typeof updater === "function" ? updater(current.data) : updater,
+      loading: false,
+      error: "",
+    }));
 
   return { ...state, reload, setData };
 }

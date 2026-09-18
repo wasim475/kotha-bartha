@@ -7,6 +7,7 @@ const authRoutes = require("./routes/auth");
 const dataRoutes = require("./routes");
 
 const app = express();
+app.set("trust proxy", 1);
 const allowedOrigins = [
   process.env.CLIENT_ORIGIN,
   "http://localhost:5173",
@@ -25,7 +26,13 @@ app.use(
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 app.use(
-  rateLimit({ windowMs: 15 * 60 * 1000, limit: 300, standardHeaders: true }),
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => req.method === "GET",
+  }),
 );
 
 app.get("/api/v1/health", (req, res) =>
