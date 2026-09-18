@@ -65,6 +65,7 @@
 ================================ */
 
 .message-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -92,40 +93,53 @@
   word-break: break-word;
 }
 
-.message-actions {
-  position: relative;
+.message-interaction {
+  position: absolute;
+  bottom: calc(100% - 2px);
+  left: 18px;
+  z-index: 20;
   display: flex;
   align-items: center;
   gap: 2px;
-  align-self: center;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 5px 16px rgba(15, 23, 42, 0.14);
 }
 
-.message-action-button {
+.message-row.own .message-interaction {
+  right: 18px;
+  left: auto;
+}
+
+.message-interaction-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
+  gap: 4px;
+  min-height: 28px;
+  padding: 4px 7px;
   border: 0;
-  border-radius: 50%;
+  border-radius: 5px;
   background: transparent;
-  color: var(--muted);
+  color: var(--ink);
+  font-size: 11px;
   cursor: pointer;
 }
 
-.message-action-button:hover {
-  background: var(--soft);
+.message-interaction-button:hover {
+  background: transparent;
   color: var(--accent);
 }
 
-.message-reaction-wrapper {
+.message-reaction-control {
   position: relative;
 }
 
 .message-reaction-picker {
   position: absolute;
-  bottom: 34px;
+  top: calc(100% + 6px);
   left: 0;
   z-index: 1000;
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
@@ -148,16 +162,36 @@
 }
 
 .message-reactions {
+  position: absolute;
+  right: 8px;
+  bottom: -10px;
   display: flex;
   gap: 3px;
-  margin-top: 7px;
+  max-width: calc(100% - 16px);
+  padding: 0;
+  z-index: 2;
 }
 
 .message-reactions span {
-  padding: 2px 5px;
-  border-radius: 10px;
-  background: var(--paper);
+  flex: 0 0 auto;
   font-size: 13px;
+}
+
+.message-status {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.status-sent,
+.status-delivered {
+  color: currentColor;
+  opacity: 0.75;
+}
+
+.status-read {
+  color: #2196f3;
 }
 
 .composer-reply-preview {
@@ -417,6 +451,20 @@
 
   .emoji-picker aside {
     width: min(320px, calc(100vw - 32px)) !important;
+  }
+
+  .message-reaction-picker {
+    left: 0;
+    max-width: calc(100vw - 32px);
+  }
+
+  .message-row.own .message-reaction-picker {
+    right: 0;
+    left: auto;
+  }
+
+  .message-reaction-picker aside {
+    width: min(280px, calc(100vw - 32px)) !important;
   }
 }
 .scrollbar-none {

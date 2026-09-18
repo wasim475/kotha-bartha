@@ -141,6 +141,33 @@ router.get(
         });
       }
 
+      const unreadMessages = await Message.find({
+        conversationId: conversation._id,
+        recipientId: req.user._id,
+        status: { $ne: "read" },
+        deletedAt: null,
+      })
+        .select("_id senderId")
+        .lean();
+
+      await Message.updateMany(
+        {
+          conversationId: conversation._id,
+          recipientId: req.user._id,
+          status: { $ne: "read" },
+          deletedAt: null,
+        },
+        { $set: { status: "read" } },
+      );
+
+      unreadMessages.forEach((message) => {
+        emitToUser(req, message.senderId, "message:read", {
+          id: message._id.toString(),
+          conversationId: conversation._id.toString(),
+          status: "read",
+        });
+      });
+
       // Mark conversation as read
       conversation.unreadCounts?.set(req.user._id.toString(), 0);
 
@@ -162,6 +189,7 @@ router.get(
           body: message.body,
           createdAt: message.createdAt,
           senderId: message.senderId.toString(),
+          status: message.status || "sent",
           replyTo: message.replyTo
             ? {
                 id: message.replyTo._id.toString(),
@@ -263,6 +291,7 @@ router.post(
           body: message.body,
           createdAt: message.createdAt,
           senderId: message.senderId.toString(),
+          status: message.status,
           replyTo: replyTo
             ? {
                 id: replyTo._id.toString(),

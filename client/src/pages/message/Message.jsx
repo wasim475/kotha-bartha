@@ -51,6 +51,8 @@ const Message = ({ user }) => {
   const [sendError, setSendError] = useState("");
   const [sending, setSending] = useState(false);
 
+  const [selectedMessageId, setSelectedMessageId] = useState(null);
+  const [emojiMessageId, setEmojiMessageId] = useState(null);
   const [openMenu, setOpenMenu] = useState(null);
 
   /*
@@ -218,6 +220,7 @@ const Message = ({ user }) => {
       id: optimisticId,
       body: text,
       senderId: user.id,
+      status: "sent",
       replyTo: replyingTo,
       reactions: [],
       pending: true,
@@ -256,6 +259,7 @@ const Message = ({ user }) => {
       );
 
       setReplyingTo(null);
+      closeMessageInteractions();
       conversations.reload();
     } catch (error) {
       thread.setData((messages = []) =>
@@ -273,6 +277,9 @@ const Message = ({ user }) => {
   };
 
   const reactToMessage = async (messageId, emoji) => {
+    setSelectedMessageId(messageId);
+    setEmojiMessageId(null);
+
     try {
       const { data } = await api.put(
         `/conversations/${conversationId}/messages/${messageId}/reaction`,
@@ -302,6 +309,44 @@ const Message = ({ user }) => {
   const toggleMessageMenu = (messageId) => {
     setOpenMenu((current) => (current === messageId ? null : messageId));
   };
+
+  const selectMessage = (messageId) => {
+    setSelectedMessageId(messageId);
+    setEmojiMessageId(null);
+    setOpenMenu(null);
+  };
+
+  const openEmojiPicker = (messageId) => {
+    setSelectedMessageId(messageId);
+    setEmojiMessageId((current) => (current === messageId ? null : messageId));
+  };
+
+  const replyToMessage = (message) => {
+    setReplyingTo(message);
+    closeMessageInteractions();
+  };
+
+  const closeMessageInteractions = () => {
+    setSelectedMessageId(null);
+    setEmojiMessageId(null);
+    setOpenMenu(null);
+  };
+
+  useEffect(() => {
+    const handleOutsideInteraction = (event) => {
+      if (
+        !event.target.closest(".message-interaction") &&
+        !event.target.closest(".message-bubble") &&
+        !event.target.closest(".message-menu")
+      ) {
+        closeMessageInteractions();
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideInteraction);
+    return () =>
+      document.removeEventListener("mousedown", handleOutsideInteraction);
+  }, []);
 
   /*
    * -----------------------------------------
@@ -361,6 +406,18 @@ const Message = ({ user }) => {
       messages.map((message) =>
         message.id === event.detail.id
           ? { ...message, reactions: event.detail.reactions }
+          : message,
+      ),
+    );
+  });
+
+  useRealtime("message:read", (event) => {
+    if (event.detail.conversationId !== conversationId) return;
+
+    thread.setData((messages = []) =>
+      messages.map((message) =>
+        message.id === event.detail.id
+          ? { ...message, status: "read" }
           : message,
       ),
     );
@@ -437,6 +494,9 @@ const Message = ({ user }) => {
    */
 
   useEffect(() => {
+    setSelectedMessageId(null);
+    setEmojiMessageId(null);
+    setOpenMenu(null);
     scrollToBottom();
 
     if (messageThreadRef.current) {
@@ -551,8 +611,13 @@ const Message = ({ user }) => {
                       onDelete={handleDelete}
                       onCancelEdit={cancelEdit}
                       onSaveEdit={saveEdit}
-                      onReply={setReplyingTo}
+                      onReply={replyToMessage}
                       onReact={reactToMessage}
+                      selected={selectedMessageId === message.id}
+                      emojiOpen={emojiMessageId === message.id}
+                      onSelectMessage={selectMessage}
+                      onOpenEmoji={() => openEmojiPicker(message.id)}
+                      onCloseInteraction={closeMessageInteractions}
                     />
                   );
                 })}

@@ -6,7 +6,6 @@ import {
   Reply,
 } from "@mui/icons-material";
 import EmojiPicker from "emoji-picker-react";
-import { useState } from "react";
 
 const MessageBubble = ({
   message,
@@ -24,9 +23,12 @@ const MessageBubble = ({
   onSaveEdit,
   onReply,
   onReact,
+  selected,
+  emojiOpen,
+  onSelectMessage,
+  onOpenEmoji,
+  onCloseInteraction,
 }) => {
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-
   return (
     <div className={`message-row ${isOwn ? "own" : ""}`}>
       {/* Editing */}
@@ -69,7 +71,10 @@ const MessageBubble = ({
           </div>
         </div>
       ) : (
-        <div className={`message-bubble ${isOwn ? "own" : ""}`}>
+        <div
+          className={`message-bubble ${isOwn ? "own" : ""}`}
+          onClick={() => onSelectMessage(message.id)}
+        >
           {message.replyTo && (
             <div className="message-reply-preview">{message.replyTo.body}</div>
           )}
@@ -80,6 +85,18 @@ const MessageBubble = ({
 
           {message.pending && (
             <small className="pending-label">Sending...</small>
+          )}
+
+          {isOwn && !message.pending && (
+            <small
+              className={`message-status status-${message.status || "sent"}`}
+            >
+              {message.status === "read"
+                ? "✓✓"
+                : message.status === "delivered"
+                  ? "✓✓"
+                  : "✓"}
+            </small>
           )}
 
           {message.reactions?.length > 0 && (
@@ -94,38 +111,45 @@ const MessageBubble = ({
         </div>
       )}
 
-      {!isEditing && (
-        <div className="message-actions">
+      {!isEditing && selected && (
+        <div
+          className="message-interaction"
+          onClick={(event) => event.stopPropagation()}
+        >
           <button
             type="button"
-            className="message-action-button"
+            className="message-interaction-button"
             aria-label="Reply to message"
             title="Reply to message"
-            onClick={() => onReply(message)}
+            onClick={() => {
+              onCloseInteraction();
+              onReply(message);
+            }}
           >
-            <Reply fontSize="small" />
+            <Reply fontSize="small" /> Reply
           </button>
 
-          <div className="message-reaction-wrapper">
+          <div className="message-reaction-control">
             <button
               type="button"
-              className="message-action-button"
+              className="message-interaction-button"
               aria-label="React to message"
               title="React to message"
-              onClick={() => setShowEmojiPicker((current) => !current)}
+              onClick={onOpenEmoji}
             >
-              <EmojiEmotions fontSize="small" />
+              <EmojiEmotions fontSize="small" /> Emoji
             </button>
 
-            {showEmojiPicker && (
+            {emojiOpen && (
               <div className="message-reaction-picker">
                 <EmojiPicker
                   onEmojiClick={(emojiData) => {
+                    onCloseInteraction();
                     onReact(message.id, emojiData.emoji);
-                    setShowEmojiPicker(false);
                   }}
                   width={280}
                   height={360}
+                  searchDisabled
                   previewConfig={{ showPreview: false }}
                   lazyLoadEmojis
                 />
@@ -143,7 +167,10 @@ const MessageBubble = ({
             className="message-menu-button"
             aria-label="Message options"
             title="Message options"
-            onClick={() => onToggleMenu(message.id)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleMenu(message.id);
+            }}
           >
             <MoreVert />
           </button>
