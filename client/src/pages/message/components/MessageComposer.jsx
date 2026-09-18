@@ -2,7 +2,15 @@ import { EmojiEmotions, Send } from "@mui/icons-material";
 import EmojiPicker from "emoji-picker-react";
 import { useState } from "react";
 
-const MessageComposer = ({ body, setBody, sending, onSend, onTyping }) => {
+const MessageComposer = ({
+  body,
+  setBody,
+  sending,
+  onSend,
+  onTyping,
+  replyingTo,
+  onCancelReply,
+}) => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   const addEmoji = (emoji) => {
@@ -14,6 +22,18 @@ const MessageComposer = ({ body, setBody, sending, onSend, onTyping }) => {
 
   return (
     <div className="message-composer-container">
+      {replyingTo && (
+        <div className="composer-reply-preview">
+          <span>Replying to: {replyingTo.body}</span>
+          <button
+            type="button"
+            onClick={onCancelReply}
+            aria-label="Cancel reply"
+          >
+            ×
+          </button>
+        </div>
+      )}
       <form className="message-composer" onSubmit={onSend}>
         <div className="emoji-wrapper">
           <button

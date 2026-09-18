@@ -24,6 +24,21 @@ const messageSchema = new mongoose.Schema(
       maxlength: 5000,
       required: true,
     },
+    replyTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Message",
+      default: null,
+    },
+    reactions: [
+      {
+        userId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          required: true,
+        },
+        emoji: { type: String, required: true, maxlength: 8 },
+      },
+    ],
     status: {
       type: String,
       enum: ["sent", "delivered", "read"],

@@ -35,6 +35,7 @@ export default function useSocket(userId) {
 
     socket.on("connect", forward("realtime:connected"));
     socket.on("message:new", handleNewMessage);
+    socket.on("message:reaction", forward("message:reaction"));
     socket.on("notification:new", forward("notification:new"));
     socket.on("typing:start", forward("typing:start"));
     socket.on("typing:stop", forward("typing:stop"));

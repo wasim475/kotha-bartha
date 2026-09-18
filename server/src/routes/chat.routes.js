@@ -124,7 +124,7 @@ router.get("/conversations", async (req, res, next) => {
 // ============================================================
 
 router.get(
-"/conversations/:conversationId/messages",
+  "/conversations/:conversationId/messages",
   async (req, res, next) => {
     try {
       const conversation = await Conversation.findOne({
@@ -150,6 +150,7 @@ router.get(
         conversationId: conversation._id,
         deletedAt: null,
       })
+        .populate("replyTo", "body senderId")
         .sort({
           createdAt: 1,
         })
@@ -161,6 +162,17 @@ router.get(
           body: message.body,
           createdAt: message.createdAt,
           senderId: message.senderId.toString(),
+          replyTo: message.replyTo
+            ? {
+                id: message.replyTo._id.toString(),
+                body: message.replyTo.body,
+                senderId: message.replyTo.senderId.toString(),
+              }
+            : null,
+          reactions: message.reactions.map((reaction) => ({
+            userId: reaction.userId.toString(),
+            emoji: reaction.emoji,
+          })),
         })),
       });
     } catch (error) {
@@ -193,6 +205,24 @@ router.post(
         });
       }
 
+      let replyTo = null;
+      if (req.body.replyTo) {
+        replyTo = await Message.findOne({
+          _id: req.body.replyTo,
+          conversationId: conversation._id,
+          deletedAt: null,
+        });
+
+        if (!replyTo) {
+          return res.status(400).json({
+            error: {
+              code: "INVALID_REPLY",
+              message: "The message being replied to was not found.",
+            },
+          });
+        }
+      }
+
       const recipientId = conversation.participantIds.find(
         (id) => id.toString() !== req.user._id.toString(),
       );
@@ -202,6 +232,7 @@ router.post(
         senderId: req.user._id,
         recipientId,
         body,
+        replyTo: replyTo?._id || null,
         status: "delivered",
       });
 
@@ -227,8 +258,91 @@ router.post(
       });
 
       res.status(201).json({
-        data: message,
+        data: {
+          id: message._id.toString(),
+          body: message.body,
+          createdAt: message.createdAt,
+          senderId: message.senderId.toString(),
+          replyTo: replyTo
+            ? {
+                id: replyTo._id.toString(),
+                body: replyTo.body,
+                senderId: replyTo.senderId.toString(),
+              }
+            : null,
+          reactions: [],
+        },
       });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// ============================================================
+// REACT TO MESSAGE
+// ============================================================
+
+router.put(
+  "/conversations/:conversationId/messages/:messageId/reaction",
+  async (req, res, next) => {
+    try {
+      const emoji = String(req.body.emoji || "").trim();
+      const conversation = await Conversation.findOne({
+        _id: req.params.conversationId,
+        participantIds: req.user._id,
+      });
+
+      if (!conversation || !emoji || emoji.length > 8) {
+        return res.status(400).json({
+          error: { code: "INVALID_REACTION", message: "Invalid reaction." },
+        });
+      }
+
+      const message = await Message.findOne({
+        _id: req.params.messageId,
+        conversationId: conversation._id,
+        deletedAt: null,
+      });
+
+      if (!message) {
+        return res.status(404).json({
+          error: { code: "NOT_FOUND", message: "Message not found." },
+        });
+      }
+
+      const userId = req.user._id.toString();
+      const existing = message.reactions.find(
+        (reaction) => reaction.userId.toString() === userId,
+      );
+
+      if (existing?.emoji === emoji) {
+        message.reactions = message.reactions.filter(
+          (reaction) => reaction.userId.toString() !== userId,
+        );
+      } else if (existing) {
+        existing.emoji = emoji;
+      } else {
+        message.reactions.push({ userId: req.user._id, emoji });
+      }
+
+      await message.save();
+
+      const reactions = message.reactions.map((reaction) => ({
+        userId: reaction.userId.toString(),
+        emoji: reaction.emoji,
+      }));
+      const payload = {
+        id: message._id.toString(),
+        conversationId: conversation._id.toString(),
+        reactions,
+      };
+      const recipientId = conversation.participantIds.find(
+        (id) => id.toString() !== userId,
+      );
+      emitToUser(req, recipientId, "message:reaction", payload);
+
+      res.json({ data: payload });
     } catch (error) {
       next(error);
     }

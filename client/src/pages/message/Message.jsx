@@ -46,6 +46,7 @@ const Message = ({ user }) => {
    */
 
   const [body, setBody] = useState("");
+  const [replyingTo, setReplyingTo] = useState(null);
   const [isTyping, setIsTyping] = useState(false);
   const [sendError, setSendError] = useState("");
   const [sending, setSending] = useState(false);
@@ -217,6 +218,8 @@ const Message = ({ user }) => {
       id: optimisticId,
       body: text,
       senderId: user.id,
+      replyTo: replyingTo,
+      reactions: [],
       pending: true,
     };
 
@@ -233,6 +236,7 @@ const Message = ({ user }) => {
         `/conversations/${conversationId}/messages`,
         {
           body: text,
+          replyTo: replyingTo?.id || null,
         },
       );
 
@@ -251,6 +255,7 @@ const Message = ({ user }) => {
         ),
       );
 
+      setReplyingTo(null);
       conversations.reload();
     } catch (error) {
       thread.setData((messages = []) =>
@@ -264,6 +269,27 @@ const Message = ({ user }) => {
       );
     } finally {
       setSending(false);
+    }
+  };
+
+  const reactToMessage = async (messageId, emoji) => {
+    try {
+      const { data } = await api.put(
+        `/conversations/${conversationId}/messages/${messageId}/reaction`,
+        { emoji },
+      );
+
+      thread.setData((messages = []) =>
+        messages.map((message) =>
+          message.id === messageId
+            ? { ...message, reactions: data.data.reactions }
+            : message,
+        ),
+      );
+    } catch (error) {
+      setSendError(
+        error.response?.data?.error?.message || "Reaction could not be saved.",
+      );
     }
   };
 
@@ -326,6 +352,18 @@ const Message = ({ user }) => {
     );
 
     conversations.reload();
+  });
+
+  useRealtime("message:reaction", (event) => {
+    if (event.detail.conversationId !== conversationId) return;
+
+    thread.setData((messages = []) =>
+      messages.map((message) =>
+        message.id === event.detail.id
+          ? { ...message, reactions: event.detail.reactions }
+          : message,
+      ),
+    );
   });
 
   useRealtime("typing:start", (event) => {
@@ -513,6 +551,8 @@ const Message = ({ user }) => {
                       onDelete={handleDelete}
                       onCancelEdit={cancelEdit}
                       onSaveEdit={saveEdit}
+                      onReply={setReplyingTo}
+                      onReact={reactToMessage}
                     />
                   );
                 })}
@@ -525,6 +565,8 @@ const Message = ({ user }) => {
                 sending={sending}
                 onSend={sendMessage}
                 onTyping={notifyTyping}
+                replyingTo={replyingTo}
+                onCancelReply={() => setReplyingTo(null)}
               />
 
               {/* Error */}

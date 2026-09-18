@@ -1,4 +1,12 @@
-import { Delete, Edit, MoreVert } from "@mui/icons-material";
+import {
+  Delete,
+  Edit,
+  EmojiEmotions,
+  MoreVert,
+  Reply,
+} from "@mui/icons-material";
+import EmojiPicker from "emoji-picker-react";
+import { useState } from "react";
 
 const MessageBubble = ({
   message,
@@ -14,19 +22,19 @@ const MessageBubble = ({
   onDelete,
   onCancelEdit,
   onSaveEdit,
+  onReply,
+  onReact,
 }) => {
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
   return (
-    <div
-      className={`message-row ${isOwn ? "own" : ""}`}
-    >
+    <div className={`message-row ${isOwn ? "own" : ""}`}>
       {/* Editing */}
       {isEditing ? (
         <div className="message-edit-box">
           <input
             value={editBody}
-            onChange={(event) =>
-              setEditBody(event.target.value)
-            }
+            onChange={(event) => setEditBody(event.target.value)}
             autoFocus
             onKeyDown={(event) => {
               if (event.key === "Enter") {
@@ -61,24 +69,69 @@ const MessageBubble = ({
           </div>
         </div>
       ) : (
-        <div
-          className={`message-bubble ${
-            isOwn ? "own" : ""
-          }`}
-        >
+        <div className={`message-bubble ${isOwn ? "own" : ""}`}>
+          {message.replyTo && (
+            <div className="message-reply-preview">{message.replyTo.body}</div>
+          )}
+
           {message.body}
 
-          {message.editedAt && (
-            <small className="edited-label">
-              edited
-            </small>
-          )}
+          {message.editedAt && <small className="edited-label">edited</small>}
 
           {message.pending && (
-            <small className="pending-label">
-              Sending...
-            </small>
+            <small className="pending-label">Sending...</small>
           )}
+
+          {message.reactions?.length > 0 && (
+            <div className="message-reactions">
+              {message.reactions.map((reaction) => (
+                <span key={`${reaction.userId}-${reaction.emoji}`}>
+                  {reaction.emoji}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!isEditing && (
+        <div className="message-actions">
+          <button
+            type="button"
+            className="message-action-button"
+            aria-label="Reply to message"
+            title="Reply to message"
+            onClick={() => onReply(message)}
+          >
+            <Reply fontSize="small" />
+          </button>
+
+          <div className="message-reaction-wrapper">
+            <button
+              type="button"
+              className="message-action-button"
+              aria-label="React to message"
+              title="React to message"
+              onClick={() => setShowEmojiPicker((current) => !current)}
+            >
+              <EmojiEmotions fontSize="small" />
+            </button>
+
+            {showEmojiPicker && (
+              <div className="message-reaction-picker">
+                <EmojiPicker
+                  onEmojiClick={(emojiData) => {
+                    onReact(message.id, emojiData.emoji);
+                    setShowEmojiPicker(false);
+                  }}
+                  width={280}
+                  height={360}
+                  previewConfig={{ showPreview: false }}
+                  lazyLoadEmojis
+                />
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -110,16 +163,8 @@ const MessageBubble = ({
               <button
                 type="button"
                 className="message-menu-item delete-item"
-                aria-label={
-                  isDeleting
-                    ? "Deleting message"
-                    : "Delete message"
-                }
-                title={
-                  isDeleting
-                    ? "Deleting message"
-                    : "Delete message"
-                }
+                aria-label={isDeleting ? "Deleting message" : "Delete message"}
+                title={isDeleting ? "Deleting message" : "Delete message"}
                 onClick={() => onDelete(message.id)}
                 disabled={isDeleting}
               >
