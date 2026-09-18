@@ -56,7 +56,7 @@ const ConversationList = ({
               >
                 {conversation.user.initials}
 
-                <i />
+                <div/>
               </div>
 
               <div>

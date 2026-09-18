@@ -20,6 +20,7 @@ import ConversationList from "./components/ConversationList";
 import MessageBubble from "./components/MessageBubble";
 import MessageComposer from "./components/MessageComposer";
 import VoiceCall from "./components/VoicCall";
+import Swal from 'sweetalert2';
 
 const Message = ({ user }) => {
   const { conversationId } = useParams();
@@ -94,15 +95,28 @@ const Message = ({ user }) => {
   };
 
   const deleteConversation = async (conversationToDelete) => {
-    try {
-      await api.delete(`/conversations/${conversationToDelete}`);
+
+ const result = await Swal.fire({
+  title: "Are you sure?",
+  text: "You won't be able to revert this!",
+  icon: "warning",
+  showCancelButton: true,
+  confirmButtonColor: "#3085d6",
+  cancelButtonColor: "#d33",
+  confirmButtonText: "Yes, delete it!"
+})
+
+if(!result.isConfirmed) return
+
+if(result.isConfirmed){
+  await api.delete(`/conversations/${conversationToDelete}`);
       conversations.reload();
-    } catch (error) {
-      setSendError(
-        error.response?.data?.error?.message ||
-          "Conversation could not be deleted.",
-      );
-    }
+  Swal.fire({
+    title: "Deleted!",
+    text: "Your file has been deleted.",
+    icon: "success"
+  });
+}
   };
 
   useEffect(() => {
