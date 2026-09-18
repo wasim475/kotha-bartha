@@ -15,12 +15,12 @@ import useDeleteMessage from "./hooks/useDeleteMessage";
 import useEditMessage from "./hooks/useEditMessage";
 import useVoiceCall from "./hooks/useVoiceCall";
 
+import Swal from "sweetalert2";
 import ChatHeader from "./components/ChatHeader";
 import ConversationList from "./components/ConversationList";
 import MessageBubble from "./components/MessageBubble";
 import MessageComposer from "./components/MessageComposer";
 import VoiceCall from "./components/VoicCall";
-import Swal from 'sweetalert2';
 
 const Message = ({ user }) => {
   const { conversationId } = useParams();
@@ -95,28 +95,27 @@ const Message = ({ user }) => {
   };
 
   const deleteConversation = async (conversationToDelete) => {
+    const result = await Swal.fire({
+      title: "Are you sure?",
+      text: "You won't be able to revert this!",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#3085d6",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "Yes, delete it!",
+    });
 
- const result = await Swal.fire({
-  title: "Are you sure?",
-  text: "You won't be able to revert this!",
-  icon: "warning",
-  showCancelButton: true,
-  confirmButtonColor: "#3085d6",
-  cancelButtonColor: "#d33",
-  confirmButtonText: "Yes, delete it!"
-})
+    if (!result.isConfirmed) return;
 
-if(!result.isConfirmed) return
-
-if(result.isConfirmed){
-  await api.delete(`/conversations/${conversationToDelete}`);
+    if (result.isConfirmed) {
+      await api.delete(`/conversations/${conversationToDelete}`);
       conversations.reload();
-  Swal.fire({
-    title: "Deleted!",
-    text: "Your file has been deleted.",
-    icon: "success"
-  });
-}
+      Swal.fire({
+        title: "Deleted!",
+        text: "Your file has been deleted.",
+        icon: "success",
+      });
+    }
   };
 
   useEffect(() => {
@@ -670,6 +669,7 @@ if(result.isConfirmed){
         /* Conversation List */
         <ConversationList
           conversations={conversations}
+          userId={user.id}
           onOpenConversation={(id) => navigate(`/app/messages/${id}`)}
           onDeleteConversation={deleteConversation}
         />

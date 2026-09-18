@@ -41,6 +41,9 @@ router.post("/conversations", async (req, res, next) => {
         pairKey: key,
       },
       {
+        $pull: {
+          hiddenFor: req.user._id,
+        },
         $setOnInsert: {
           participantIds: [req.user._id, other._id],
           pairKey: key,
@@ -70,6 +73,7 @@ router.get("/conversations", async (req, res, next) => {
   try {
     const conversations = await Conversation.find({
       participantIds: req.user._id,
+      hiddenFor: { $ne: req.user._id },
     })
       .sort({
         updatedAt: -1,
@@ -121,6 +125,7 @@ router.delete("/conversations/:conversationId", async (req, res, next) => {
     const conversation = await Conversation.findOne({
       _id: req.params.conversationId,
       participantIds: req.user._id,
+      hiddenFor: { $ne: req.user._id },
     });
 
     if (!conversation) {
@@ -132,8 +137,10 @@ router.delete("/conversations/:conversationId", async (req, res, next) => {
       });
     }
 
-    await Message.deleteMany({ conversationId: conversation._id });
-    await conversation.deleteOne();
+    await Conversation.updateOne(
+      { _id: conversation._id },
+      { $addToSet: { hiddenFor: req.user._id } },
+    );
 
     res.json({ data: { id: conversation._id.toString() } });
   } catch (error) {
@@ -155,6 +162,7 @@ router.get(
       const conversation = await Conversation.findOne({
         _id: req.params.conversationId,
         participantIds: req.user._id,
+        hiddenFor: { $ne: req.user._id },
       });
 
       if (!conversation) {
@@ -247,6 +255,7 @@ router.post(
       const conversation = await Conversation.findOne({
         _id: req.params.conversationId,
         participantIds: req.user._id,
+        hiddenFor: { $ne: req.user._id },
       });
 
       if (!conversation || !body) {
@@ -278,6 +287,12 @@ router.post(
 
       const recipientId = conversation.participantIds.find(
         (id) => id.toString() !== req.user._id.toString(),
+      );
+
+      conversation.hiddenFor = (conversation.hiddenFor || []).filter(
+        (id) =>
+          id.toString() !== req.user._id.toString() &&
+          id.toString() !== recipientId.toString(),
       );
 
       const message = await Message.create({

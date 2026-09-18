@@ -27,7 +27,7 @@ export default function useSocket(userId) {
       if (messageId && forwardedMessageIds.has(messageId)) return;
       if (messageId) forwardedMessageIds.add(messageId);
 
-      if (!isConversationMuted(payload?.conversationId)) {
+      if (!isConversationMuted(userId, payload?.conversationId)) {
         const messageSound = new Audio("/sounds/message.mp3");
         messageSound.play().catch((error) => {
           console.error("Message sound failed:", error);

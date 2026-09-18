@@ -9,6 +9,7 @@ import { colorFor, formatTime, ResourceState } from "../../../utility/helpers";
 
 const ConversationList = ({
   conversations,
+  userId,
   onOpenConversation,
   onDeleteConversation,
 }) => {
@@ -26,7 +27,11 @@ const ConversationList = ({
   }, []);
 
   const toggleMute = (conversationId) => {
-    setConversationMuted(conversationId, !isConversationMuted(conversationId));
+    setConversationMuted(
+      userId,
+      conversationId,
+      !isConversationMuted(userId, conversationId),
+    );
     setOpenMenu(null);
   };
 
@@ -56,7 +61,7 @@ const ConversationList = ({
               >
                 {conversation.user.initials}
 
-                <div/>
+                <div />
               </div>
 
               <div>
@@ -99,12 +104,14 @@ const ConversationList = ({
                     type="button"
                     onClick={() => toggleMute(conversation.id)}
                   >
-                    {isConversationMuted(conversation.id) ? (
+                    {isConversationMuted(userId, conversation.id) ? (
                       <VolumeUp fontSize="small" />
                     ) : (
                       <VolumeOff fontSize="small" />
                     )}
-                    {isConversationMuted(conversation.id) ? "Unmute" : "Mute"}
+                    {isConversationMuted(userId, conversation.id)
+                      ? "Unmute"
+                      : "Mute"}
                   </button>
                   <button
                     type="button"

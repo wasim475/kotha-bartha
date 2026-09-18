@@ -2,8 +2,17 @@ const mongoose = require("mongoose");
 
 const conversationSchema = new mongoose.Schema(
   {
-    participantIds: { type: [mongoose.Schema.Types.ObjectId], required: true, index: true },
+    participantIds: {
+      type: [mongoose.Schema.Types.ObjectId],
+      required: true,
+      index: true,
+    },
     pairKey: { type: String, required: true, unique: true },
+    hiddenFor: {
+      type: [mongoose.Schema.Types.ObjectId],
+      default: [],
+      index: true,
+    },
     lastMessage: { type: String, default: "" },
     lastMessageAt: Date,
     unreadCounts: { type: Map, of: Number, default: {} },
