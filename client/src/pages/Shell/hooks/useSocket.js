@@ -39,9 +39,18 @@ export default function useSocket(userId) {
         "Notification" in window &&
         Notification.permission === "granted"
       ) {
-        new Notification(payload?.sender?.fullName || "Kotha-Barta", {
-          body: payload?.body || "",
-        });
+        const desktopNotification = new Notification(
+          payload?.sender?.fullName?.trim() || "Kotha-Barta",
+          {
+            body: payload?.body || "",
+          },
+        );
+
+        desktopNotification.onclick = () => {
+          window.focus();
+          document.title = "kotha-barta";
+          desktopNotification.close();
+        };
       }
 
       forward("message:new")(payload);
