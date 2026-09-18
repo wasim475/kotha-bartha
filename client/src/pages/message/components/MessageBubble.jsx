@@ -92,7 +92,7 @@ const MessageBubble = ({
               className={`message-status status-${message.status || "sent"}`}
             >
               {message.status === "read"
-                ? "✓✓"
+                ? ""
                 : message.status === "delivered"
                   ? "✓✓"
                   : "✓"}

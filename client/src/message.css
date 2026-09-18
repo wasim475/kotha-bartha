@@ -195,17 +195,11 @@
 }
 
 .status-read {
-  color: #2196f3;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border: 1px solid #ffffff;
+  width: 9px;
+  height: 9px;
+  border: 1px solid #9ca3af;
   border-radius: 50%;
-  background: #ffffff;
-  font-size: 10px;
-  line-height: 1;
+  background: #2196f3;
   vertical-align: middle;
 }
 
