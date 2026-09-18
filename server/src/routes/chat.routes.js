@@ -169,7 +169,7 @@ router.get(
                 senderId: message.replyTo.senderId.toString(),
               }
             : null,
-          reactions: message.reactions.map((reaction) => ({
+          reactions: (message.reactions || []).map((reaction) => ({
             userId: reaction.userId.toString(),
             emoji: reaction.emoji,
           })),
