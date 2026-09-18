@@ -68,6 +68,7 @@ const Message = ({ user }) => {
   const savedScrollTopRef = useRef(0);
   const localTypingTimeoutRef = useRef(null);
   const remoteTypingTimeoutRef = useRef(null);
+  const pendingMessageSoundIdsRef = useRef(new Set());
 
   /*
    * -----------------------------------------
@@ -358,10 +359,42 @@ const Message = ({ user }) => {
     conversations.reload();
 
     if (event.detail.conversationId === conversationId) {
+      if (event.detail.id) {
+        pendingMessageSoundIdsRef.current.add(String(event.detail.id));
+      }
       prepareForIncomingMessage();
       thread.reload();
     }
   });
+
+  useEffect(() => {
+    if (!thread.data || pendingMessageSoundIdsRef.current.size === 0) {
+      return undefined;
+    }
+
+    const frame = requestAnimationFrame(() => {
+      const renderedMessageIds = new Set(
+        thread.data.map((message) => String(message.id)),
+      );
+      const renderedPendingIds = [...pendingMessageSoundIdsRef.current].filter(
+        (id) => renderedMessageIds.has(id),
+      );
+
+      if (renderedPendingIds.length === 0) return;
+
+      renderedPendingIds.forEach((id) =>
+        pendingMessageSoundIdsRef.current.delete(id),
+      );
+
+      const messageSound = new Audio("/sounds/message.mp3");
+      messageSound.currentTime = 0;
+      messageSound.play().catch((error) => {
+        console.error("Message sound failed:", error);
+      });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [thread.data]);
 
   useRealtime("message:updated", (event) => {
     if (event.detail.conversationId !== conversationId) {

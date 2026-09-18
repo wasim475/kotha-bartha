@@ -5,8 +5,6 @@ import { realtime, setActiveSocket } from "../../../utility/helpers";
 
 const socketUrl = api.defaults.baseURL.replace(/\/api\/v1$/, "");
 
-const messageSound = new Audio("/sounds/message.mp3");
-
 export default function useSocket(userId) {
   useEffect(() => {
     const socket = io(socketUrl, { withCredentials: true });
@@ -21,20 +19,8 @@ export default function useSocket(userId) {
       );
     };
 
-    const handleNewMessage = (payload) => {
-      // আগে existing realtime event পাঠাবে
-      forward("message:new")(payload);
-
-      // নতুন message এলে sound
-      messageSound.currentTime = 0;
-
-      messageSound.play().catch((error) => {
-        console.error("Message sound failed:", error);
-      });
-    };
-
     socket.on("connect", forward("realtime:connected"));
-    socket.on("message:new", handleNewMessage);
+    socket.on("message:new", forward("message:new"));
     socket.on("message:reaction", forward("message:reaction"));
     socket.on("message:read", forward("message:read"));
     socket.on("notification:new", forward("notification:new"));
