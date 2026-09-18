@@ -116,6 +116,31 @@ router.get("/conversations", async (req, res, next) => {
   }
 });
 
+router.delete("/conversations/:conversationId", async (req, res, next) => {
+  try {
+    const conversation = await Conversation.findOne({
+      _id: req.params.conversationId,
+      participantIds: req.user._id,
+    });
+
+    if (!conversation) {
+      return res.status(404).json({
+        error: {
+          code: "NOT_FOUND",
+          message: "Conversation not found.",
+        },
+      });
+    }
+
+    await Message.deleteMany({ conversationId: conversation._id });
+    await conversation.deleteOne();
+
+    res.json({ data: { id: conversation._id.toString() } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ============================================================
 // GET MESSAGES
 //

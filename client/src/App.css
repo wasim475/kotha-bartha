@@ -699,7 +699,20 @@ button {
 .conversation {
   width: 100%;
 }
-.conversation > div:nth-child(2),
+.conversation-main {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+  flex: 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.conversation-main > div:nth-child(2),
 .notification > div:nth-child(2) {
   display: grid;
   flex: 1;
@@ -709,7 +722,7 @@ button {
   color: var(--muted);
   font-size: 10px;
 }
-.conversation > b {
+.conversation-main > b {
   display: grid;
   place-items: center;
   width: 18px;
@@ -718,6 +731,60 @@ button {
   color: #fff;
   background: #4b89c6;
   font-size: 9px;
+}
+.conversation-menu-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+.conversation-menu-button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.conversation-menu-button:hover,
+.conversation-menu-button:focus-visible {
+  background: var(--soft);
+  color: var(--ink);
+}
+.conversation-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  min-width: 125px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  box-shadow: 0 5px 16px rgba(15, 23, 42, 0.14);
+}
+.conversation-menu button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+.conversation-menu button:hover,
+.conversation-menu button:focus-visible {
+  background: var(--soft);
+}
+.conversation-menu .delete-item {
+  color: #c65c81;
 }
 .conversation.unread {
   background: var(--soft);
