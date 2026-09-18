@@ -7,6 +7,18 @@ import {
 } from "@mui/icons-material";
 import EmojiPicker from "emoji-picker-react";
 
+const formatMessageTime = (date) => {
+  if (!date) return "";
+
+  const parsedDate = new Date(date);
+  if (Number.isNaN(parsedDate.getTime())) return "";
+
+  return parsedDate.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
 const MessageBubble = ({
   message,
   isOwn,
@@ -81,23 +93,29 @@ const MessageBubble = ({
 
           {message.body}
 
-          {message.editedAt && <small className="edited-label">edited</small>}
+          <span className="message-meta">
+            {message.editedAt && <small className="edited-label">edited</small>}
 
-          {message.pending && (
-            <small className="pending-label">Sending...</small>
-          )}
+            {message.pending && (
+              <small className="pending-label">Sending...</small>
+            )}
 
-          {isOwn && !message.pending && (
-            <small
-              className={`message-status status-${message.status || "sent"}`}
-            >
-              {message.status === "read"
-                ? ""
-                : message.status === "delivered"
-                  ? "✓✓"
-                  : "✓"}
+            <small className="message-time">
+              {formatMessageTime(message.createdAt)}
             </small>
-          )}
+
+            {isOwn && !message.pending && (
+              <small
+                className={`message-status status-${message.status || "sent"}`}
+              >
+                {message.status === "read"
+                  ? ""
+                  : message.status === "delivered"
+                    ? "✓✓"
+                    : "✓"}
+              </small>
+            )}
+          </span>
 
           {message.reactions?.length > 0 && (
             <div className="message-reactions">

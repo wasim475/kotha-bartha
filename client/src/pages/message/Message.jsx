@@ -243,6 +243,7 @@ const Message = ({ user }) => {
     const optimisticMessage = {
       id: optimisticId,
       body: text,
+      createdAt: new Date().toISOString(),
       senderId: user.id,
       status: "sent",
       replyTo: replyingTo,
