@@ -682,12 +682,6 @@ button {
   font-size: 10px;
 }
 
-
-
-
-
-
-
 .message-list,
 .notification-list {
   display: grid;
@@ -749,6 +743,17 @@ button {
   height: 32px;
   margin-left: auto;
   font-size: 9px;
+}
+.chat-header-user {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.typing-indicator {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
 }
 .chat-header .icon-button {
   margin-left: 4px;

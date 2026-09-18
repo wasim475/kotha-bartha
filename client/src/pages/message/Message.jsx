@@ -6,19 +6,20 @@ import { api } from "../../utility/api";
 
 import {
   ResourceState,
-  useResource,
+  sendTypingSignal,
   useRealtime,
+  useResource,
 } from "../../utility/helpers";
 
-import useVoiceCall from "./hooks/useVoiceCall";
-import useEditMessage from "./hooks/useEditMessage";
 import useDeleteMessage from "./hooks/useDeleteMessage";
+import useEditMessage from "./hooks/useEditMessage";
+import useVoiceCall from "./hooks/useVoiceCall";
 
 import ChatHeader from "./components/ChatHeader";
-import VoiceCall from "./components/VoicCall";
+import ConversationList from "./components/ConversationList";
 import MessageBubble from "./components/MessageBubble";
 import MessageComposer from "./components/MessageComposer";
-import ConversationList from "./components/ConversationList";
+import VoiceCall from "./components/VoicCall";
 
 const Message = ({ user }) => {
   const { conversationId } = useParams();
@@ -45,6 +46,7 @@ const Message = ({ user }) => {
    */
 
   const [body, setBody] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
   const [sendError, setSendError] = useState("");
   const [sending, setSending] = useState(false);
 
@@ -61,6 +63,8 @@ const Message = ({ user }) => {
   const scrollIntentRef = useRef("bottom");
 
   const savedScrollTopRef = useRef(0);
+  const localTypingTimeoutRef = useRef(null);
+  const remoteTypingTimeoutRef = useRef(null);
 
   /*
    * -----------------------------------------
@@ -71,6 +75,31 @@ const Message = ({ user }) => {
   const selected = conversations.data?.find(
     (item) => item.id === conversationId,
   );
+
+  const notifyTyping = (value) => {
+    if (!conversationId || !selected?.user?.id) return;
+
+    clearTimeout(localTypingTimeoutRef.current);
+
+    const typing = Boolean(value.trim());
+    sendTypingSignal(selected.user.id, conversationId, typing);
+
+    if (typing) {
+      localTypingTimeoutRef.current = setTimeout(() => {
+        sendTypingSignal(selected.user.id, conversationId, false);
+      }, 1200);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      clearTimeout(localTypingTimeoutRef.current);
+
+      if (conversationId && selected?.user?.id) {
+        sendTypingSignal(selected.user.id, conversationId, false);
+      }
+    };
+  }, [conversationId, selected?.user?.id]);
 
   /*
    * -----------------------------------------
@@ -118,8 +147,7 @@ const Message = ({ user }) => {
   const preserveScrollPosition = () => {
     scrollIntentRef.current = "preserve";
 
-    savedScrollTopRef.current =
-      messageThreadRef.current?.scrollTop || 0;
+    savedScrollTopRef.current = messageThreadRef.current?.scrollTop || 0;
   };
 
   const prepareForIncomingMessage = () => {
@@ -157,10 +185,7 @@ const Message = ({ user }) => {
    * -----------------------------------------
    */
 
-  const {
-    deletingMessage,
-    handleDelete,
-  } = useDeleteMessage({
+  const { deletingMessage, handleDelete } = useDeleteMessage({
     conversationId,
     thread,
     conversations,
@@ -182,6 +207,10 @@ const Message = ({ user }) => {
       return;
     }
 
+    clearTimeout(typingTimeoutRef.current);
+    sendTypingSignal(selected?.user?.id, conversationId, false);
+    setIsTyping(false);
+
     const optimisticId = `pending-${Date.now()}`;
 
     const optimisticMessage = {
@@ -197,10 +226,7 @@ const Message = ({ user }) => {
 
     scrollToBottom();
 
-    thread.setData((messages = []) => [
-      ...messages,
-      optimisticMessage,
-    ]);
+    thread.setData((messages = []) => [...messages, optimisticMessage]);
 
     try {
       const { data } = await api.post(
@@ -228,16 +254,13 @@ const Message = ({ user }) => {
       conversations.reload();
     } catch (error) {
       thread.setData((messages = []) =>
-        messages.filter(
-          (message) => message.id !== optimisticId,
-        ),
+        messages.filter((message) => message.id !== optimisticId),
       );
 
       setBody(text);
 
       setSendError(
-        error.response?.data?.error?.message ||
-          "Message could not be sent.",
+        error.response?.data?.error?.message || "Message could not be sent.",
       );
     } finally {
       setSending(false);
@@ -251,9 +274,7 @@ const Message = ({ user }) => {
    */
 
   const toggleMessageMenu = (messageId) => {
-    setOpenMenu((current) =>
-      current === messageId ? null : messageId,
-    );
+    setOpenMenu((current) => (current === messageId ? null : messageId));
   };
 
   /*
@@ -272,9 +293,7 @@ const Message = ({ user }) => {
   });
 
   useRealtime("message:updated", (event) => {
-    if (
-      event.detail.conversationId !== conversationId
-    ) {
+    if (event.detail.conversationId !== conversationId) {
       return;
     }
 
@@ -296,21 +315,42 @@ const Message = ({ user }) => {
   });
 
   useRealtime("message:deleted", (event) => {
-    if (
-      event.detail.conversationId !== conversationId
-    ) {
+    if (event.detail.conversationId !== conversationId) {
       return;
     }
 
     prepareForIncomingMessage();
 
     thread.setData((messages = []) =>
-      messages.filter(
-        (message) => message.id !== event.detail.id,
-      ),
+      messages.filter((message) => message.id !== event.detail.id),
     );
 
     conversations.reload();
+  });
+
+  useRealtime("typing:start", (event) => {
+    if (
+      event.detail.conversationId !== conversationId ||
+      event.detail.senderId !== String(selected?.user?.id)
+    ) {
+      return;
+    }
+
+    setIsTyping(true);
+    clearTimeout(remoteTypingTimeoutRef.current);
+    remoteTypingTimeoutRef.current = setTimeout(() => {
+      setIsTyping(false);
+    }, 2500);
+  });
+
+  useRealtime("typing:stop", (event) => {
+    if (
+      event.detail.conversationId === conversationId &&
+      event.detail.senderId === String(selected?.user?.id)
+    ) {
+      clearTimeout(remoteTypingTimeoutRef.current);
+      setIsTyping(false);
+    }
   });
 
   useRealtime("realtime:connected", () => {
@@ -329,10 +369,7 @@ const Message = ({ user }) => {
    */
 
   useEffect(() => {
-    const timer = setInterval(
-      conversations.reload,
-      5000,
-    );
+    const timer = setInterval(conversations.reload, 5000);
 
     return () => clearInterval(timer);
   }, [conversationId]);
@@ -344,16 +381,14 @@ const Message = ({ user }) => {
    */
 
   useEffect(() => {
-    const previousOverflow =
-      document.body.style.overflow;
+    const previousOverflow = document.body.style.overflow;
 
     if (conversationId) {
       document.body.style.overflow = "hidden";
     }
 
     return () => {
-      document.body.style.overflow =
-        previousOverflow;
+      document.body.style.overflow = previousOverflow;
     };
   }, [conversationId]);
 
@@ -378,29 +413,21 @@ const Message = ({ user }) => {
    */
 
   useEffect(() => {
-    if (
-      !thread.data ||
-      !messageThreadRef.current
-    ) {
+    if (!thread.data || !messageThreadRef.current) {
       return undefined;
     }
 
     const frame = requestAnimationFrame(() => {
-      const messageThread =
-        messageThreadRef.current;
+      const messageThread = messageThreadRef.current;
 
       if (!messageThread) {
         return;
       }
 
-      if (
-        scrollIntentRef.current === "bottom"
-      ) {
-        messageThread.scrollTop =
-          messageThread.scrollHeight;
+      if (scrollIntentRef.current === "bottom") {
+        messageThread.scrollTop = messageThread.scrollHeight;
       } else {
-        messageThread.scrollTop =
-          savedScrollTopRef.current;
+        messageThread.scrollTop = savedScrollTopRef.current;
       }
     });
 
@@ -416,17 +443,13 @@ const Message = ({ user }) => {
   return (
     <div
       className={
-        conversationId
-          ? "message-page message-page-chat"
-          : "message-page"
+        conversationId ? "message-page message-page-chat" : "message-page"
       }
     >
       {/* Page Heading */}
       <div className="page-heading">
         <div>
-          <span className="eyebrow">
-            Messages
-          </span>
+          <span className="eyebrow">Messages</span>
         </div>
 
         <button
@@ -441,26 +464,18 @@ const Message = ({ user }) => {
       {conversationId ? (
         <div className="chat-container">
           <ResourceState
-            loading={
-              conversations.loading ||
-              thread.loading
-            }
-            error={
-              conversations.error ||
-              thread.error
-            }
+            loading={conversations.loading || thread.loading}
+            error={conversations.error || thread.error}
           >
             <section className="chat-panel">
-
               {/* Chat Header */}
               <ChatHeader
                 selected={selected}
-                onBack={() =>
-                  navigate("/app/messages")
-                }
+                onBack={() => navigate("/app/messages")}
                 callState={callState}
                 startCall={startCall}
                 finishCall={finishCall}
+                isTyping={isTyping}
               />
 
               {/* Voice Call */}
@@ -474,20 +489,13 @@ const Message = ({ user }) => {
               />
 
               {/* Message Thread */}
-              <div
-                className="message-thread"
-                ref={messageThreadRef}
-              >
+              <div className="message-thread" ref={messageThreadRef}>
                 {thread.data?.map((message) => {
-                  const isOwn =
-                    String(message.senderId) ===
-                    String(user.id);
+                  const isOwn = String(message.senderId) === String(user.id);
 
-                  const isEditing =
-                    editingMessage === message.id;
+                  const isEditing = editingMessage === message.id;
 
-                  const isDeleting =
-                    deletingMessage === message.id;
+                  const isDeleting = deletingMessage === message.id;
 
                   return (
                     <MessageBubble
@@ -500,9 +508,7 @@ const Message = ({ user }) => {
                       editBody={editBody}
                       editLoading={editLoading}
                       setEditBody={setEditBody}
-                      onToggleMenu={
-                        toggleMessageMenu
-                      }
+                      onToggleMenu={toggleMessageMenu}
                       onEdit={handleEdit}
                       onDelete={handleDelete}
                       onCancelEdit={cancelEdit}
@@ -518,13 +524,12 @@ const Message = ({ user }) => {
                 setBody={setBody}
                 sending={sending}
                 onSend={sendMessage}
+                onTyping={notifyTyping}
               />
 
               {/* Error */}
               {sendError && (
-                <div className="form-error message-error">
-                  {sendError}
-                </div>
+                <div className="form-error message-error">{sendError}</div>
               )}
             </section>
           </ResourceState>
@@ -533,9 +538,7 @@ const Message = ({ user }) => {
         /* Conversation List */
         <ConversationList
           conversations={conversations}
-          onOpenConversation={(id) =>
-            navigate(`/app/messages/${id}`)
-          }
+          onOpenConversation={(id) => navigate(`/app/messages/${id}`)}
         />
       )}
     </div>

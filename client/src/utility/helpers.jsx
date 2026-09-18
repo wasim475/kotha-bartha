@@ -7,6 +7,11 @@ export const setActiveSocket = (socket) => {
 };
 export const sendSignal = (to, signal) =>
   activeSocket?.emit("call:signal", { to, signal });
+export const sendTypingSignal = (to, conversationId, typing) =>
+  activeSocket?.emit(typing ? "typing:start" : "typing:stop", {
+    to,
+    conversationId,
+  });
 
 export function useRealtime(eventName, handler) {
   useEffect(() => {

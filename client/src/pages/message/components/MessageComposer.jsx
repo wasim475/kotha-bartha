@@ -2,12 +2,7 @@ import { EmojiEmotions, Send } from "@mui/icons-material";
 import EmojiPicker from "emoji-picker-react";
 import { useState } from "react";
 
-const MessageComposer = ({
-  body,
-  setBody,
-  sending,
-  onSend,
-}) => {
+const MessageComposer = ({ body, setBody, sending, onSend, onTyping }) => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   const addEmoji = (emoji) => {
@@ -19,19 +14,14 @@ const MessageComposer = ({
 
   return (
     <div className="message-composer-container">
-      <form
-        className="message-composer"
-        onSubmit={onSend}
-      >
+      <form className="message-composer" onSubmit={onSend}>
         <div className="emoji-wrapper">
           <button
             type="button"
             className="emoji-button"
             aria-label="Choose emoji"
             title="Choose emoji"
-            onClick={() =>
-              setShowEmojiPicker((current) => !current)
-            }
+            onClick={() => setShowEmojiPicker((current) => !current)}
           >
             <EmojiEmotions fontSize="small" />
           </button>
@@ -39,9 +29,7 @@ const MessageComposer = ({
           {showEmojiPicker && (
             <div className="emoji-picker">
               <EmojiPicker
-                onEmojiClick={(emojiData) =>
-                  addEmoji(emojiData.emoji)
-                }
+                onEmojiClick={(emojiData) => addEmoji(emojiData.emoji)}
                 width={320}
                 height={400}
                 searchDisabled={false}
@@ -56,9 +44,11 @@ const MessageComposer = ({
 
         <input
           value={body}
-          onChange={(event) =>
-            setBody(event.target.value)
-          }
+          onChange={(event) => {
+            const value = event.target.value;
+            setBody(value);
+            onTyping(value);
+          }}
           placeholder="Write a message..."
           autoFocus
         />

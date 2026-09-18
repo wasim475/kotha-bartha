@@ -7,15 +7,12 @@ const ChatHeader = ({
   callState,
   startCall,
   finishCall,
+  isTyping,
 }) => {
   return (
     <div className="chat-header">
       {/* Back */}
-      <button
-        type="button"
-        className="text-button"
-        onClick={onBack}
-      >
+      <button type="button" className="text-button" onClick={onBack}>
         Back
       </button>
 
@@ -24,7 +21,10 @@ const ChatHeader = ({
         <>
           <Avatar person={selected.user} />
 
-          <strong>{selected.user.fullName}</strong>
+          <div className="chat-header-user">
+            <strong>{selected.user.fullName}</strong>
+            {isTyping && <span className="typing-indicator">Typing...</span>}
+          </div>
         </>
       )}
 
@@ -32,11 +32,7 @@ const ChatHeader = ({
       <button
         type="button"
         className="icon-button"
-        onClick={
-          callState === "idle"
-            ? startCall
-            : () => finishCall()
-        }
+        onClick={callState === "idle" ? startCall : () => finishCall()}
         aria-label="Voice call"
         title="Voice call"
       >

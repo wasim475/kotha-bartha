@@ -21,9 +21,9 @@ export default function Topbar({
   return (
     <header className="topbar">
       <button className="wordmark compact" onClick={onBrandClick}>
-        <span className="brand-mark">ক</span>
+        <span className="brand-mark">K</span>
         <span>
-          কথা<span>-বার্তা</span>
+          Kotha<span>-Barta</span>
         </span>
       </button>
 
