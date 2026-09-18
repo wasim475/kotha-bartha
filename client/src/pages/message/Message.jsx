@@ -207,7 +207,7 @@ const Message = ({ user }) => {
       return;
     }
 
-    clearTimeout(typingTimeoutRef.current);
+    clearTimeout(localTypingTimeoutRef.current);
     sendTypingSignal(selected?.user?.id, conversationId, false);
     setIsTyping(false);
 
