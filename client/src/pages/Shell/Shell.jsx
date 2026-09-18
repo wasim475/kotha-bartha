@@ -11,6 +11,7 @@ import Notifications from "../../pages/notifications/Notifications";
 import Profile from "../../pages/profile/Profile";
 import Topbar from "./components/Topbar";
 import useSocket from "./hooks/useSocket";
+import useTabNotifications from "./hooks/useTabNotifications";
 import useUserSearch from "./hooks/useUserSearch";
 
 export default function Shell({ user, onLogout }) {
@@ -20,9 +21,10 @@ export default function Shell({ user, onLogout }) {
 
   const desktopProfileRef = useRef(null);
   const mobileProfileRef = useRef(null);
-   const [profileOpen, setProfileOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   useSocket(user.id);
+  useTabNotifications();
 
   const selectSearchResult = (person) => {
     navigate(`/app/profile/${person.id}`);
@@ -47,7 +49,7 @@ export default function Shell({ user, onLogout }) {
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
-   const handleProfile = () => {
+  const handleProfile = () => {
     setProfileOpen(false);
     navigate("/app/profile/me");
   };
@@ -72,9 +74,9 @@ export default function Shell({ user, onLogout }) {
         onProfileDefault={() => navigate("/app/profile/me")}
         onBrandClick={() => navigate("/app/feed")}
         profileOpen={profileOpen}
-        onToggleProfile= {toggleProfile}
-        onProfile= {handleProfile}
-        onLogout= {handleLogout}
+        onToggleProfile={toggleProfile}
+        onProfile={handleProfile}
+        onLogout={handleLogout}
         desktopProfileRef={desktopProfileRef}
         mobileProfileRef={mobileProfileRef}
       />
