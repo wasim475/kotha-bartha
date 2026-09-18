@@ -33,7 +33,13 @@ export default function useUnreadCounts() {
     loadCounts();
   }, []);
 
-  useRealtime("message:new", loadCounts);
+  useRealtime("message:new", () => {
+    setCounts((current) => ({
+      ...current,
+      messages: Math.max(current.messages, 1),
+    }));
+    loadCounts();
+  });
 
   useRealtime("notification:new", () => {
     setCounts((current) => ({

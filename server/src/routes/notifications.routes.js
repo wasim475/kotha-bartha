@@ -44,13 +44,11 @@ router.get("/notifications/unread-counts", async (req, res, next) => {
       .lean();
 
     const messages = conversations.reduce((total, conversation) => {
-      let unread = 0;
-
-      if (conversation.unreadCounts?.get) {
-        unread = conversation.unreadCounts.get(userIdString) || 0;
-      } else if (conversation.unreadCounts) {
-        unread = conversation.unreadCounts[userIdString] || 0;
-      }
+      const unreadCounts = conversation.unreadCounts;
+      const unread =
+        unreadCounts instanceof Map
+          ? unreadCounts.get(userIdString)
+          : unreadCounts?.[userIdString];
 
       return total + (Number(unread) > 0 ? 1 : 0);
     }, 0);
