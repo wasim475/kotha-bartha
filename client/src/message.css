@@ -67,10 +67,11 @@
 .message-row {
   position: relative;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   margin-bottom: 10px;
   width: 100%;
+  min-width: 0;
 }
 
 .own-message {
@@ -87,10 +88,14 @@
 
 .message-bubble {
   position: relative;
+  min-width: 0;
   max-width: 70%;
-  padding: 10px 14px;
+  padding: 10px 13px;
   border-radius: 16px;
+  overflow-wrap: anywhere;
   word-break: break-word;
+  font-size: 14px;
+  line-height: 1.45;
 }
 
 .message-interaction {
@@ -269,6 +274,8 @@
 
 .message-row.own .message-menu-wrapper {
   order: -1;
+  flex: 0 0 32px;
+  margin-top: 2px;
 }
 
 .message-menu-button {
@@ -462,8 +469,23 @@
 ================================ */
 
 @media (max-width: 600px) {
+  .message-thread {
+    padding: 14px 10px;
+  }
+
+  .message-row {
+    gap: 4px;
+  }
+
   .message-bubble {
-    max-width: 82%;
+    max-width: 88%;
+    padding: 10px 12px;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+
+  .message-row.own .message-bubble {
+    max-width: calc(100% - 36px);
   }
 
   .message-edit-box {
@@ -472,6 +494,11 @@
 
   .message-menu {
     min-width: 120px;
+  }
+
+  .message-menu-button {
+    width: 32px;
+    height: 32px;
   }
 
   .emoji-picker {
