@@ -2,7 +2,7 @@ import { useContext } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Auth } from "../provider/AuthProvider";
 import AuthPage from "../pages/auth/AuthPage";
-import Shell from "../pages/shell/Shell";
+import Shell from "../pages/Shell/Shell";
 
 export default function MainRouter() {
   const { user, setUser, checking, logout } = useContext(Auth);

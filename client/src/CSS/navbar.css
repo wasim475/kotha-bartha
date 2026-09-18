@@ -39,14 +39,18 @@
   position: relative;
 }
 
+.profile-wrapper{
+  position: relative;
+}
+
 .profile-popup {
   position: absolute;
-  left: calc(100% + 10px);
-  bottom: 0;
+  top: calc(100% + 10px);
+  right: 10px;
   z-index: 20;
   display: grid;
-  width: 170px;
-  padding: 6px;
+  width: 150px;
+  padding: 5px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
@@ -56,9 +60,9 @@
 .profile-popup-item {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 5px;
   width: 100%;
-  padding: 10px;
+  padding: 5px;
   border-radius: 6px;
   color: var(--ink);
   background: transparent;

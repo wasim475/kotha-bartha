@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { createContext, useEffect, useState } from 'react'
 import { api } from '../utility/api';
+import Swal from 'sweetalert2';
 export const Auth = createContext(null);
 const AuthProvider = ({children}) => {
   
@@ -14,9 +15,36 @@ const [user, setUser] = useState(null);
       .catch(() => {})
       .finally(() => setChecking(false));
   }, []);
+
   const logout = async () => {
-    await api.post("/auth/logout").catch(() => {});
-    setUser(null);
+
+   const restult =await Swal.fire({
+              title: "Are you sure?",
+              icon: "warning",
+              text: "You will be logged out from this account.",
+              showCancelButton: true,
+              confirmButtonColor: "#3085d6",
+              cancelButtonColor: "#d33",
+              confirmButtonText: "Log out"
+            })
+
+            if(!restult.isConfirmed) return;
+
+            if(restult.isConfirmed){
+             
+             Swal.fire({
+                  position: "center",
+                  icon: "success",
+                  title: "Logged out.",
+                  showConfirmButton: false,
+                  timer: 1500
+                });
+
+               await api.post("/auth/logout").catch(() => {});
+              setUser(null);
+            }
+    
+
   };
     
 

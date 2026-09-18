@@ -1,6 +1,6 @@
 import { Search } from "@mui/icons-material";
 
-import { colorFor } from "../../../../utility/helpers";
+import { colorFor } from "../../../utility/helpers";
 
 export default function SearchBox({
   search,

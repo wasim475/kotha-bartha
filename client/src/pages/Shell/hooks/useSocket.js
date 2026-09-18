@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { io } from "socket.io-client";
 
-import { api } from "../../../../utility/api";
-import { realtime, setActiveSocket } from "../../../../utility/helpers";
+import { api } from "../../../utility/api";
+import { realtime, setActiveSocket } from "../../../utility/helpers";
 
 const socketUrl = api.defaults.baseURL.replace(/\/api\/v1$/, "");
 

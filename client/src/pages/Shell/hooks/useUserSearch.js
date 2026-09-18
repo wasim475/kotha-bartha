@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { api } from "../../../../utility/api";
+import { api } from "../../../utility/api";
 
 export default function useUserSearch() {
   const [search, setSearch] = useState("");

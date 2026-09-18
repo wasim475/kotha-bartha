@@ -9,8 +9,14 @@ export default function Topbar({
   results,
   onSearchChange,
   onSelectSearchResult,
-  onProfile,
+  onProfileDefault,
   onBrandClick,
+   profileOpen,
+  onToggleProfile,
+  onProfile,
+  onLogout,
+  desktopProfileRef,
+  mobileProfileRef,
 }) {
   return (
     <header className="topbar">
@@ -32,7 +38,12 @@ export default function Topbar({
         theme={theme}
         setTheme={setTheme}
         user={user}
+        onProfileDefault={onProfileDefault}
+        profileOpen={profileOpen}
+        onToggleProfile={onToggleProfile}
         onProfile={onProfile}
+        onLogout={onLogout}
+        profileRef={desktopProfileRef}
       />
     </header>
   );
