@@ -113,6 +113,10 @@
   box-shadow: 0 5px 16px rgba(15, 23, 42, 0.14);
 }
 
+.desktop-hover-interaction {
+  display: none;
+}
+
 .message-row.own .message-interaction {
   right: 18px;
   left: auto;
@@ -284,7 +288,7 @@
 .desktop-message-actions {
   position: absolute;
   top: 50%;
-  right: calc(70% + 6px);
+  left: calc(100% + 6px);
   z-index: 20;
   display: none;
   align-items: center;
@@ -295,6 +299,12 @@
   background: var(--panel);
   box-shadow: 0 5px 16px rgba(15, 23, 42, 0.14);
   transform: translateY(-50%);
+  transform-origin: left center;
+}
+
+.message-row.own .desktop-message-actions {
+  right: calc(100% + 6px);
+  left: auto;
   transform-origin: right center;
 }
 
@@ -558,6 +568,12 @@
   .message-reaction-picker aside {
     width: 100% !important;
     max-width: calc(100vw - 16px);
+  }
+}
+
+@media (min-width: 761px) {
+  .desktop-hover-interaction {
+    display: flex;
   }
 }
 

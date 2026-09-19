@@ -144,11 +144,11 @@ const MessageBubble = ({
   return (
     <div
       className={`message-row ${isOwn ? "own" : ""}`}
-      onMouseEnter={() => isOwn && setIsMessageHovered(true)}
-      onMouseLeave={() => isOwn && setIsMessageHovered(false)}
-      onFocus={() => isOwn && setIsMessageHovered(true)}
+      onMouseEnter={() => setIsMessageHovered(true)}
+      onMouseLeave={() => setIsMessageHovered(false)}
+      onFocus={() => setIsMessageHovered(true)}
       onBlur={(event) => {
-        if (isOwn && !event.currentTarget.contains(event.relatedTarget)) {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
           setIsMessageHovered(false);
         }
       }}
@@ -236,6 +236,49 @@ const MessageBubble = ({
               ))}
             </div>
           )}
+
+          {isOwn && (
+            <AnimatePresence>
+              {isMessageHovered && (
+                <Motion.div
+                  className="desktop-message-actions"
+                  initial={{ opacity: 0, scale: 0.94, x: 8 }}
+                  animate={{ opacity: 1, scale: 1, x: 0 }}
+                  exit={{ opacity: 0, scale: 0.94, x: 8 }}
+                  transition={{ duration: 0.16, ease: "easeOut" }}
+                  onMouseDown={(event) => event.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    className="desktop-message-action edit-item"
+                    aria-label="Edit message"
+                    title="Edit message"
+                    onClick={() => {
+                      onCloseInteraction();
+                      onEdit(message);
+                    }}
+                  >
+                    <Edit fontSize="small" />
+                  </button>
+                  <button
+                    type="button"
+                    className="desktop-message-action delete-item"
+                    aria-label={
+                      isDeleting ? "Deleting message" : "Delete message"
+                    }
+                    title={isDeleting ? "Deleting message" : "Delete message"}
+                    onClick={() => {
+                      onCloseInteraction();
+                      onDelete(message.id);
+                    }}
+                    disabled={isDeleting}
+                  >
+                    <Delete fontSize="small" />
+                  </button>
+                </Motion.div>
+              )}
+            </AnimatePresence>
+          )}
         </div>
       )}
 
@@ -272,6 +315,47 @@ const MessageBubble = ({
         </div>
       )}
 
+      {!isEditing && !selected && (
+        <AnimatePresence>
+          {isMessageHovered && (
+            <Motion.div
+              className="message-interaction desktop-hover-interaction"
+              initial={{ opacity: 0, scale: 0.96, x: 6 }}
+              animate={{ opacity: 1, scale: 1, x: 0 }}
+              exit={{ opacity: 0, scale: 0.96, x: 6 }}
+              transition={{ duration: 0.16, ease: "easeOut" }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="message-interaction-button"
+                aria-label="Reply to message"
+                title="Reply to message"
+                onClick={() => {
+                  onCloseInteraction();
+                  onReply(message);
+                }}
+              >
+                <Reply fontSize="small" /> Reply
+              </button>
+
+              <div className="message-reaction-control">
+                <button
+                  type="button"
+                  className="message-interaction-button"
+                  aria-label="React to message"
+                  title="React to message"
+                  ref={emojiButtonRef}
+                  onClick={onOpenEmoji}
+                >
+                  <EmojiEmotions fontSize="small" /> Emoji
+                </button>
+              </div>
+            </Motion.div>
+          )}
+        </AnimatePresence>
+      )}
+
       {emojiOpen &&
         emojiPickerPosition &&
         createPortal(
@@ -295,47 +379,6 @@ const MessageBubble = ({
           </div>,
           document.body,
         )}
-
-      {isOwn && (
-        <AnimatePresence>
-          {isMessageHovered && (
-            <Motion.div
-              className="desktop-message-actions"
-              initial={{ opacity: 0, scale: 0.94, x: 8 }}
-              animate={{ opacity: 1, scale: 1, x: 0 }}
-              exit={{ opacity: 0, scale: 0.94, x: 8 }}
-              transition={{ duration: 0.16, ease: "easeOut" }}
-              onMouseDown={(event) => event.stopPropagation()}
-            >
-              <button
-                type="button"
-                className="desktop-message-action edit-item"
-                aria-label="Edit message"
-                title="Edit message"
-                onClick={() => {
-                  onCloseInteraction();
-                  onEdit(message);
-                }}
-              >
-                <Edit fontSize="small" />
-              </button>
-              <button
-                type="button"
-                className="desktop-message-action delete-item"
-                aria-label={isDeleting ? "Deleting message" : "Delete message"}
-                title={isDeleting ? "Deleting message" : "Delete message"}
-                onClick={() => {
-                  onCloseInteraction();
-                  onDelete(message.id);
-                }}
-                disabled={isDeleting}
-              >
-                <Delete fontSize="small" />
-              </button>
-            </Motion.div>
-          )}
-        </AnimatePresence>
-      )}
 
       {/* Message Menu */}
       {isOwn && (
