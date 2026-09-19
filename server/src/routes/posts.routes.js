@@ -48,6 +48,25 @@ router.get("/posts/feed", async (req, res, next) => {
   }
 });
 
+router.get("/posts/:postId", async (req, res, next) => {
+  try {
+    const post = await Post.findOne({
+      _id: req.params.postId,
+      deletedAt: null,
+    }).populate("authorId");
+
+    if (!post) {
+      return res.status(404).json({
+        error: { code: "NOT_FOUND", message: "Post not found." },
+      });
+    }
+
+    res.json({ data: await serializePost(post, req.user._id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ============================================================
 // CREATE POST
 // ============================================================

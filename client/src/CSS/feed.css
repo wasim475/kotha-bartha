@@ -2,6 +2,95 @@
   position: relative;
 }
 
+.post-body-link {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.post-body-link:hover,
+.post-body-link:focus-visible {
+  color: var(--accent);
+}
+
+.single-post-heading {
+  align-items: center;
+}
+
+.comment {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.comment > div:not(.comment-replies) {
+  min-width: 0;
+}
+
+.comment p {
+  overflow-wrap: anywhere;
+}
+
+.comment-replies {
+  flex-basis: 100%;
+  display: grid;
+  gap: 10px;
+  margin-left: 28px;
+  padding-left: 12px;
+  border-left: 2px solid var(--line);
+}
+
+.comment-reply-form {
+  display: grid;
+  gap: 5px;
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.comment-reply-form > div {
+  display: flex;
+  gap: 6px;
+}
+
+.comment-reply-form input {
+  min-width: 0;
+  flex: 1;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  background: var(--panel);
+}
+
+.comment-reply-form button {
+  padding: 5px 7px;
+  border-radius: 5px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 11px;
+}
+
+.comment-reply-form .primary-button {
+  color: var(--panel);
+}
+
+@media (max-width: 520px) {
+  .single-post-heading {
+    align-items: flex-start;
+  }
+
+  .comment-replies {
+    margin-left: 12px;
+  }
+
+  .comment-reply-form > div {
+    flex-wrap: wrap;
+  }
+
+  .comment-reply-form input {
+    flex-basis: 100%;
+  }
+}
+
 .feed-menu {
   position: relative;
   margin-left: auto;
@@ -65,20 +154,37 @@
   background: var(--soft);
 }
 
+.post-body-link {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.post-body-link:hover,
+.post-body-link:focus-visible {
+  color: var(--accent);
+}
+
+.single-post-heading {
+  align-items: center;
+}
 .feed-edit-form {
   display: grid;
   gap: 8px;
   margin: 12px 0;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .feed-edit-form textarea,
 .comment-edit-box input {
+  min-width: 0;
   width: 100%;
   box-sizing: border-box;
   padding: 9px 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--ink);
+  overflow-wrap: anywhere;
   background: var(--panel);
   font: inherit;
   resize: vertical;
@@ -130,6 +236,21 @@
 }
 
 .comment-reaction.sad {
+  .single-post-heading {
+    align-items: flex-start;
+  }
+
+  .comment-replies {
+    margin-left: 12px;
+  }
+
+  .comment-reply-form > div {
+    flex-wrap: wrap;
+  }
+
+  .comment-reply-form input {
+    flex-basis: 100%;
+  }
   color: #2563eb;
 }
 

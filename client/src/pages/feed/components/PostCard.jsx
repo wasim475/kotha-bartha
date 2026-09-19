@@ -12,8 +12,13 @@ import { Avatar, formatTime } from "../../../utility/helpers";
 
 import CommentSection from "./CommentSection";
 
-export default function PostCard({ post, onChanged }) {
-  const [showComments, setShowComments] = useState(false);
+export default function PostCard({
+  post,
+  onChanged,
+  onOpenPost = () => {},
+  initialShowComments = false,
+}) {
+  const [showComments, setShowComments] = useState(initialShowComments);
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [body, setBody] = useState(post.body);
@@ -103,7 +108,20 @@ export default function PostCard({ post, onChanged }) {
           </div>
         </form>
       ) : (
-        <p className="post-body">{post.body}</p>
+        <p
+          className="post-body post-body-link"
+          onClick={() => onOpenPost(post.id)}
+          role="link"
+          tabIndex="0"
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              onOpenPost(post.id);
+            }
+          }}
+        >
+          {post.body}
+        </p>
       )}
 
       {/* Post Stats */}

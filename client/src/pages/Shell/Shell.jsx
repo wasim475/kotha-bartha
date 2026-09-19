@@ -5,6 +5,7 @@ import { Utility } from "../../provider/UtilityProvider";
 
 import Navbar from "../../pages/SharePage/Navbar/Navbar";
 import Feed from "../../pages/feed/Feed";
+import SinglePost from "../../pages/feed/SinglePost";
 import Friends from "../../pages/friends/Friends";
 import Message from "../../pages/message/Message";
 import Notifications from "../../pages/notifications/Notifications";
@@ -87,6 +88,7 @@ export default function Shell({ user, onLogout }) {
         <main className="page-content">
           <Routes>
             <Route path="feed" element={<Feed user={user} />} />
+            <Route path="post/:postId" element={<SinglePost user={user} />} />
             <Route path="friends" element={<Friends />} />
             <Route path="messages" element={<Message user={user} />} />
             <Route

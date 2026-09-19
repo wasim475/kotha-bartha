@@ -1,16 +1,14 @@
 import { Add, Send } from "@mui/icons-material";
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { api } from "../../utility/api";
-import {
-  ResourceState,
-  useResource,
-} from "../../utility/helpers";
+import { ResourceState, useResource } from "../../utility/helpers";
 
 import PostCard from "./components/PostCard";
 
 export default function Feed({ user }) {
+  const navigate = useNavigate();
   const posts = useResource("/posts/feed");
 
   const [searchParams] = useSearchParams();
@@ -20,17 +18,11 @@ export default function Feed({ user }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (
-      !postId ||
-      posts.loading ||
-      !posts.data?.length
-    ) {
+    if (!postId || posts.loading || !posts.data?.length) {
       return;
     }
 
-    const postElement = document.getElementById(
-      `post-${postId}`,
-    );
+    const postElement = document.getElementById(`post-${postId}`);
 
     if (postElement) {
       postElement.scrollIntoView({
@@ -85,28 +77,18 @@ export default function Feed({ user }) {
       {/* Create Post */}
       <section className="composer">
         <div className="avatar avatar-coral">
-          {user.fullName
-            .slice(0, 2)
-            .toUpperCase()}
+          {user.fullName.slice(0, 2).toUpperCase()}
         </div>
 
         <textarea
           value={body}
-          onChange={(event) =>
-            setBody(event.target.value)
-          }
-          placeholder={`What is on your mind, ${
-            user.fullName.split(" ")[0]
-          }?`}
+          onChange={(event) => setBody(event.target.value)}
+          placeholder={`What is on your mind, ${user.fullName.split(" ")[0]}?`}
           rows="2"
         />
 
         <div className="composer-actions">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={createPost}
-          >
+          <button type="button" disabled={busy} onClick={createPost}>
             <Send />
 
             {busy ? "Posting..." : "Post"}
@@ -129,6 +111,7 @@ export default function Feed({ user }) {
             key={post.id}
             post={post}
             onChanged={posts.reload}
+            onOpenPost={(id) => navigate(`/app/post/${id}`)}
           />
         ))}
       </ResourceState>

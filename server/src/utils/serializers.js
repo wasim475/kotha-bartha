@@ -57,6 +57,7 @@ async function serializeComment(comment, viewerId) {
 
   return {
     id: comment._id.toString(),
+    parentId: comment.parentId ? comment.parentId.toString() : null,
     body: comment.body,
     createdAt: comment.createdAt,
     updatedAt: comment.updatedAt,

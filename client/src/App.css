@@ -608,7 +608,7 @@ button {
   height: 29px;
   font-size: 9px;
 }
-.comment > div {
+.comment > div:not(.comment-replies) {
   flex: 1;
   padding: 8px 10px;
   border-radius: 7px;

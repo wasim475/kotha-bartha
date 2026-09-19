@@ -34,6 +34,7 @@ router.get("/posts/:postId/comments", async (req, res, next) => {
 router.post("/posts/:postId/comments", async (req, res, next) => {
   try {
     const body = String(req.body.body || "").trim();
+    const parentId = req.body.parentId || null;
 
     const post = await Post.findOne({
       _id: req.params.postId,
@@ -49,9 +50,26 @@ router.post("/posts/:postId/comments", async (req, res, next) => {
       });
     }
 
+    if (parentId) {
+      const parent = await Comment.findOne({
+        _id: parentId,
+        postId: post._id,
+      });
+
+      if (!parent) {
+        return res.status(400).json({
+          error: {
+            code: "INVALID_PARENT",
+            message: "Comment reply target not found.",
+          },
+        });
+      }
+    }
+
     const comment = await Comment.create({
       postId: post._id,
       authorId: req.user._id,
+      parentId,
       body,
     });
 
