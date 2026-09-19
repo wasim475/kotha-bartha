@@ -1,16 +1,10 @@
-import {
-  ChatBubble,
-  Delete,
-  Edit,
-  MoreVert,
-  ThumbUpAlt,
-} from "@mui/icons-material";
+import { ChatBubble, MoreVert, ThumbUpAlt } from "@mui/icons-material";
 import { useState } from "react";
 
-import { api } from "../../../utility/api";
 import { Avatar, formatTime } from "../../../utility/helpers";
+import usePostActions from "../hooks/usePostActions";
 
-import CommentSection from "./CommentSection";
+import CommentSection from "./CommentSection/CommentSection";
 
 export default function PostCard({
   post,
@@ -19,33 +13,17 @@ export default function PostCard({
   initialShowComments = false,
 }) {
   const [showComments, setShowComments] = useState(initialShowComments);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [body, setBody] = useState(post.body);
-
-  const savePost = async (event) => {
-    event.preventDefault();
-    if (!body.trim()) return;
-
-    await api.patch(`/posts/${post.id}`, { body: body.trim() });
-    setEditing(false);
-    setMenuOpen(false);
-    onChanged();
-  };
-
-  const deletePost = async () => {
-    if (!window.confirm("Delete this post?")) return;
-    await api.delete(`/posts/${post.id}`);
-    onChanged();
-  };
-
-  const toggleLike = async () => {
-    await api.put(`/posts/${post.id}/like`, {
-      liked: !post.liked,
-    });
-
-    onChanged();
-  };
+  const {
+    menuOpen,
+    setMenuOpen,
+    editing,
+    setEditing,
+    body,
+    setBody,
+    savePost,
+    deletePost,
+    toggleLike,
+  } = usePostActions({ post, onChanged });
 
   const toggleComments = async () => {
     if (!showComments) {
