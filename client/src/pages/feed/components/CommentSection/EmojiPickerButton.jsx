@@ -1,6 +1,6 @@
 import { EmojiEmotions } from "@mui/icons-material";
 import EmojiPicker from "emoji-picker-react";
-
+console.log(EmojiPicker)
 const EmojiPickerButton = ({ open, onToggle, onEmoji }) => (
   <div className="emoji-wrapper">
     <button
@@ -20,6 +20,17 @@ const EmojiPickerButton = ({ open, onToggle, onEmoji }) => (
           height={400}
           previewConfig={{ showPreview: false }}
           lazyLoadEmojis
+          searchDisabled
+          categories={[
+            "smileys_people",
+            "animals_nature",
+            "food_drink",
+            "travel_places",
+            "activities",
+            "objects",
+            "symbols",
+            "flags",
+          ]}
         />
       </div>
     )}

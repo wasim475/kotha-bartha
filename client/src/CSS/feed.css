@@ -1,3 +1,7 @@
+/* =========================================================
+   FEED / POST
+========================================================= */
+
 .post-header {
   position: relative;
 }
@@ -5,6 +9,7 @@
 .post-body-link {
   cursor: pointer;
   overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .post-body-link:hover,
@@ -12,84 +17,19 @@
   color: var(--accent);
 }
 
+
+/* =========================================================
+   SINGLE POST
+========================================================= */
+
 .single-post-heading {
   align-items: center;
 }
 
-.comment {
-  min-width: 0;
-  flex-wrap: wrap;
-}
 
-.comment > div:not(.comment-replies) {
-  min-width: 0;
-}
-
-.comment p {
-  overflow-wrap: anywhere;
-}
-
-.comment-replies {
-  flex-basis: 100%;
-  display: grid;
-  gap: 10px;
-  margin-left: 28px;
-  padding-left: 12px;
-  border-left: 2px solid var(--line);
-}
-
-.comment-reply-form {
-  display: grid;
-  gap: 5px;
-  margin-top: 9px;
-  color: var(--muted);
-  font-size: 10px;
-}
-
-.comment-reply-form > div {
-  display: flex;
-  gap: 6px;
-}
-
-.comment-reply-form input {
-  min-width: 0;
-  flex: 1;
-  padding: 7px 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  color: var(--ink);
-  background: var(--panel);
-}
-
-.comment-reply-form button {
-  padding: 5px 7px;
-  border-radius: 5px;
-  color: var(--muted);
-  background: transparent;
-  font-size: 11px;
-}
-
-.comment-reply-form .primary-button {
-  color: var(--panel);
-}
-
-@media (max-width: 520px) {
-  .single-post-heading {
-    align-items: flex-start;
-  }
-
-  .comment-replies {
-    margin-left: 12px;
-  }
-
-  .comment-reply-form > div {
-    flex-wrap: wrap;
-  }
-
-  .comment-reply-form input {
-    flex-basis: 100%;
-  }
-}
+/* =========================================================
+   FEED MENU
+========================================================= */
 
 .feed-menu {
   position: relative;
@@ -100,10 +40,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+
   width: 30px;
   height: 30px;
+
   padding: 0;
+
   border-radius: 50%;
+
   color: var(--muted);
   background: transparent;
 }
@@ -114,17 +58,29 @@
   background: var(--soft);
 }
 
+
+/* =========================================================
+   FEED MENU / REACTION POPOVER
+========================================================= */
+
 .feed-menu-popover,
 .reaction-popover {
   position: absolute;
+
   right: 0;
+
   z-index: 10;
+
   display: grid;
+
   min-width: 120px;
   padding: 5px;
+
   border: 1px solid var(--line);
   border-radius: 7px;
+
   background: var(--panel);
+
   box-shadow: var(--shadow);
 }
 
@@ -132,61 +88,68 @@
   top: 34px;
 }
 
+
+/* =========================================================
+   POPOVER BUTTONS
+========================================================= */
+
 .feed-menu-popover button,
 .reaction-popover button,
-.comment-edit-box button,
 .feed-edit-form button {
   display: inline-flex;
   align-items: center;
   gap: 7px;
+
   padding: 8px 9px;
+
   border-radius: 5px;
+
   color: var(--ink);
   background: transparent;
+
   font-size: 12px;
   text-align: left;
 }
 
 .feed-menu-popover button:hover,
 .reaction-popover button:hover,
-.comment-edit-box button:hover,
 .feed-edit-form button:hover {
   background: var(--soft);
 }
 
-.post-body-link {
-  cursor: pointer;
-  overflow-wrap: anywhere;
-}
 
-.post-body-link:hover,
-.post-body-link:focus-visible {
-  color: var(--accent);
-}
+/* =========================================================
+   FEED EDIT FORM
+========================================================= */
 
-.single-post-heading {
-  align-items: center;
-}
 .feed-edit-form {
   display: grid;
   gap: 8px;
+
   margin: 12px 0;
+
   min-width: 0;
-  flex-wrap: wrap;
 }
 
-.feed-edit-form textarea,
-.comment-edit-box input {
+.feed-edit-form textarea {
   min-width: 0;
   width: 100%;
+
   box-sizing: border-box;
+
   padding: 9px 10px;
+
   border: 1px solid var(--line);
   border-radius: 6px;
+
   color: var(--ink);
+
   overflow-wrap: anywhere;
+
   background: var(--panel);
+
   font: inherit;
+
   resize: vertical;
 }
 
@@ -196,132 +159,13 @@
   gap: 7px;
 }
 
-.comment-post-author {
-  background: #d7ed72 !important;
-}
 
-.comment-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 7px;
-}
-
-.reaction-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 24px;
-}
-
-.comment-reactions {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-left: auto;
-}
-
-.comment-reaction {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.comment-reaction.like {
-  color: #2563eb;
-}
-
-.comment-reaction.haha {
-  color: #d97706;
-}
-
-.comment-reaction.sad {
-  .single-post-heading {
-    align-items: flex-start;
-  }
-
-  .comment-replies {
-    margin-left: 12px;
-  }
-
-  .comment-reply-form > div {
-    flex-wrap: wrap;
-  }
-
-  .comment-reply-form input {
-    flex-basis: 100%;
-  }
-  color: #2563eb;
-}
-
-.comment-reaction.angry {
-  color: #dc2626;
-}
-
-.comment-reaction b {
-  font-size: 10px;
-  font-weight: 600;
-}
-
-.comment-reaction-total {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.reaction-emoji {
-  font-size: 16px;
-  line-height: 1;
-}
-
-.reaction-face {
-  display: block;
-  width: 17px;
-  height: 17px;
-}
-
-.comment-actions button {
-  padding: 3px 5px;
-  border-radius: 4px;
-  color: var(--muted);
-  background: transparent;
-  font-size: 11px;
-}
-
-.comment-actions button:hover,
-.comment-actions button:focus-visible {
-  color: var(--accent);
-  background: var(--panel);
-}
-
-.reaction-menu {
-  position: relative;
-}
-
-.reaction-popover {
-  bottom: 27px;
-  left: 0;
-  right: auto;
-  min-width: 90px;
-}
-
-.comment-edit-box {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 5px;
-  margin-top: 6px;
-}
-
-.comment-edit-box button {
-  padding: 5px 7px;
-}
+/* =========================================================
+   POST AUTHOR / OTHER POST STYLES
+========================================================= */
 
 @media (max-width: 520px) {
-  .comment-edit-box {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .comment-edit-box input {
-    grid-column: 1 / -1;
+  .single-post-heading {
+    align-items: flex-start;
   }
 }

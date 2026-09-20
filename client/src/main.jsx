@@ -5,6 +5,9 @@ import "./CSS/feed.css";
 import "./CSS/navbar.css";
 import "./index.css";
 import "./message.css";
+import "./CSS/comment.css";
+import "./CSS/reply.css";
+
 import AuthProvider from "./provider/AuthProvider.jsx";
 import UtilityProvider from "./provider/UtilityProvider.jsx";
 import MainRouter from "./Router/Main.jsx";

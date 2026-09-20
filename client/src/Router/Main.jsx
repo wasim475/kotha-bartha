@@ -7,7 +7,7 @@ import Shell from "../pages/Shell/Shell";
 export default function MainRouter() {
   const { user, setUser, checking, logout } = useContext(Auth);
 
-  if (checking) return <div className="loading-screen"><span className="brand-mark">K</span><p>Preparing your space...</p></div>;
+  if (checking) return <div className="loading-screen"><span className="brand-mark">ক</span><p>Preparing your space...</p></div>;
 
   return <BrowserRouter><Routes>
     <Route path="/login" element={user ? <Navigate to="/app/feed" replace /> : <AuthPage mode="login" onAuth={setUser} />} />
