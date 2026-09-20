@@ -4,13 +4,10 @@
 
 .comment {
   display: flex;
-  align-items: flex-start;
-
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
-
-  min-width: 0;
-
-  flex-wrap: wrap;
+  width: 100%;
 }
 
 
@@ -49,7 +46,7 @@
 ========================================================= */
 
 .comment-post-author {
-  background: #d7ed72 !important;
+  background: #eae3e0 !important;
 }
 
 

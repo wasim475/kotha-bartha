@@ -29,7 +29,7 @@ const CommentItem = ({
   renderReply,
 }) => (
   <div className="comment">
-    <Avatar person={entry.author} />
+    {/* <Avatar person={entry.author} /> */}
     <div
       className={entry.author.id === postAuthorId ? "comment-post-author" : ""}
     >

@@ -1,4 +1,4 @@
-import { ChatBubble, MoreVert, ThumbUpAlt } from "@mui/icons-material";
+import { ChatBubble, Delete, Edit, MoreVert, ThumbUpAlt } from "@mui/icons-material";
 import { AnimatePresence, motion as Motion } from "framer-motion";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 

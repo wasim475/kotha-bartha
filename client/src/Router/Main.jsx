@@ -1,7 +1,7 @@
 import { useContext } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Auth } from "../provider/AuthProvider";
-import AuthPage from "../pages/auth/AuthPage";
+import AuthPage from "../pages/auth/Auth/AuthPage";
 import Shell from "../pages/Shell/Shell";
 
 export default function MainRouter() {

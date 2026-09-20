@@ -176,21 +176,27 @@ router.get(
         participantIds: req.user._id,
       });
 
+      if (!conversation) {
+        return res.status(404).json({
+          error: { code: "NOT_FOUND", message: "Conversation not found." },
+        });
+      }
+
       const userId = req.user._id.toString();
       const deletedAt = conversation?.deletedAtBy?.get?.(userId);
 
-      if (
-        !conversation ||
-        (conversation.hiddenFor?.some((id) => id.toString() === userId) &&
-          (!deletedAt || conversation.lastMessageAt <= deletedAt))
-      ) {
-        return res.status(404).json({
-          error: {
-            code: "NOT_FOUND",
-            message: "Conversation not found.",
-          },
-        });
-      }
+      // if (
+      //   !conversation ||
+      //   (conversation.hiddenFor?.some((id) => id.toString() === userId) &&
+      //     (!deletedAt || conversation.lastMessageAt <= deletedAt))
+      // ) {
+      //   return res.status(404).json({
+      //     error: {
+      //       code: "NOT_FOUND",
+      //       message: "Conversation not found.",
+      //     },
+      //   });
+      // }
 
       const unreadMessages = await Message.find({
         conversationId: conversation._id,
@@ -284,11 +290,7 @@ router.post(
         (id) => id.toString() === userId,
       );
 
-      if (
-        !conversation ||
-        !body ||
-        (isHidden && (!deletedAt || conversation.lastMessageAt <= deletedAt))
-      ) {
+      if (!conversation || !body) {
         return res.status(400).json({
           error: {
             code: "INVALID_MESSAGE",
@@ -296,6 +298,19 @@ router.post(
           },
         });
       }
+
+      // if (
+      //   !conversation ||
+      //   !body ||
+      //   (isHidden && (!deletedAt || conversation.lastMessageAt <= deletedAt))
+      // ) {
+      //   return res.status(400).json({
+      //     error: {
+      //       code: "INVALID_MESSAGE",
+      //       message: "Message cannot be empty.",
+      //     },
+      //   });
+      // }
 
       let replyTo = null;
       if (req.body.replyTo) {
