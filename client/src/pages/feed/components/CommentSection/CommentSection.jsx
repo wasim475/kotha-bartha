@@ -2,12 +2,21 @@ import { useEffect, useState } from "react";
 
 import { api } from "../../../../utility/api";
 import CommentForm from "./CommentForm";
-import CommentItem from "./CommentItem";
 import CommentList from "./CommentList";
+
+// All descendants of a top-level comment, any depth, flattened into one
+// chronological list — the approved "flatten to one visual level" reply
+// design. A reply-to-a-reply still carries its real parentId (used to
+// show "Replying to @name"), it just doesn't nest visually any deeper.
+function collectDescendants(parentId, allComments) {
+  const direct = allComments.filter((item) => item.parentId === parentId);
+  return direct.flatMap((item) => [item, ...collectDescendants(item.id, allComments)]);
+}
 
 const CommentSection = ({
   postId,
   postAuthorId,
+  user,
   showComments,
   setShowComments,
   onChanged,
@@ -17,10 +26,8 @@ const CommentSection = ({
   const [replyingTo, setReplyingTo] = useState(null);
   const [replyBody, setReplyBody] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editBody, setEditBody] = useState("");
-  const [reactionOpen, setReactionOpen] = useState(null);
 
   useEffect(() => {
     if (!showComments) return;
@@ -80,8 +87,6 @@ const CommentSection = ({
       );
       if (error.response?.status !== 404)
         console.error("Unable to react to comment:", error);
-    } finally {
-      setReactionOpen(null);
     }
   };
 
@@ -103,8 +108,21 @@ const CommentSection = ({
     onChanged?.();
   };
 
-  const renderComment = (entry) => {
-    const replies = comments.filter((item) => item.parentId === entry.id);
+  const startReply = (targetId) => {
+    setReplyingTo((current) => (current === targetId ? null : targetId));
+    setReplyBody("");
+  };
+
+  // Builds every prop a <CommentItem>/<ReplyItem> needs. Called once per
+  // top-level comment (for CommentItem) and once per flattened reply (via
+  // renderReply, invoked from RepliesList) — same shape either way, so
+  // both components share identical edit/react/reply wiring.
+  const buildEntryProps = (entry, { topLevelId, replies = [] } = {}) => {
+    const isTopLevel = entry.id === (topLevelId ?? entry.id);
+    const threadReplyTargetIds = isTopLevel
+      ? [entry.id, ...replies.map((reply) => reply.id)]
+      : [];
+
     return {
       entry,
       editing: editingId === entry.id,
@@ -112,54 +130,63 @@ const CommentSection = ({
       onEditBodyChange: setEditBody,
       onSaveEdit: () => saveComment(entry.id),
       onCancelEdit: () => setEditingId(null),
-      reactionOpen: reactionOpen === entry.id,
-      onToggleReaction: () =>
-        setReactionOpen(reactionOpen === entry.id ? null : entry.id),
       onReact: (type) => reactToComment(entry.id, type),
-      onReply: () => {
-        setReplyingTo(replyingTo === entry.id ? null : entry.id);
-        setReplyBody("");
-      },
-      replyOpen: replyingTo === entry.id,
-      replyBody,
-      onReplyBodyChange: setReplyBody,
-      onSubmitReply: (event) => addComment(event, entry.id),
-      onCancelReply: () => setReplyingTo(null),
-      menuOpen: menuOpen === entry.id,
-      onToggleMenu: () => setMenuOpen(menuOpen === entry.id ? null : entry.id),
+      onReply: () => startReply(entry.id),
       onEdit: () => {
         setEditingId(entry.id);
         setEditBody(entry.body);
-        setMenuOpen(null);
       },
       onDelete: () => deleteComment(entry.id),
-      replies,
-      renderReply: (reply) => (
-        <CommentItem
-          key={reply.id}
-          {...renderComment(reply)}
-          postAuthorId={postAuthorId}
-        />
-      ),
+      ...(isTopLevel
+        ? {
+            replyOpen: threadReplyTargetIds.includes(replyingTo),
+            replyTargetName:
+              replyingTo === entry.id
+                ? entry.author.fullName
+                : replies.find((reply) => reply.id === replyingTo)?.author.fullName,
+            replyBody,
+            onReplyBodyChange: setReplyBody,
+            onSubmitReply: (event) => addComment(event, replyingTo),
+            onCancelReply: () => setReplyingTo(null),
+            replies,
+            renderReply: (reply) => ({
+              ...buildEntryProps(reply, { topLevelId: entry.id }),
+              replyingToName:
+                reply.parentId === entry.id
+                  ? null
+                  : comments.find((item) => item.id === reply.parentId)?.author.fullName,
+            }),
+          }
+        : {}),
     };
+  };
+
+  const renderComment = (entry) => {
+    const replies = collectDescendants(entry.id, comments).sort(
+      (a, b) => new Date(a.createdAt) - new Date(b.createdAt),
+    );
+    return buildEntryProps(entry, { topLevelId: entry.id, replies });
   };
 
   if (!showComments) return null;
 
   return (
-    <div className="comments">
-      <CommentList
-        comments={comments}
-        postAuthorId={postAuthorId}
-        renderComment={renderComment}
-      />
+    <div className="mt-3 flex flex-col gap-4 border-t border-line pt-3">
       <CommentForm
+        user={user}
         value={comment}
         onChange={setComment}
         onSubmit={(event) => addComment(event)}
         emojiOpen={showEmojiPicker}
         onToggleEmoji={() => setShowEmojiPicker((current) => !current)}
         onEmoji={(emoji) => setComment((current) => `${current}${emoji}`)}
+      />
+
+      <CommentList
+        comments={comments}
+        postAuthorId={postAuthorId}
+        user={user}
+        renderComment={renderComment}
       />
     </div>
   );

@@ -6,6 +6,7 @@ const Reaction = require("../models/Reaction");
 const { serializePost } = require("../utils/serializers");
 const { emitToUser } = require("../utils/realtime");
 const { createNotification } = require("../services/notification.service");
+const { REACTION_TYPES } = require("../utils/reactionTypes");
 
 const router = express.Router();
 
@@ -227,6 +228,89 @@ router.put("/posts/:postId/like", async (req, res, next) => {
       data: {
         liked: Boolean(req.body.liked),
         likes,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
+// REACT TO POST (unified 5-reaction system — like/love/haha/sad/angry)
+// ============================================================
+
+router.put("/posts/:postId/reaction", async (req, res, next) => {
+  try {
+    const type = req.body.type || null;
+
+    if (type && !REACTION_TYPES.includes(type)) {
+      return res.status(400).json({
+        error: { code: "INVALID_REACTION", message: "Invalid reaction." },
+      });
+    }
+
+    const post = await Post.findOne({
+      _id: req.params.postId,
+      deletedAt: null,
+    });
+
+    if (!post) {
+      return res.status(404).json({
+        error: { code: "NOT_FOUND", message: "Post not found." },
+      });
+    }
+
+    if (!type) {
+      await Reaction.deleteOne({
+        userId: req.user._id,
+        targetType: "post",
+        targetId: post._id,
+      });
+    } else {
+      await Reaction.updateOne(
+        { userId: req.user._id, targetType: "post", targetId: post._id },
+        { $set: { type } },
+        { upsert: true },
+      );
+
+      if (post.authorId.toString() !== req.user._id.toString()) {
+        await createNotification(req, {
+          recipientId: post.authorId,
+          actorId: req.user._id,
+          type: "post_reaction",
+          entityType: "post",
+          entityId: post._id,
+          payload: {
+            message: `${req.user.fullName} reacted to your post.`,
+          },
+          uniqueEventId: `post-reaction:${post._id}:${req.user._id}`,
+        });
+      }
+    }
+
+    const reactionDocs = await Reaction.find({
+      targetType: "post",
+      targetId: post._id,
+    })
+      .select("userId type")
+      .lean();
+
+    const mine = reactionDocs.find(
+      (entry) => entry.userId.toString() === req.user._id.toString(),
+    );
+
+    res.json({
+      data: {
+        reaction: mine?.type || null,
+        reactions: reactionDocs.reduce(
+          (counts, entry) => ({
+            ...counts,
+            [entry.type]: (counts[entry.type] || 0) + 1,
+          }),
+          {},
+        ),
+        likes: reactionDocs.length,
+        liked: Boolean(mine),
       },
     });
   } catch (error) {

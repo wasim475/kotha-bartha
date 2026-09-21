@@ -4,6 +4,7 @@ const Comment = require("../models/Comment");
 const Reaction = require("../models/Reaction");
 const { serializeComment } = require("../utils/serializers");
 const { createNotification } = require("../services/notification.service");
+const { REACTION_TYPES } = require("../utils/reactionTypes");
 
 const router = express.Router();
 
@@ -178,11 +179,10 @@ router.delete("/comments/:commentId", async (req, res, next) => {
 
 router.put("/comments/:commentId/reaction", async (req, res, next) => {
   try {
-    const allowedTypes = ["like", "haha", "sad", "angry"];
     const type = req.body.type;
     const comment = await Comment.findById(req.params.commentId);
 
-    if (!comment || (type && !allowedTypes.includes(type))) {
+    if (!comment || (type && !REACTION_TYPES.includes(type))) {
       return res.status(400).json({
         error: {
           code: "INVALID_REACTION",

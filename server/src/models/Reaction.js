@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { REACTION_TYPES } = require("../utils/reactionTypes");
 
 const reactionSchema = new mongoose.Schema(
   {
@@ -15,7 +16,7 @@ const reactionSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["like", "love", "care", "haha", "sad", "angry"],
+      enum: REACTION_TYPES,
       default: "like",
     },
   },

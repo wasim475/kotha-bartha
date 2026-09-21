@@ -23,12 +23,16 @@ function safeUser(user) {
 }
 
 async function serializePost(post, viewerId) {
-  const reactions = await Reaction.find({
+  const reactionDocs = await Reaction.find({
     targetType: "post",
     targetId: post._id,
   })
-    .select("userId")
+    .select("userId type")
     .lean();
+
+  const mine = reactionDocs.find(
+    (reaction) => reaction.userId.toString() === viewerId.toString(),
+  );
 
   return {
     id: post._id.toString(),
@@ -37,13 +41,22 @@ async function serializePost(post, viewerId) {
     createdAt: post.createdAt,
     author: safeUser(post.authorId),
     editable: post.authorId._id.toString() === viewerId.toString(),
-    likes: reactions.length,
+    // reaction/reactions mirror serializeComment's shape so the client can
+    // use the same ReactionButton/ReactionSummary for both. likes/liked
+    // are kept for any existing consumer of the old boolean-like shape.
+    reaction: mine?.type || null,
+    reactions: reactionDocs.reduce(
+      (counts, entry) => ({
+        ...counts,
+        [entry.type]: (counts[entry.type] || 0) + 1,
+      }),
+      {},
+    ),
+    likes: reactionDocs.length,
+    liked: Boolean(mine),
     comments: await Comment.countDocuments({
       postId: post._id,
     }),
-    liked: reactions.some(
-      (reaction) => reaction.userId.toString() === viewerId.toString(),
-    ),
   };
 }
 

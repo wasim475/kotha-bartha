@@ -18,7 +18,7 @@ import { REACTION_LABELS, REACTION_TYPES } from "./reactionTypes";
  * quick-like default.
  */
 const ReactionPicker = forwardRef(function ReactionPicker(
-  { selected, onSelect, className = "", autoFocus = false },
+  { selected, onSelect, types = REACTION_TYPES, className = "", autoFocus = false },
   forwardedRef,
 ) {
   const reduceMotion = useReducedMotion();
@@ -56,7 +56,7 @@ const ReactionPicker = forwardRef(function ReactionPicker(
         className,
       )}
     >
-      {REACTION_TYPES.map((type) => (
+      {types.map((type) => (
         <button
           key={type}
           type="button"

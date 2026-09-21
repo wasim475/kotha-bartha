@@ -1,26 +1,17 @@
-import { Delete, Edit, MoreVert } from "@mui/icons-material";
+import { Delete, Edit, MoreHoriz } from "@mui/icons-material";
 
-const CommentMenu = ({ open, onToggle, onEdit, onDelete }) => (
-  <div className="feed-menu">
-    <button
-      type="button"
-      className="feed-menu-button"
-      aria-label="Comment options"
-      onClick={onToggle}
-    >
-      <MoreVert fontSize="small" />
-    </button>
-    {open && (
-      <div className="feed-menu-popover">
-        <button type="button" onClick={onEdit}>
-          <Edit fontSize="small" /> Edit
-        </button>
-        <button type="button" onClick={onDelete}>
-          <Delete fontSize="small" /> Delete
-        </button>
-      </div>
-    )}
-  </div>
+import IconButton from "../../../../components/ui/IconButton";
+import Menu from "../../../../components/ui/Menu";
+
+const CommentMenu = ({ onEdit, onDelete }) => (
+  <Menu
+    align="end"
+    trigger={<IconButton label="Comment options" icon={<MoreHoriz fontSize="small" />} size="sm" />}
+    items={[
+      { key: "edit", label: "Edit", icon: <Edit fontSize="small" />, onClick: onEdit },
+      { key: "delete", label: "Delete", icon: <Delete fontSize="small" />, danger: true, onClick: onDelete },
+    ]}
+  />
 );
 
 export default CommentMenu;

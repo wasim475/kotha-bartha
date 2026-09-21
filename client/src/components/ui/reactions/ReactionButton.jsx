@@ -5,7 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { cx } from "../../../utility/cx";
 import ReactionIcon from "./ReactionIcons";
 import ReactionPicker from "./ReactionPicker";
-import { REACTION_LABELS } from "./reactionTypes";
+import { REACTION_LABELS, REACTION_TYPES } from "./reactionTypes";
 
 const CAN_HOVER =
   typeof window !== "undefined" &&
@@ -28,10 +28,13 @@ const sizes = {
 export default function ReactionButton({
   value,
   onChange,
+  types = REACTION_TYPES,
   size = "md",
   label = "React",
+  fullWidth = false,
   className = "",
 }) {
+  const pickerEnabled = types.length > 1;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [offset, setOffset] = useState(0);
   const [openedByKeyboard, setOpenedByKeyboard] = useState(false);
@@ -68,6 +71,7 @@ export default function ReactionButton({
   };
 
   const startLongPress = () => {
+    if (!pickerEnabled) return;
     clearTimeout(longPressTimer.current);
     longPressTimer.current = setTimeout(() => {
       suppressClick.current = true;
@@ -93,6 +97,7 @@ export default function ReactionButton({
   };
 
   const handleTriggerKeyDown = (event) => {
+    if (!pickerEnabled) return;
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       setOpenedByKeyboard(true);
@@ -148,16 +153,16 @@ export default function ReactionButton({
   return (
     <div
       ref={wrapRef}
-      className={cx("relative inline-flex", className)}
-      onPointerEnter={CAN_HOVER ? openPicker : undefined}
-      onPointerLeave={CAN_HOVER ? scheduleClose : undefined}
+      className={cx("relative inline-flex", fullWidth && "w-full", className)}
+      onPointerEnter={CAN_HOVER && pickerEnabled ? openPicker : undefined}
+      onPointerLeave={CAN_HOVER && pickerEnabled ? scheduleClose : undefined}
     >
       <button
         ref={triggerRef}
         type="button"
         aria-label={value ? `${REACTION_LABELS[value]} — change reaction` : label}
-        aria-haspopup="menu"
-        aria-expanded={pickerOpen}
+        aria-haspopup={pickerEnabled ? "menu" : undefined}
+        aria-expanded={pickerEnabled ? pickerOpen : undefined}
         onPointerDown={startLongPress}
         onPointerUp={cancelLongPress}
         onPointerLeave={cancelLongPress}
@@ -167,6 +172,7 @@ export default function ReactionButton({
           "inline-flex items-center gap-1.5 rounded-md font-semibold transition-colors motion-safe:duration-150",
           "hover:bg-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
           value ? "text-accent" : "text-muted hover:text-ink",
+          fullWidth && "w-full justify-center",
           sizing.button,
         )}
       >
@@ -178,21 +184,24 @@ export default function ReactionButton({
         {value ? REACTION_LABELS[value] : "Like"}
       </button>
 
-      <AnimatePresence>
-        {pickerOpen && (
-          <div
-            className="absolute bottom-full left-0 z-20 mb-2"
-            style={{ transform: `translateX(${offset}px)` }}
-          >
-            <ReactionPicker
-              ref={pickerRef}
-              selected={value}
-              onSelect={handlePick}
-              autoFocus={openedByKeyboard}
-            />
-          </div>
-        )}
-      </AnimatePresence>
+      {pickerEnabled && (
+        <AnimatePresence>
+          {pickerOpen && (
+            <div
+              className="absolute bottom-full left-0 z-20 mb-2"
+              style={{ transform: `translateX(${offset}px)` }}
+            >
+              <ReactionPicker
+                ref={pickerRef}
+                selected={value}
+                onSelect={handlePick}
+                types={types}
+                autoFocus={openedByKeyboard}
+              />
+            </div>
+          )}
+        </AnimatePresence>
+      )}
     </div>
   );
 }

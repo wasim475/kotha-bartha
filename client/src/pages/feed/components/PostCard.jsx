@@ -1,270 +1,150 @@
-import { ChatBubble, Delete, Edit, MoreVert, ThumbUpAlt } from "@mui/icons-material";
-import { AnimatePresence, motion as Motion } from "framer-motion";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ChatBubbleOutlined, Delete, Edit, MoreHoriz } from "@mui/icons-material";
+import { useState } from "react";
 
-import { Avatar, formatTime } from "../../../utility/helpers";
+import Avatar from "../../../components/ui/Avatar";
+import Button from "../../../components/ui/Button";
+import Card from "../../../components/ui/Card";
+import IconButton from "../../../components/ui/IconButton";
+import Menu from "../../../components/ui/Menu";
+import ReactionButton from "../../../components/ui/reactions/ReactionButton";
+import ReactionSummary from "../../../components/ui/reactions/ReactionSummary";
+import { REACTION_TYPES } from "../../../components/ui/reactions/reactionTypes";
+import { formatTime } from "../../../utility/helpers";
 import usePostActions from "../hooks/usePostActions";
 
 import CommentSection from "./CommentSection/CommentSection";
 
-const POST_REACTIONS = [
-  { type: "like", emoji: "👍", label: "Like" },
-  { type: "haha", emoji: "😂", label: "Haha" },
-  { type: "care", emoji: "❤️", label: "Care" },
-  { type: "angry", emoji: "😡", label: "Angry" },
-];
-
-// The hover picker is a desktop-only affordance (hover + fine pointer support).
-const CAN_HOVER =
-  typeof window !== "undefined" &&
-  window.matchMedia("(hover: hover) and (pointer: fine)").matches;
-
 export default function PostCard({
   post,
+  user,
   onChanged,
+  onPostUpdated,
   onOpenPost = () => {},
   initialShowComments = false,
 }) {
   const [showComments, setShowComments] = useState(initialShowComments);
-  const {
-    menuOpen,
-    setMenuOpen,
-    editing,
-    setEditing,
-    body,
-    setBody,
-    savePost,
-    deletePost,
-    toggleLike,
-    reactToPost,
-  } = usePostActions({ post, onChanged });
+  const { editing, setEditing, body, setBody, savePost, deletePost, reactToPost } =
+    usePostActions({ post, onChanged, onPostUpdated });
 
-  const toggleComments = async () => {
-    if (!showComments) {
-      setShowComments(true);
-    } else {
-      setShowComments(false);
-    }
-  };
-
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerOffset, setPickerOffset] = useState(0);
-  const likeWrapRef = useRef(null);
-  const pickerRef = useRef(null);
-  const closeTimer = useRef(null);
-
-  const clearCloseTimer = () => {
-    if (closeTimer.current) {
-      clearTimeout(closeTimer.current);
-      closeTimer.current = null;
-    }
-  };
-
-  const openPicker = () => {
-    if (!CAN_HOVER) return;
-    clearCloseTimer();
-    setPickerOpen(true);
-  };
-
-  const schedulePickerClose = () => {
-    if (!CAN_HOVER) return;
-    clearCloseTimer();
-    closeTimer.current = setTimeout(() => setPickerOpen(false), 200);
-  };
-
-  // Close when clicking outside the Like button / picker, or pressing Escape.
-  useEffect(() => {
-    if (!pickerOpen) return undefined;
-
-    const handlePointerDown = (event) => {
-      if (!event.target.closest?.(".post-like-wrap")) {
-        setPickerOpen(false);
-      }
-    };
-    const handleKeyDown = (event) => {
-      if (event.key === "Escape") {
-        setPickerOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [pickerOpen]);
-
-  // Keep the picker inside the viewport by clamping its horizontal offset.
-  useLayoutEffect(() => {
-    if (!pickerOpen) return;
-
-    const wrap = likeWrapRef.current;
-    const picker = pickerRef.current;
-    if (!wrap || !picker) return;
-
-    const wrapRect = wrap.getBoundingClientRect();
-    const pickerWidth = picker.offsetWidth;
-    const margin = 8;
-
-    const centeredOffset = wrapRect.width / 2 - pickerWidth / 2;
-    const minOffset = margin - wrapRect.left;
-    const maxOffset = window.innerWidth - margin - pickerWidth - wrapRect.left;
-
-    setPickerOffset(
-      Math.min(Math.max(centeredOffset, minOffset), Math.max(minOffset, maxOffset)),
-    );
-  }, [pickerOpen]);
-
-  useEffect(() => clearCloseTimer, []);
-
-  const handlePickReaction = (type) => {
-    setPickerOpen(false);
-    reactToPost(type);
-  };
+  const openComments = () => setShowComments(true);
+  const toggleComments = () => setShowComments((current) => !current);
 
   return (
-    <article className="post-card" id={`post-${post.id}`}>
-      {/* Post Header */}
-      <div className="post-header">
-        <Avatar person={post.author} />
+    <Card as="article" id={`post-${post.id}`} padded={false} className="mb-4 overflow-hidden">
+      {/* Author */}
+      <div className="flex items-center gap-3 p-4">
+        <Avatar person={post.author} size="md" />
 
-        <div>
-          <strong>{post.author.fullName}</strong>
-          <span>{formatTime(post.createdAt)}</span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-ink">{post.author.fullName}</p>
+          <p className="text-xs text-muted">{formatTime(post.createdAt)}</p>
         </div>
 
         {post.editable && (
-          <div className="feed-menu">
-            <button
-              type="button"
-              className="feed-menu-button"
-              aria-label="Post options"
-              title="Post options"
-              onClick={() => setMenuOpen((current) => !current)}
-            >
-              <MoreVert fontSize="small" />
-            </button>
-
-            {menuOpen && (
-              <div className="feed-menu-popover">
-                <button type="button" onClick={() => setEditing(true)}>
-                  <Edit fontSize="small" /> Edit
-                </button>
-                <button type="button" onClick={deletePost}>
-                  <Delete fontSize="small" /> Delete
-                </button>
-              </div>
-            )}
-          </div>
+          <Menu
+            align="end"
+            trigger={<IconButton label="Post options" icon={<MoreHoriz fontSize="small" />} size="sm" />}
+            items={[
+              {
+                key: "edit",
+                label: "Edit",
+                icon: <Edit fontSize="small" />,
+                onClick: () => setEditing(true),
+              },
+              {
+                key: "delete",
+                label: "Delete",
+                icon: <Delete fontSize="small" />,
+                danger: true,
+                onClick: deletePost,
+              },
+            ]}
+          />
         )}
       </div>
 
+      {/* Content */}
       {editing ? (
-        <form className="feed-edit-form" onSubmit={savePost}>
+        <form className="grid gap-2 px-4 pb-4" onSubmit={savePost}>
           <textarea
             value={body}
             onChange={(event) => setBody(event.target.value)}
+            rows={3}
+            className="w-full resize-y rounded-md border border-line bg-panel p-2.5 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
           />
-          <div>
-            <button type="button" onClick={() => setEditing(false)}>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" type="button" onClick={() => setEditing(false)}>
               Cancel
-            </button>
-            <button type="submit" className="primary-button small">
+            </Button>
+            <Button variant="primary" size="sm" type="submit">
               Save
-            </button>
+            </Button>
           </div>
         </form>
       ) : (
         <p
-          className="post-body post-body-link"
           onClick={() => onOpenPost(post.id)}
           role="link"
-          tabIndex="0"
+          tabIndex={0}
           onKeyDown={(event) => {
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
               onOpenPost(post.id);
             }
           }}
+          className="cursor-pointer px-4 pb-4 text-[15px] leading-relaxed text-ink transition-colors hover:text-accent"
         >
           {post.body}
         </p>
       )}
 
-      {/* Post Stats */}
-      <div className="post-stats">
-        <span>
-          <ThumbUpAlt fontSize="inherit" /> {post.likes}
-        </span>
-
-        <span>{post.comments} comments</span>
-      </div>
-
-      {/* Post Actions */}
-      <div className="post-actions">
-        <div
-          className="post-like-wrap"
-          ref={likeWrapRef}
-          onMouseEnter={openPicker}
-          onMouseLeave={schedulePickerClose}
-        >
-          <button className={post.liked ? "selected" : ""} onClick={toggleLike}>
-            <ThumbUpAlt fontSize="small" />
-            Like
-          </button>
-
-          <AnimatePresence>
-            {pickerOpen && (
-              <div
-                key="post-reaction-picker"
-                className="post-reaction-anchor"
-                style={{ transform: `translateX(${pickerOffset}px)` }}
-              >
-                <Motion.div
-                  ref={pickerRef}
-                  className="post-reaction-picker"
-                  role="menu"
-                  aria-label="Pick a reaction"
-                  initial={{ opacity: 0, scale: 0.8, y: 8 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, y: 6 }}
-                  transition={{ duration: 0.18, ease: "easeOut" }}
-                >
-                  {POST_REACTIONS.map((reaction) => (
-                    <button
-                      key={reaction.type}
-                      type="button"
-                      role="menuitem"
-                      className={post.reaction === reaction.type ? "active" : ""}
-                      title={reaction.label}
-                      aria-label={`React with ${reaction.label}`}
-                      onClick={() => handlePickReaction(reaction.type)}
-                    >
-                      <span aria-hidden="true">{reaction.emoji}</span>
-                    </button>
-                  ))}
-                </Motion.div>
-              </div>
-            )}
-          </AnimatePresence>
+      {/* Reaction + comment summary */}
+      {(post.likes > 0 || post.comments > 0) && (
+        <div className="flex items-center justify-between px-4 pb-2 text-xs">
+          <ReactionSummary reactions={post.reactions} />
+          {post.comments > 0 && (
+            <button
+              type="button"
+              onClick={openComments}
+              className="font-medium text-muted transition-colors hover:text-accent"
+            >
+              {post.comments} comment{post.comments === 1 ? "" : "s"}
+            </button>
+          )}
         </div>
+      )}
 
-        <button onClick={toggleComments}>
-          <ChatBubble fontSize="small" />
+      {/* Primary actions */}
+      <div className="grid grid-cols-2 gap-1 border-t border-line p-1">
+        <ReactionButton
+          value={post.reaction}
+          onChange={reactToPost}
+          types={REACTION_TYPES}
+          label="Like this post"
+          fullWidth
+        />
+        <button
+          type="button"
+          onClick={toggleComments}
+          aria-pressed={showComments}
+          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md text-xs font-semibold text-muted transition-colors motion-safe:duration-150 hover:bg-soft hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          <ChatBubbleOutlined fontSize="small" />
           Comment
         </button>
       </div>
 
-      {/* Comment Section */}
-      <CommentSection
-        postId={post.id}
-        postAuthorId={post.author.id}
-        showComments={showComments}
-        setShowComments={setShowComments}
-        onChanged={onChanged}
-      />
-    </article>
+      {/* Comments */}
+      <div className="px-4">
+        <CommentSection
+          postId={post.id}
+          postAuthorId={post.author.id}
+          user={user}
+          showComments={showComments}
+          setShowComments={setShowComments}
+          onChanged={onChanged}
+        />
+      </div>
+    </Card>
   );
 }

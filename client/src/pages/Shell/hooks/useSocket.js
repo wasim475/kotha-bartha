@@ -61,6 +61,7 @@ export default function useSocket(userId) {
     socket.on("message:reaction", forward("message:reaction"));
     socket.on("message:read", forward("message:read"));
     socket.on("notification:new", forward("notification:new"));
+    socket.on("post:new", forward("post:new"));
     socket.on("typing:start", forward("typing:start"));
     socket.on("typing:stop", forward("typing:stop"));
     socket.on("call:signal", forward("call:signal"));

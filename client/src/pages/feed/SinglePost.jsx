@@ -4,7 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ResourceState, useResource } from "../../utility/helpers";
 import PostCard from "./components/PostCard";
 
-export default function SinglePost() {
+export default function SinglePost({ user }) {
   const { postId } = useParams();
   const navigate = useNavigate();
   const post = useResource(`/posts/${postId}`);
@@ -30,6 +30,7 @@ export default function SinglePost() {
         {post.data ? (
           <PostCard
             post={post.data}
+            user={user}
             onChanged={post.reload}
             initialShowComments
           />

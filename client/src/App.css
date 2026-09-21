@@ -506,139 +506,28 @@ button {
   font-size: 13px;
   line-height: 1.5;
 }
-.composer-actions {
-  grid-column: 2;
-  display: flex;
-  gap: 20px;
-  padding-top: 13px;
-  border-top: 1px solid var(--line);
-}
-.composer-actions button,
-.post-actions button {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--muted);
-  font-size: 11px;
-}
-.composer-actions svg {
-  color: var(--accent);
-  font-size: 17px;
-}
 .post-card {
   padding: 19px;
 }
-.post-header {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-}
-.post-header > div:nth-child(2) {
-  display: grid;
-  gap: 2px;
-}
-.post-header strong,
 .friend-card strong,
 .conversation strong,
 .notification strong {
   font-size: 12px;
 }
-.post-header span,
 .friend-card span,
 .conversation span,
 .notification span {
   color: var(--muted);
   font-size: 11px;
 }
-.more-button {
-  margin-left: auto;
-  color: var(--muted);
-}
 .post-body {
   margin: 20px 0 14px;
   font-size: 14px;
   line-height: 1.55;
 }
-.post-art {
-  display: grid;
-  place-items: end start;
-  height: 190px;
-  padding: 17px;
-  border-radius: 6px;
-  background: linear-gradient(135deg, #c8d8d6, #e4d0b6 52%, #ca8470);
-  color: rgba(38, 36, 33, 0.6);
-  font:
-    500 16px Fraunces,
-    serif;
-}
-.post-card:nth-of-type(2) .post-art {
-  background: linear-gradient(145deg, #edd8af, #d58d68 50%, #8a7873);
-}
-.post-stats {
-  display: flex;
-  justify-content: space-between;
-  padding: 12px 0 10px;
-  color: var(--muted);
-  font-size: 10px;
-}
-.post-stats span:first-child {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--accent);
-}
-.post-actions {
-  display: flex;
-  justify-content: space-around;
-  padding-top: 11px;
-  border-top: 1px solid var(--line);
-}
-.post-actions button.selected {
-  color: var(--accent);
-}
 .profile-link {
   padding: 0;
   text-align: left;
-}
-.comments {
-  display: grid;
-  gap: 12px;
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
-}
-.comment {
-  display: flex;
-  gap: 9px;
-}
-.comment .avatar {
-  width: 29px;
-  height: 29px;
-  font-size: 9px;
-}
-.comment > div:not(.comment-replies) {
-  flex: 1;
-  padding: 8px 10px;
-  border-radius: 7px;
-  background: var(--soft);
-}
-.comment p {
-  margin: 4px 0 0;
-  font-size: 12px;
-  line-height: 1.4;
-}
-.comment-form {
-  display: flex;
-  gap: 8px;
-}
-.comment-form input {
-  min-width: 0;
-  flex: 1;
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--panel);
-  color: var(--ink);
 }
 .tabs,
 .profile-tabs {
@@ -1101,9 +990,6 @@ button {
   }
   .composer {
     margin-bottom: 14px;
-  }
-  .post-art {
-    height: 165px;
   }
   .friend-grid {
     grid-template-columns: repeat(2, 1fr);

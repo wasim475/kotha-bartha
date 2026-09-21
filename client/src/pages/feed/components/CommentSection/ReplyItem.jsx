@@ -2,13 +2,18 @@ import Avatar from "../../../../components/ui/Avatar";
 import CommentActions from "./CommentActions";
 import CommentEditForm from "./CommentEditForm";
 import CommentMenu from "./CommentMenu";
-import CommentReply from "./CommentReply";
-import RepliesList from "./RepliesList";
 
-const CommentItem = ({
+/**
+ * One reply in a flattened thread. Visually every reply sits at the same
+ * indentation under its top-level comment (see the approved "flatten to
+ * one visual level" decision) — a reply that actually targets another
+ * reply just carries a small "Replying to @name" tag instead of nesting
+ * further, so long threads never run away with indentation on mobile.
+ */
+const ReplyItem = ({
   entry,
   postAuthorId,
-  user,
+  replyingToName,
   editing,
   editBody,
   onEditBodyChange,
@@ -16,31 +21,27 @@ const CommentItem = ({
   onCancelEdit,
   onReact,
   onReply,
-  replyOpen,
-  replyTargetName,
-  replyBody,
-  onReplyBodyChange,
-  onSubmitReply,
-  onCancelReply,
   onEdit,
   onDelete,
-  replies,
-  renderReply,
 }) => (
-  <div className="flex gap-3">
-    <Avatar person={entry.author} size="sm" className="mt-0.5 shrink-0" />
+  <div className="flex gap-2.5">
+    <Avatar person={entry.author} size="xs" className="mt-0.5 shrink-0" />
 
     <div className="min-w-0 flex-1">
       <div
         className={
-          "min-w-0 rounded-2xl px-3.5 py-2.5 " +
+          "min-w-0 rounded-2xl px-3 py-2 " +
           (entry.author.id === postAuthorId ? "bg-accent/10" : "bg-soft")
         }
       >
         <div className="flex items-start justify-between gap-2">
-          <p className="text-sm font-semibold text-ink">{entry.author.fullName}</p>
+          <p className="text-[13px] font-semibold text-ink">{entry.author.fullName}</p>
           {entry.editable && <CommentMenu onEdit={onEdit} onDelete={onDelete} />}
         </div>
+
+        {replyingToName && (
+          <p className="text-[11px] font-medium text-accent">Replying to {replyingToName}</p>
+        )}
 
         {editing ? (
           <CommentEditForm
@@ -50,7 +51,7 @@ const CommentItem = ({
             onCancel={onCancelEdit}
           />
         ) : (
-          <p className="min-w-0 wrap-break-word text-sm leading-relaxed text-ink">{entry.body}</p>
+          <p className="min-w-0 wrap-break-word text-[13px] leading-relaxed text-ink">{entry.body}</p>
         )}
       </div>
 
@@ -62,23 +63,8 @@ const CommentItem = ({
           onReply={onReply}
         />
       )}
-
-      {replyOpen && (
-        <CommentReply
-          user={user}
-          authorName={replyTargetName}
-          value={replyBody}
-          onChange={onReplyBodyChange}
-          onSubmit={onSubmitReply}
-          onCancel={onCancelReply}
-        />
-      )}
-
-      {replies.length > 0 && (
-        <RepliesList replies={replies} postAuthorId={postAuthorId} renderReply={renderReply} />
-      )}
     </div>
   </div>
 );
 
-export default CommentItem;
+export default ReplyItem;

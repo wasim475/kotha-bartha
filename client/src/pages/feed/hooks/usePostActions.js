@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { api } from "../../../utility/api";
 
-const usePostActions = ({ post, onChanged }) => {
+const usePostActions = ({ post, onChanged, onPostUpdated }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [body, setBody] = useState(post.body);
@@ -23,9 +23,32 @@ const usePostActions = ({ post, onChanged }) => {
     onChanged();
   };
 
-  const toggleLike = async () => {
-    await api.put(`/posts/${post.id}/like`, { liked: !post.liked });
-    onChanged();
+  // The reaction endpoint returns the authoritative { reaction, reactions,
+  // likes, liked } snapshot, so the card can be patched in place instead
+  // of forcing a full feed reload for every reaction — same instant-feel
+  // pattern as the Phase 2 like button, now covering all 5 reaction types.
+  // Selecting the currently-active reaction again removes it, matching
+  // the existing comment-reaction contract.
+  const reactToPost = async (type) => {
+    const nextType = post.reaction === type ? null : type;
+
+    try {
+      const { data } = await api.put(`/posts/${post.id}/reaction`, {
+        type: nextType,
+      });
+      if (onPostUpdated) {
+        onPostUpdated(post.id, {
+          reaction: data.data.reaction,
+          reactions: data.data.reactions,
+          likes: data.data.likes,
+          liked: data.data.liked,
+        });
+      } else {
+        onChanged();
+      }
+    } catch (error) {
+      console.error("Failed to update reaction:", error);
+    }
   };
 
   return {
@@ -37,7 +60,7 @@ const usePostActions = ({ post, onChanged }) => {
     setBody,
     savePost,
     deletePost,
-    toggleLike,
+    reactToPost,
   };
 };
 
