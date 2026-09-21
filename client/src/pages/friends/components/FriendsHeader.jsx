@@ -1,16 +1,11 @@
-import { PersonAddAlt } from "@mui/icons-material";
-
-const FriendsHeader = ({ onFindPeople }) => (
-  <div className="page-heading">
-    <div>
-      <span className="eyebrow">Your circle</span>
-      <h1>Friends</h1>
-    </div>
-
-    <button type="button" className="outline-button" onClick={onFindPeople}>
-      <PersonAddAlt fontSize="small" />
-      Find people
-    </button>
+const FriendsHeader = () => (
+  <div className="mb-6">
+    <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-accent">
+      Your circle
+    </span>
+    <h1 className="mt-1 font-display text-2xl font-semibold tracking-tight text-ink">
+      Friends
+    </h1>
   </div>
 );
 

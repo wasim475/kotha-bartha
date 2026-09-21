@@ -1,15 +1,15 @@
 const friendTabs = [
   {
     id: "friends",
-    label: "All Friends",
+    label: "Friends",
   },
   {
     id: "requests",
-    label: "Friend Requests",
+    label: "Requests",
   },
   {
     id: "sent",
-    label: "Sent Requests",
+    label: "Sent",
   },
 ];
 
