@@ -7,6 +7,7 @@ const { pairKey } = require("../utils/ids");
 const { safeUser } = require("../utils/serializers");
 const { emitToUser } = require("../utils/realtime");
 const { createNotification } = require("../services/notification.service");
+const { isBlockedEitherWay } = require("../utils/blocks");
 
 const router = express.Router();
 
@@ -97,6 +98,15 @@ router.post("/friends/requests", async (req, res, next) => {
         error: {
           code: "NOT_FOUND",
           message: "User not found.",
+        },
+      });
+    }
+
+    if (await isBlockedEitherWay(req.user._id, receiver._id)) {
+      return res.status(403).json({
+        error: {
+          code: "BLOCKED",
+          message: "You can't send a friend request to this user.",
         },
       });
     }
@@ -263,6 +273,43 @@ router.post("/friends/requests/:requestId/accept", async (req, res, next) => {
     res.json({
       data: {
         accepted: true,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
+// UNFRIEND
+// ============================================================
+router.delete("/friends/:userId", async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.userId)) {
+      return res.status(400).json({
+        error: {
+          code: "INVALID_ID",
+          message: "Invalid user id.",
+        },
+      });
+    }
+
+    const friendship = await Friendship.findOneAndDelete({
+      pairKey: pairKey(req.user._id, req.params.userId),
+    });
+
+    if (!friendship) {
+      return res.status(404).json({
+        error: {
+          code: "NOT_FOUND",
+          message: "You're not friends with this user.",
+        },
+      });
+    }
+
+    res.json({
+      data: {
+        unfriended: true,
       },
     });
   } catch (error) {

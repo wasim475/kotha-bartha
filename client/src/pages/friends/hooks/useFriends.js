@@ -27,8 +27,9 @@ const useFriends = () => {
   // want the loading flag flipped on (tab switch, retry) do it themselves,
   // synchronously, before triggering this.
   const load = useCallback((activeTab, { signal, silent = false } = {}) => {
+    const url = activeTab === "blocked" ? "/blocks" : `/friends?tab=${activeTab}`;
     return api
-      .get(`/friends?tab=${activeTab}`, { signal })
+      .get(url, { signal })
       .then(({ data }) => setPeople({ data: data.data, loading: false, error: "" }))
       .catch((error) => {
         if (error.code === "ERR_CANCELED") return;
@@ -106,8 +107,37 @@ const useFriends = () => {
 
   const cancelRequest = (entry) => {
     const id = rowId(entry);
-    runAction(id, async () => {
+    return runAction(id, async () => {
       await api.delete(`/friends/requests/${entry.user.id}`);
+      removeRow(id);
+      load(tab, { silent: true });
+    });
+  };
+
+  // Friends tab entries are bare person objects, so `entry.id` is already
+  // the target user's id for both of these.
+  const unfriend = (entry) => {
+    const id = rowId(entry);
+    return runAction(id, async () => {
+      await api.delete(`/friends/${entry.id}`);
+      removeRow(id);
+      load(tab, { silent: true });
+    });
+  };
+
+  const blockUser = (entry) => {
+    const id = rowId(entry);
+    return runAction(id, async () => {
+      await api.post(`/blocks/${entry.id}`);
+      removeRow(id);
+      load(tab, { silent: true });
+    });
+  };
+
+  const unblockUser = (entry) => {
+    const id = rowId(entry);
+    return runAction(id, async () => {
+      await api.delete(`/blocks/${entry.id}`);
       removeRow(id);
       load(tab, { silent: true });
     });
@@ -121,6 +151,9 @@ const useFriends = () => {
     rowErrors,
     acceptRequest,
     cancelRequest,
+    unfriend,
+    blockUser,
+    unblockUser,
     runAction,
   };
 };

@@ -1,13 +1,23 @@
-import { Check, ChatBubbleOutlineRounded, Close } from "@mui/icons-material";
-import { useState } from "react";
+import {
+  Block,
+  Check,
+  ChatBubbleOutlineRounded,
+  Close,
+  MoreHoriz,
+  PersonRemoveOutlined,
+} from "@mui/icons-material";
 
 import Avatar from "../../../components/ui/Avatar";
 import Button from "../../../components/ui/Button";
 import Card from "../../../components/ui/Card";
+import IconButton from "../../../components/ui/IconButton";
+import Menu from "../../../components/ui/Menu";
+import useButtonColorFix from "../../../utility/useButtonColorFix";
 
 const subtitleFor = (tab, person) => {
   if (tab === "requests") return "Sent you a friend request";
   if (tab === "sent") return "Friend request sent";
+  if (tab === "blocked") return "Blocked";
   return person.bio?.trim() || "Friend";
 };
 
@@ -19,34 +29,17 @@ const FriendCard = ({
   onAccept,
   onCancel,
   onMessage,
+  onUnfriend,
+  onBlock,
+  onUnblock,
   onProfileClick,
 }) => {
   const person = entry.user || entry;
-  const [hover, setHover] = useState(false);
+
+  const acceptFix = useButtonColorFix("primary");
+  const outlineFix = useButtonColorFix("outline");
 
   const stop = (event) => event.stopPropagation();
-
-  // The shared Button component's `primary`/`outline` colors are silently
-  // defeated by a pre-existing, app-wide App.css rule — an unscoped
-  // `button { background: transparent; color: inherit }` reset that isn't
-  // wrapped in a Tailwind layer, so it beats `bg-accent`/`text-white` etc.
-  // on every button in the app (confirmed on Feed's own buttons too, not
-  // something this change introduced). Fixing that reset is out of scope
-  // for a Friends-only change, so these inline styles restore the intended
-  // look for just these three actions without touching the shared file.
-  const hoverHandlers = {
-    onMouseEnter: () => setHover(true),
-    onMouseLeave: () => setHover(false),
-  };
-  const primaryStyle = {
-    backgroundColor: hover ? "var(--accent-deep)" : "var(--accent)",
-    color: "#fff",
-  };
-  const outlineStyle = {
-    backgroundColor: hover ? "var(--soft)" : "var(--panel)",
-    color: "var(--ink)",
-    borderColor: "var(--line)",
-  };
 
   return (
     <Card
@@ -76,8 +69,9 @@ const FriendCard = ({
             disabled={acting}
             onClick={() => onAccept(entry)}
             aria-label={`Accept ${person.fullName}'s friend request`}
-            style={primaryStyle}
-            {...hoverHandlers}
+            style={acceptFix.style}
+            onMouseEnter={acceptFix.onMouseEnter}
+            onMouseLeave={acceptFix.onMouseLeave}
           >
             {!acting && <Check fontSize="small" />}
             Accept
@@ -92,28 +86,75 @@ const FriendCard = ({
             disabled={acting}
             onClick={() => onCancel(entry)}
             aria-label={`Cancel friend request to ${person.fullName}`}
-            style={outlineStyle}
-            {...hoverHandlers}
+            style={outlineFix.style}
+            onMouseEnter={outlineFix.onMouseEnter}
+            onMouseLeave={outlineFix.onMouseLeave}
           >
             {!acting && <Close fontSize="small" />}
             Cancel
           </Button>
         )}
 
-        {tab === "friends" && (
+        {tab === "blocked" && (
           <Button
             size="sm"
             variant="outline"
             loading={acting}
             disabled={acting}
-            onClick={() => onMessage(entry)}
-            aria-label={`Message ${person.fullName}`}
-            style={outlineStyle}
-            {...hoverHandlers}
+            onClick={() => onUnblock(entry)}
+            aria-label={`Unblock ${person.fullName}`}
+            style={outlineFix.style}
+            onMouseEnter={outlineFix.onMouseEnter}
+            onMouseLeave={outlineFix.onMouseLeave}
           >
-            {!acting && <ChatBubbleOutlineRounded fontSize="small" />}
-            Message
+            Unblock
           </Button>
+        )}
+
+        {tab === "friends" && (
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              loading={acting}
+              disabled={acting}
+              onClick={() => onMessage(entry)}
+              aria-label={`Message ${person.fullName}`}
+              style={outlineFix.style}
+              onMouseEnter={outlineFix.onMouseEnter}
+              onMouseLeave={outlineFix.onMouseLeave}
+            >
+              {!acting && <ChatBubbleOutlineRounded fontSize="small" />}
+              Message
+            </Button>
+
+            <Menu
+              align="end"
+              trigger={
+                <IconButton
+                  label={`More actions for ${person.fullName}`}
+                  icon={<MoreHoriz fontSize="small" />}
+                  size="sm"
+                  disabled={acting}
+                />
+              }
+              items={[
+                {
+                  key: "unfriend",
+                  label: "Unfriend",
+                  icon: <PersonRemoveOutlined fontSize="small" />,
+                  onClick: () => onUnfriend(entry),
+                },
+                {
+                  key: "block",
+                  label: "Block",
+                  icon: <Block fontSize="small" />,
+                  danger: true,
+                  onClick: () => onBlock(entry),
+                },
+              ]}
+            />
+          </>
         )}
       </div>
     </Card>

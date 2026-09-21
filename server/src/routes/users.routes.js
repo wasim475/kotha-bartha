@@ -4,15 +4,20 @@ const User = require("../models/User");
 const Post = require("../models/Post");
 const Friendship = require("../models/Friendship");
 const FriendRequest = require("../models/FriendRequest");
+const Block = require("../models/Block");
 const { safeUser, serializePost } = require("../utils/serializers");
+const { blockedPairIds } = require("../utils/blocks");
 
 const router = express.Router();
 
 router.get("/users", async (req, res, next) => {
   try {
+    const excludedIds = await blockedPairIds(req.user._id);
+
     const users = await User.find({
       _id: {
         $ne: req.user._id,
+        $nin: [...excludedIds],
       },
     }).sort({
       fullName: 1,
@@ -45,9 +50,12 @@ router.get("/users/search", async (req, res, next) => {
       });
     }
 
+    const excludedIds = await blockedPairIds(req.user._id);
+
     const users = await User.find({
       _id: {
         $ne: req.user._id,
+        $nin: [...excludedIds],
       },
       fullName: {
         $regex: query,
@@ -157,6 +165,16 @@ router.get("/users/:userId", async (req, res, next) => {
       .select("_id")
       .lean();
 
+    const isBlocked = await Block.exists({
+      blockerId: req.user._id,
+      blockedId: user._id,
+    });
+
+    const hasBlockedMe = await Block.exists({
+      blockerId: user._id,
+      blockedId: req.user._id,
+    });
+
     res.json({
       data: {
         ...safeUser(user),
@@ -165,6 +183,8 @@ router.get("/users/:userId", async (req, res, next) => {
         friendRequestSent: Boolean(sentRequest),
         friendRequestReceived: Boolean(receivedRequest),
         receivedFriendRequestId: receivedRequest?._id?.toString(),
+        isBlocked: Boolean(isBlocked),
+        hasBlockedMe: Boolean(hasBlockedMe),
       },
     });
   } catch (error) {

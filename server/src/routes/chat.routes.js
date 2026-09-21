@@ -6,6 +6,7 @@ const Message = require("../models/Message");
 const { pairKey } = require("../utils/ids");
 const { safeUser } = require("../utils/serializers");
 const { emitToUser } = require("../utils/realtime");
+const { isBlockedEitherWay } = require("../utils/blocks");
 
 const router = express.Router();
 
@@ -30,6 +31,15 @@ router.post("/conversations", async (req, res, next) => {
         error: {
           code: "NOT_FOUND",
           message: "User not found.",
+        },
+      });
+    }
+
+    if (await isBlockedEitherWay(req.user._id, other._id)) {
+      return res.status(403).json({
+        error: {
+          code: "BLOCKED",
+          message: "You can't message this user.",
         },
       });
     }
@@ -311,6 +321,21 @@ router.post(
       //     },
       //   });
       // }
+
+      // A conversation can predate a block (they were messaging, then one
+      // side blocked the other) — re-check on every send, not just when the
+      // conversation is first created.
+      const otherParticipantId = conversation.participantIds.find(
+        (id) => id.toString() !== req.user._id.toString(),
+      );
+      if (await isBlockedEitherWay(req.user._id, otherParticipantId)) {
+        return res.status(403).json({
+          error: {
+            code: "BLOCKED",
+            message: "You can't message this user.",
+          },
+        });
+      }
 
       let replyTo = null;
       if (req.body.replyTo) {

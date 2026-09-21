@@ -11,6 +11,10 @@ const friendTabs = [
     id: "sent",
     label: "Sent",
   },
+  {
+    id: "blocked",
+    label: "Blocked",
+  },
 ];
 
 export default friendTabs;

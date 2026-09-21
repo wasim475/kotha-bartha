@@ -1,13 +1,14 @@
 import {
+  Block,
   ErrorOutlined,
   GroupOutlined,
   InboxOutlined,
   OutboxOutlined,
 } from "@mui/icons-material";
-import { useState } from "react";
 
 import Button from "../../../components/ui/Button";
 import Card from "../../../components/ui/Card";
+import useButtonColorFix from "../../../utility/useButtonColorFix";
 import FriendCard from "./FriendCard";
 
 function FriendRowSkeleton() {
@@ -42,6 +43,11 @@ const emptyStateCopy = {
     title: "No sent requests",
     message: "Requests you've sent will show up here until they're accepted.",
   },
+  blocked: {
+    icon: Block,
+    title: "No blocked users",
+    message: "People you block will show up here — you can unblock them anytime.",
+  },
 };
 
 function FriendEmptyState({ tab }) {
@@ -59,9 +65,9 @@ function FriendEmptyState({ tab }) {
 }
 
 function FriendErrorState({ message, onRetry }) {
-  // See FriendCard.jsx for why this inline style is needed: a pre-existing,
-  // app-wide App.css rule silently defeats Button's `outline` colors.
-  const [hover, setHover] = useState(false);
+  // See utility/useButtonColorFix.js for why this inline style is needed: a
+  // pre-existing, app-wide App.css rule silently defeats Button's colors.
+  const outlineFix = useButtonColorFix("outline");
   return (
     <div className="flex flex-col items-center gap-3 py-16 text-center">
       <div className="flex size-12 items-center justify-center rounded-full bg-danger-soft text-danger">
@@ -73,13 +79,9 @@ function FriendErrorState({ message, onRetry }) {
           variant="outline"
           size="sm"
           onClick={onRetry}
-          style={{
-            backgroundColor: hover ? "var(--soft)" : "var(--panel)",
-            color: "var(--ink)",
-            borderColor: "var(--line)",
-          }}
-          onMouseEnter={() => setHover(true)}
-          onMouseLeave={() => setHover(false)}
+          style={outlineFix.style}
+          onMouseEnter={outlineFix.onMouseEnter}
+          onMouseLeave={outlineFix.onMouseLeave}
         >
           Try again
         </Button>
@@ -96,6 +98,9 @@ const FriendList = ({
   onAccept,
   onCancel,
   onMessage,
+  onUnfriend,
+  onBlock,
+  onUnblock,
   onProfileClick,
 }) => {
   if (people.loading) {
@@ -131,6 +136,9 @@ const FriendList = ({
             onAccept={onAccept}
             onCancel={onCancel}
             onMessage={onMessage}
+            onUnfriend={onUnfriend}
+            onBlock={onBlock}
+            onUnblock={onUnblock}
             onProfileClick={onProfileClick}
           />
         );
