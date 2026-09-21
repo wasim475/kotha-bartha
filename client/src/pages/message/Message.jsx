@@ -78,7 +78,7 @@ const Message = ({ user }) => {
     conversations,
     preserveScrollPosition: scroll.preserveScrollPosition,
   });
-  const call = useVoiceCall({ selected, conversationId });
+  const call = useVoiceCall({ selected, conversationId, thread, conversations });
 
   useMessageRealtime({
     conversationId,
@@ -123,13 +123,8 @@ const Message = ({ user }) => {
   const showingThread = Boolean(conversationId);
 
   return (
-    <div className="flex h-[calc(100dvh-195px)] min-h-[420px] w-full flex-col md:h-[calc(100dvh-200px)]">
-      <div
-        className={cx(
-          "mb-3 shrink-0",
-          showingThread && "hidden md:block",
-        )}
-      >
+    <div className="flex h-[calc(100dvh-195px)] min-h-105 w-full flex-col md:h-[calc(100dvh-200px)]">
+      <div className={cx("mb-3 shrink-0", showingThread && "hidden")}>
         <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-accent">
           Inbox
         </span>
@@ -175,6 +170,7 @@ const Message = ({ user }) => {
                 selected={selected}
                 callState={call.callState}
                 incomingCall={call.incomingCall}
+                callDuration={call.callDuration}
                 remoteAudio={call.remoteAudio}
                 acceptCall={call.acceptCall}
                 finishCall={call.finishCall}

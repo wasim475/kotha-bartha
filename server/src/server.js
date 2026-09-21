@@ -4,6 +4,9 @@ const mongoose = require("mongoose");
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const app = require("./app");
+const Conversation = require("./models/Conversation");
+const { pairKey } = require("./utils/ids");
+const { isBlockedEitherWay } = require("./utils/blocks");
 
 const port = process.env.PORT || 5000;
 const httpServer = http.createServer(app);
@@ -49,9 +52,20 @@ io.on("connection", (socket) => {
 
   socket.on("typing:start", forwardTyping("typing:start"));
   socket.on("typing:stop", forwardTyping("typing:stop"));
-  socket.on("call:signal", ({ to, signal }) => {
-    if (typeof to === "string" && signal)
-      io.to(`user:${to}`).emit("call:signal", { from: socket.userId, signal });
+  socket.on("call:signal", async ({ to, signal }) => {
+    if (typeof to !== "string" || !signal) return;
+
+    // Only the call-initiating "offer" needs the authorization check —
+    // answer/ice/end are just completing a call that already passed it.
+    if (signal.type === "offer") {
+      const [authorized, blocked] = await Promise.all([
+        Conversation.exists({ pairKey: pairKey(socket.userId, to) }),
+        isBlockedEitherWay(socket.userId, to),
+      ]);
+      if (!authorized || blocked) return;
+    }
+
+    io.to(`user:${to}`).emit("call:signal", { from: socket.userId, signal });
   });
   socket.on("disconnect", () => {});
 });

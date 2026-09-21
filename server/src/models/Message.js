@@ -24,6 +24,15 @@ const messageSchema = new mongoose.Schema(
       maxlength: 5000,
       required: true,
     },
+    type: {
+      type: String,
+      enum: ["text", "call"],
+      default: "text",
+    },
+    call: {
+      outcome: { type: String, enum: ["completed", "missed", "cancelled"] },
+      durationSec: { type: Number, default: 0 },
+    },
     replyTo: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Message",

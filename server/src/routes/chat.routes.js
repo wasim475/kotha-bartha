@@ -257,6 +257,13 @@ router.get(
         data: messages.map((message) => ({
           id: message._id.toString(),
           body: message.body,
+          type: message.type || "text",
+          call: message.call
+            ? {
+                outcome: message.call.outcome,
+                durationSec: message.call.durationSec || 0,
+              }
+            : null,
           createdAt: message.createdAt,
           senderId: message.senderId.toString(),
           status: message.status || "sent",
@@ -422,6 +429,108 @@ router.post(
 );
 
 // ============================================================
+// CALL RECORD
+//
+// Created once per call by the caller's client after it ends (completed,
+// missed, or cancelled) — the only backend awareness of calls beyond the
+// existing raw call:signal WebRTC relay. Rendered as a distinct message
+// type on the client, same delivery path as a normal text message.
+// ============================================================
+
+const formatCallDuration = (totalSeconds) => {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+};
+
+router.post("/conversations/:conversationId/calls", async (req, res, next) => {
+  try {
+    const outcome = String(req.body.outcome || "");
+    const durationSec = Math.max(0, Math.round(Number(req.body.durationSec) || 0));
+
+    if (!["completed", "missed", "cancelled"].includes(outcome)) {
+      return res.status(400).json({
+        error: { code: "INVALID_CALL", message: "Invalid call outcome." },
+      });
+    }
+
+    const conversation = await Conversation.findOne({
+      _id: req.params.conversationId,
+      participantIds: req.user._id,
+    });
+
+    if (!conversation) {
+      return res.status(404).json({
+        error: { code: "NOT_FOUND", message: "Conversation not found." },
+      });
+    }
+
+    const recipientId = conversation.participantIds.find(
+      (id) => id.toString() !== req.user._id.toString(),
+    );
+
+    if (await isBlockedEitherWay(req.user._id, recipientId)) {
+      return res.status(403).json({
+        error: { code: "BLOCKED", message: "You can't call this user." },
+      });
+    }
+
+    const body =
+      outcome === "completed"
+        ? `Audio call · ${formatCallDuration(durationSec)}`
+        : "Missed audio call";
+
+    conversation.hiddenFor = (conversation.hiddenFor || []).filter(
+      (id) =>
+        id.toString() !== req.user._id.toString() &&
+        id.toString() !== recipientId.toString(),
+    );
+
+    const message = await Message.create({
+      conversationId: conversation._id,
+      senderId: req.user._id,
+      recipientId,
+      body,
+      type: "call",
+      call: { outcome, durationSec: outcome === "completed" ? durationSec : 0 },
+      status: "delivered",
+    });
+
+    conversation.lastMessage = body;
+    conversation.lastMessageAt = message.createdAt;
+    conversation.unreadCounts?.set(
+      recipientId.toString(),
+      (conversation.unreadCounts?.get(recipientId.toString()) || 0) + 1,
+    );
+    await conversation.save();
+
+    const payload = {
+      id: message._id.toString(),
+      conversationId: conversation._id.toString(),
+      body: message.body,
+      type: "call",
+      call: { outcome, durationSec: message.call.durationSec || 0 },
+      createdAt: message.createdAt,
+      senderId: req.user._id.toString(),
+      sender: { fullName: req.user.fullName },
+    };
+
+    emitToUser(req, recipientId, "message:new", payload);
+
+    res.status(201).json({
+      data: {
+        ...payload,
+        status: message.status,
+        replyTo: null,
+        reactions: [],
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
 // REACT TO MESSAGE
 // ============================================================
 
@@ -537,6 +646,15 @@ router.patch(
           error: {
             code: "NOT_FOUND",
             message: "Message not found or you cannot edit this message.",
+          },
+        });
+      }
+
+      if (message.type === "call") {
+        return res.status(400).json({
+          error: {
+            code: "INVALID_MESSAGE",
+            message: "Call records can't be edited.",
           },
         });
       }

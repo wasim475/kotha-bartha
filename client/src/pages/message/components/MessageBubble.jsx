@@ -67,6 +67,12 @@ const MessageBubble = ({
   const [emojiPickerPosition, setEmojiPickerPosition] = useState(null);
 
   const primaryFix = useButtonColorFix("primary");
+  // The bubble itself is a <button> (clickable to reveal actions), so it's
+  // subject to the same app-wide App.css button reset the rest of this
+  // page already works around — see utility/useButtonColorFix.js.
+  const ownBubbleFix = useButtonColorFix("primary");
+  const otherBubbleFix = useButtonColorFix("outline");
+  const bubbleFix = isOwn ? ownBubbleFix : otherBubbleFix;
 
   useLayoutEffect(() => {
     if (!emojiOpen || !emojiButtonRef.current) {
@@ -150,7 +156,7 @@ const MessageBubble = ({
     >
       <div
         className={cx(
-          "flex max-w-[86%] items-end gap-1.5 sm:max-w-[75%]",
+          "flex max-w-[86%] items-end gap-1.5 sm:max-w-[min(75%,34rem)]",
           isOwn ? "flex-row-reverse" : "flex-row",
         )}
       >
@@ -207,9 +213,12 @@ const MessageBubble = ({
               onClick={() => onSelectMessage(message.id)}
               className={cx(
                 "min-w-0 rounded-2xl px-3.5 py-2 text-left text-sm leading-relaxed wrap-break-word shadow-sm transition-opacity",
-                isOwn ? "bg-accent text-white" : "border border-line bg-panel text-ink",
+                isOwn ? "text-white" : "text-ink",
                 message.pending && "opacity-70",
               )}
+              style={bubbleFix.style}
+              onMouseEnter={bubbleFix.onMouseEnter}
+              onMouseLeave={bubbleFix.onMouseLeave}
             >
               {message.replyTo && (
                 <div

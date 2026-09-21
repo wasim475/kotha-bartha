@@ -52,7 +52,7 @@ const MessageComposer = ({
   return (
     <div className="shrink-0 border-t border-line bg-panel">
       {replyingTo && (
-        <div className="flex items-center gap-2 border-b border-line bg-soft px-3.5 py-2 text-xs text-muted sm:px-4">
+        <div className="mx-auto flex w-full max-w-4xl items-center gap-2 border-b border-line bg-soft px-3.5 py-2 text-xs text-muted sm:px-6 lg:px-10">
           <div className="min-w-0 flex-1 border-l-2 border-accent pl-2">
             <span className="block truncate">Replying to: {replyingTo.body}</span>
           </div>
@@ -66,7 +66,7 @@ const MessageComposer = ({
       )}
 
       <form
-        className="flex items-end gap-1.5 p-2.5 sm:gap-2 sm:p-3"
+        className="mx-auto flex w-full max-w-4xl items-end gap-1.5 p-2.5 sm:gap-2 sm:px-6 sm:py-3 lg:px-10"
         onSubmit={submit}
       >
         <div className="relative shrink-0" ref={emojiWrapperRef}>

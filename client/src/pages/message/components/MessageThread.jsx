@@ -1,5 +1,6 @@
 import { ForumOutlined } from "@mui/icons-material";
 
+import CallRecordRow from "./CallRecordRow";
 import MessageBubble from "./MessageBubble";
 
 const GROUP_GAP_MS = 5 * 60 * 1000;
@@ -102,69 +103,75 @@ const MessageThread = ({
 
   if (!messages?.length) {
     return (
-      <div className="flex flex-1 flex-col overflow-y-auto" ref={threadRef}>
+      <div className="flex  flex-1 flex-col overflow-y-auto" ref={threadRef}>
         <MessageThreadEmpty name={otherUser?.fullName} />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-4 sm:px-4" ref={threadRef}>
-      {messages.map((message, index) => {
-        const previous = messages[index - 1];
-        const next = messages[index + 1];
-        const isOwn = String(message.senderId) === String(userId);
+    <div className="flex flex-1 flex-col overflow-y-auto px-3 py-4 sm:px-6 lg:px-10" ref={threadRef}>
+      <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col justify-end gap-0.5">
+        {messages.map((message, index) => {
+          const previous = messages[index - 1];
+          const next = messages[index + 1];
+          const isOwn = String(message.senderId) === String(userId);
 
-        const showDateSeparator =
-          !previous || !sameDay(previous.createdAt, message.createdAt);
+          const showDateSeparator =
+            !previous || !sameDay(previous.createdAt, message.createdAt);
 
-        const groupedWithPrevious =
-          !showDateSeparator &&
-          previous &&
-          String(previous.senderId) === String(message.senderId) &&
-          Math.abs(new Date(message.createdAt) - new Date(previous.createdAt)) < GROUP_GAP_MS;
+          const groupedWithPrevious =
+            !showDateSeparator &&
+            previous &&
+            String(previous.senderId) === String(message.senderId) &&
+            Math.abs(new Date(message.createdAt) - new Date(previous.createdAt)) < GROUP_GAP_MS;
 
-        const groupedWithNext =
-          next &&
-          sameDay(next.createdAt, message.createdAt) &&
-          String(next.senderId) === String(message.senderId) &&
-          Math.abs(new Date(next.createdAt) - new Date(message.createdAt)) < GROUP_GAP_MS;
+          const groupedWithNext =
+            next &&
+            sameDay(next.createdAt, message.createdAt) &&
+            String(next.senderId) === String(message.senderId) &&
+            Math.abs(new Date(next.createdAt) - new Date(message.createdAt)) < GROUP_GAP_MS;
 
-        return (
-          <div key={message.id} data-message-row>
-            {showDateSeparator && (
-              <div className="my-3 flex items-center justify-center first:mt-0">
-                <span className="rounded-full bg-soft px-3 py-1 text-[11px] font-semibold text-muted">
-                  {formatDateSeparator(message.createdAt)}
-                </span>
-              </div>
-            )}
-            <MessageBubble
-              message={message}
-              isOwn={isOwn}
-              otherUser={otherUser}
-              groupStart={!groupedWithPrevious}
-              groupEnd={!groupedWithNext}
-              isEditing={editingMessage === message.id}
-              isDeleting={deletingMessage === message.id}
-              editBody={editBody}
-              editLoading={editLoading}
-              setEditBody={setEditBody}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              onCancelEdit={onCancelEdit}
-              onSaveEdit={onSaveEdit}
-              onReply={onReply}
-              onReact={onReact}
-              selected={selectedMessageId === message.id}
-              emojiOpen={emojiMessageId === message.id}
-              onSelectMessage={onSelectMessage}
-              onOpenEmoji={() => onOpenEmoji(message.id)}
-              onCloseInteraction={onCloseInteraction}
-            />
-          </div>
-        );
-      })}
+          return (
+            <div key={message.id} data-message-row>
+              {showDateSeparator && (
+                <div className="my-3 flex items-center justify-center first:mt-0">
+                  <span className="rounded-full bg-soft px-3 py-1 text-[11px] font-semibold text-muted">
+                    {formatDateSeparator(message.createdAt)}
+                  </span>
+                </div>
+              )}
+              {message.type === "call" ? (
+                <CallRecordRow message={message} isOwn={isOwn} groupStart={!groupedWithPrevious} />
+              ) : (
+                <MessageBubble
+                  message={message}
+                  isOwn={isOwn}
+                  otherUser={otherUser}
+                  groupStart={!groupedWithPrevious}
+                  groupEnd={!groupedWithNext}
+                  isEditing={editingMessage === message.id}
+                  isDeleting={deletingMessage === message.id}
+                  editBody={editBody}
+                  editLoading={editLoading}
+                  setEditBody={setEditBody}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onCancelEdit={onCancelEdit}
+                  onSaveEdit={onSaveEdit}
+                  onReply={onReply}
+                  onReact={onReact}
+                  selected={selectedMessageId === message.id}
+                  emojiOpen={emojiMessageId === message.id}
+                  onSelectMessage={onSelectMessage}
+                  onOpenEmoji={() => onOpenEmoji(message.id)}
+                  onCloseInteraction={onCloseInteraction}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };
