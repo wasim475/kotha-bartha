@@ -92,6 +92,8 @@ io.on("connection", (socket) => {
       if (!authorized || blocked) return;
     }
 
+    const room = io.sockets.adapter.rooms.get(`user:${to}`);
+    console.log("DEBUG room size before forward", `user:${to}`, room ? room.size : 0, room ? [...room] : []);
     io.to(`user:${to}`).emit("call:signal", { from: socket.userId, signal });
     console.log("DEBUG call:signal forwarded to", `user:${to}`);
   });

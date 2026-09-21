@@ -191,6 +191,7 @@ const useVoiceCall = ({ selected, conversationId, thread, conversations }) => {
 
   useRealtime("call:signal", async (event) => {
     const { from, signal } = event.detail;
+    console.log("DEBUG useVoiceCall received call:signal", { from, type: signal?.type, selectedUserId: selected?.user?.id });
 
     if (from !== selected?.user.id) {
       return;
