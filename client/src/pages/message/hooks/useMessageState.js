@@ -9,7 +9,6 @@ const useMessageState = ({ conversationId, selected }) => {
   const [sending, setSending] = useState(false);
   const [selectedMessageId, setSelectedMessageId] = useState(null);
   const [emojiMessageId, setEmojiMessageId] = useState(null);
-  const [openMenu, setOpenMenu] = useState(null);
 
   const localTypingTimeoutRef = useRef(null);
   const remoteTypingTimeoutRef = useRef(null);
@@ -17,7 +16,6 @@ const useMessageState = ({ conversationId, selected }) => {
   const closeMessageInteractions = () => {
     setSelectedMessageId(null);
     setEmojiMessageId(null);
-    setOpenMenu(null);
   };
 
   const notifyTyping = (value) => {
@@ -62,8 +60,6 @@ const useMessageState = ({ conversationId, selected }) => {
     setSelectedMessageId,
     emojiMessageId,
     setEmojiMessageId,
-    openMenu,
-    setOpenMenu,
     localTypingTimeoutRef,
     remoteTypingTimeoutRef,
     notifyTyping,

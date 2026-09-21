@@ -1,7 +1,8 @@
 import { useContext, useEffect, useRef, useState } from "react";
-import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { Utility } from "../../provider/UtilityProvider";
+import { cx } from "../../utility/cx";
 
 import Navbar from "../../pages/SharePage/Navbar/Navbar";
 import Feed from "../../pages/feed/Feed";
@@ -18,6 +19,8 @@ import PrivacyPolicy from '../privacyPolicy/PrivacyPolicy';
 
 export default function Shell({ user, onLogout }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isMessagesRoute = location.pathname.startsWith("/app/messages");
   const { theme, setTheme } = useContext(Utility);
   const { search, results, updateSearch, clearSearch } = useUserSearch();
 
@@ -83,7 +86,7 @@ export default function Shell({ user, onLogout }) {
         mobileProfileRef={mobileProfileRef}
       />
 
-      <div className="app-body">
+      <div className={cx("app-body", isMessagesRoute && "app-body--full")}>
         <Navbar onLogout={onLogout} />
 
         <main className="page-content">

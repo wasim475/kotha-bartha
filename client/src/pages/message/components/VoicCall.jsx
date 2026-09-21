@@ -1,51 +1,60 @@
+import { Call, CallEnd } from "@mui/icons-material";
 
+import Button from "../../../components/ui/Button";
+import useButtonColorFix from "../../../utility/useButtonColorFix";
 
 const VoiceCall = ({
   selected,
   callState,
   incomingCall,
   remoteAudio,
-  startCall,
   acceptCall,
   finishCall,
 }) => {
+  const primaryFix = useButtonColorFix("primary");
+  const outlineFix = useButtonColorFix("outline");
+
   return (
     <>
-      
-
-      {/* Incoming Call */}
       {incomingCall && (
-        <div className="call-banner">
-          <span>{selected?.user.fullName} is calling</span>
+        <div className="flex shrink-0 flex-wrap items-center gap-2.5 border-b border-line bg-soft px-4 py-2.5 text-sm text-ink">
+          <Call fontSize="small" className="text-accent" />
+          <span className="flex-1">{selected?.user.fullName} is calling…</span>
 
-          <button
-            type="button"
-            className="primary-button small"
+          <Button
+            size="sm"
+            variant="primary"
             onClick={acceptCall}
+            style={primaryFix.style}
+            onMouseEnter={primaryFix.onMouseEnter}
+            onMouseLeave={primaryFix.onMouseLeave}
           >
             Answer
-          </button>
+          </Button>
 
-          <button
-            type="button"
-            className="outline-button"
+          <Button
+            size="sm"
+            variant="outline"
             onClick={() => finishCall()}
+            style={outlineFix.style}
+            onMouseEnter={outlineFix.onMouseEnter}
+            onMouseLeave={outlineFix.onMouseLeave}
           >
             Decline
-          </button>
+          </Button>
         </div>
       )}
 
-      {/* Calling */}
       {callState === "calling" && (
-        <div className="call-banner">
+        <div className="flex shrink-0 items-center gap-2.5 border-b border-line bg-soft px-4 py-2.5 text-sm text-muted">
+          <Call fontSize="small" className="animate-pulse text-accent motion-reduce:animate-none" />
           Calling {selected?.user.fullName}…
         </div>
       )}
 
-      {/* Active Call */}
       {callState === "active" && (
-        <div className="call-banner">
+        <div className="flex shrink-0 items-center gap-2.5 border-b border-line bg-soft px-4 py-2.5 text-sm text-muted">
+          <CallEnd fontSize="small" className="text-accent" />
           Voice call in progress
         </div>
       )}

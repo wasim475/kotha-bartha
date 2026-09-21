@@ -360,6 +360,18 @@ button {
   margin: 0 auto;
   padding: 42px 25px 80px;
 }
+/* Messages wants the main column to use available desktop width instead of
+   the ~680px cap every other page uses — scoped to this modifier (added by
+   Shell only on /app/messages) and to desktop widths, so no other page and
+   no mobile layout is affected. */
+@media (min-width: 761px) {
+  .app-body--full {
+    grid-template-columns: 220px minmax(0, 1fr);
+    width: min(100%, 1600px);
+    gap: clamp(20px, 3vw, 40px);
+    padding: 22px clamp(16px, 2.5vw, 32px) 28px;
+  }
+}
 .desktop-nav {
   display: flex;
   flex-direction: column;

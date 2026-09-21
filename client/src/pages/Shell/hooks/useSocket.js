@@ -58,6 +58,8 @@ export default function useSocket(userId) {
 
     socket.on("connect", forward("realtime:connected"));
     socket.on("message:new", forwardNewMessage);
+    socket.on("message:updated", forward("message:updated"));
+    socket.on("message:deleted", forward("message:deleted"));
     socket.on("message:reaction", forward("message:reaction"));
     socket.on("message:read", forward("message:read"));
     socket.on("notification:new", forward("notification:new"));

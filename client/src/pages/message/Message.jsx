@@ -1,8 +1,9 @@
-import { Add } from "@mui/icons-material";
-import { useEffect } from "react";
+import { ForumOutlined } from "@mui/icons-material";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { ResourceState } from "../../utility/helpers";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import { cx } from "../../utility/cx";
 import useDeleteMessage from "./hooks/useDeleteMessage";
 import useEditMessage from "./hooks/useEditMessage";
 import useMessageActions from "./hooks/useMessageActions";
@@ -18,6 +19,21 @@ import MessageComposer from "./components/MessageComposer";
 import MessageThread from "./components/MessageThread";
 import VoiceCall from "./components/VoicCall";
 
+const confirmCopy = {
+  conversation: {
+    title: "Delete this conversation?",
+    description: "This removes the conversation and its messages for you. This can't be undone.",
+    confirmLabel: "Delete",
+    variant: "danger",
+  },
+  message: {
+    title: "Delete this message?",
+    description: "This removes the message for everyone in the conversation. This can't be undone.",
+    confirmLabel: "Delete",
+    variant: "danger",
+  },
+};
+
 const Message = ({ user }) => {
   const { conversationId } = useParams();
   const navigate = useNavigate();
@@ -32,10 +48,10 @@ const Message = ({ user }) => {
     isTyping,
     setIsTyping,
     sendError,
+    setSendError,
     sending,
     selectedMessageId,
     emojiMessageId,
-    openMenu,
     closeMessageInteractions,
     notifyTyping,
   } = state;
@@ -74,39 +90,81 @@ const Message = ({ user }) => {
     prepareForIncomingMessage: scroll.prepareForIncomingMessage,
   });
 
-  useEffect(() => {
-    const timer = setInterval(conversations.reload, 5000);
-    return () => clearInterval(timer);
-  }, [conversations.reload]);
+  const [pendingConfirm, setPendingConfirm] = useState(null); // { type: "conversation"|"message", id }
+  const [confirmLoading, setConfirmLoading] = useState(false);
+
+  const openConversation = (id) => navigate(`/app/messages/${id}`);
+  const closeConfirm = () => {
+    if (!confirmLoading) setPendingConfirm(null);
+  };
+
+  const runPendingConfirm = async () => {
+    if (!pendingConfirm) return;
+    setConfirmLoading(true);
+    try {
+      if (pendingConfirm.type === "conversation") {
+        await actions.deleteConversation(pendingConfirm.id);
+        if (pendingConfirm.id === conversationId) navigate("/app/messages");
+      } else {
+        const error = await deletion.handleDelete(pendingConfirm.id);
+        if (error) setSendError(error);
+      }
+    } catch (error) {
+      setSendError(
+        error.response?.data?.error?.message || "Something went wrong.",
+      );
+    } finally {
+      setConfirmLoading(false);
+      setPendingConfirm(null);
+    }
+  };
+
+  const dialogCopy = pendingConfirm ? confirmCopy[pendingConfirm.type] : null;
+  const showingThread = Boolean(conversationId);
 
   return (
-    <div
-      className={
-        conversationId ? "message-page message-page-chat" : "message-page"
-      }
-    >
-      <div className="page-heading">
-        <div>
-          <span className="eyebrow">Messages</span>
-        </div>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Choose a conversation"
-        >
-          <Add />
-        </button>
+    <div className="flex h-[calc(100dvh-195px)] min-h-[420px] w-full flex-col md:h-[calc(100dvh-200px)]">
+      <div
+        className={cx(
+          "mb-3 shrink-0",
+          showingThread && "hidden md:block",
+        )}
+      >
+        <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-accent">
+          Inbox
+        </span>
+        <h1 className="mt-1 font-display text-2xl font-semibold tracking-tight text-ink">
+          Messages
+        </h1>
       </div>
 
-      {conversationId ? (
-        <div className="chat-container">
-          <ResourceState
-            loading={conversations.loading || thread.loading}
-            error={conversations.error || thread.error}
-          >
-            <section className="chat-panel">
+      <div className="flex min-h-0 flex-1 overflow-hidden rounded-lg border border-line bg-panel shadow-soft">
+        <div
+          className={cx(
+            "w-full shrink-0 flex-col overflow-y-auto md:flex md:w-80 md:border-r md:border-line lg:w-96",
+            showingThread ? "hidden md:flex" : "flex",
+          )}
+        >
+          <ConversationList
+            conversations={conversations}
+            userId={user.id}
+            activeId={conversationId}
+            onOpenConversation={openConversation}
+            onRequestDelete={(id) => setPendingConfirm({ type: "conversation", id })}
+          />
+        </div>
+
+        <div
+          className={cx(
+            "min-w-0 flex-1 flex-col",
+            showingThread ? "flex" : "hidden md:flex",
+          )}
+        >
+          {showingThread ? (
+            <>
               <ChatHeader
                 selected={selected}
+                loading={conversations.loading}
                 onBack={() => navigate("/app/messages")}
                 callState={call.callState}
                 startCall={call.startCall}
@@ -123,23 +181,23 @@ const Message = ({ user }) => {
               />
               <MessageThread
                 messages={thread.data}
+                loading={thread.loading}
+                otherUser={selected?.user}
                 threadRef={scroll.messageThreadRef}
                 userId={user.id}
                 editingMessage={edit.editingMessage}
                 deletingMessage={deletion.deletingMessage}
-                openMenu={openMenu}
                 editBody={edit.editBody}
                 editLoading={edit.editLoading}
                 setEditBody={edit.setEditBody}
-                selectedMessageId={selectedMessageId}
-                emojiMessageId={emojiMessageId}
-                onToggleMenu={actions.toggleMessageMenu}
                 onEdit={edit.handleEdit}
-                onDelete={deletion.handleDelete}
+                onDelete={(id) => setPendingConfirm({ type: "message", id })}
                 onCancelEdit={edit.cancelEdit}
                 onSaveEdit={edit.saveEdit}
                 onReply={actions.replyToMessage}
                 onReact={actions.reactToMessage}
+                selectedMessageId={selectedMessageId}
+                emojiMessageId={emojiMessageId}
                 onSelectMessage={actions.selectMessage}
                 onOpenEmoji={actions.openEmojiPicker}
                 onCloseInteraction={closeMessageInteractions}
@@ -153,20 +211,39 @@ const Message = ({ user }) => {
                 replyingTo={replyingTo}
                 onCancelReply={() => setReplyingTo(null)}
               />
-              {sendError && (
-                <div className="form-error message-error">{sendError}</div>
-              )}
-            </section>
-          </ResourceState>
+            </>
+          ) : (
+            <div className="hidden flex-1 flex-col items-center justify-center gap-3 px-6 text-center md:flex">
+              <div className="flex size-14 items-center justify-center rounded-full bg-soft text-muted">
+                <ForumOutlined fontSize="medium" />
+              </div>
+              <p className="font-display text-lg font-semibold text-ink">
+                Select a conversation
+              </p>
+              <p className="max-w-xs text-sm text-muted">
+                Choose someone from the list to see your conversation.
+              </p>
+            </div>
+          )}
         </div>
-      ) : (
-        <ConversationList
-          conversations={conversations}
-          userId={user.id}
-          onOpenConversation={(id) => navigate(`/app/messages/${id}`)}
-          onDeleteConversation={actions.deleteConversation}
-        />
+      </div>
+
+      {sendError && (
+        <div className="mt-3 shrink-0 rounded-md bg-danger-soft px-4 py-2.5 text-xs font-medium text-danger">
+          {sendError}
+        </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(pendingConfirm)}
+        title={dialogCopy?.title}
+        description={dialogCopy?.description}
+        confirmLabel={dialogCopy?.confirmLabel}
+        variant={dialogCopy?.variant}
+        loading={confirmLoading}
+        onConfirm={runPendingConfirm}
+        onCancel={closeConfirm}
+      />
     </div>
   );
 };

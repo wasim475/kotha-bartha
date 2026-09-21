@@ -15,14 +15,6 @@ const useDeleteMessage = ({
       return null;
     }
 
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this message?",
-    );
-
-    if (!confirmed) {
-      return null;
-    }
-
     setDeletingMessage(messageId);
 
     try {

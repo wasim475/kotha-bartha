@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import Swal from "sweetalert2";
 import { api } from "../../../utility/api";
 import { sendTypingSignal } from "../../../utility/helpers";
 
@@ -23,31 +22,15 @@ const useMessageActions = ({
     setSending,
     setSelectedMessageId,
     setEmojiMessageId,
-    setOpenMenu,
     localTypingTimeoutRef,
     closeMessageInteractions,
   } = state;
 
+  // Confirmation is handled by the page-level ConfirmDialog before this
+  // runs; this just performs the delete + reload.
   const deleteConversation = async (conversationToDelete) => {
-    const result = await Swal.fire({
-      title: "Are you sure?",
-      text: "You won't be able to revert this!",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#3085d6",
-      cancelButtonColor: "#d33",
-      confirmButtonText: "Yes, delete it!",
-    });
-
-    if (!result.isConfirmed) return;
-
     await api.delete(`/conversations/${conversationToDelete}`);
     conversations.reload();
-    Swal.fire({
-      title: "Deleted!",
-      text: "Your file has been deleted.",
-      icon: "success",
-    });
   };
 
   const sendMessage = async (event) => {
@@ -136,14 +119,9 @@ const useMessageActions = ({
     }
   };
 
-  const toggleMessageMenu = (messageId) => {
-    setOpenMenu((current) => (current === messageId ? null : messageId));
-  };
-
   const selectMessage = (messageId) => {
-    setSelectedMessageId(messageId);
+    setSelectedMessageId((current) => (current === messageId ? null : messageId));
     setEmojiMessageId(null);
-    setOpenMenu(null);
   };
 
   const openEmojiPicker = (messageId) => {
@@ -159,9 +137,8 @@ const useMessageActions = ({
   useEffect(() => {
     const handleOutsideInteraction = (event) => {
       if (
-        !event.target.closest(".message-interaction") &&
-        !event.target.closest(".message-bubble") &&
-        !event.target.closest(".message-menu")
+        !event.target.closest("[data-message-row]") &&
+        !event.target.closest("[data-emoji-picker]")
       ) {
         closeMessageInteractions();
       }
@@ -176,7 +153,6 @@ const useMessageActions = ({
     deleteConversation,
     sendMessage,
     reactToMessage,
-    toggleMessageMenu,
     selectMessage,
     openEmojiPicker,
     replyToMessage,

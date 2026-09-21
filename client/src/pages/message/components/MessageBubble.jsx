@@ -1,14 +1,20 @@
 import {
   Delete,
+  Done,
+  DoneAll,
   Edit,
   EmojiEmotions,
-  MoreVert,
   Reply,
 } from "@mui/icons-material";
 import EmojiPicker from "emoji-picker-react";
-import { AnimatePresence, motion as Motion } from "framer-motion";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+
+import Avatar from "../../../components/ui/Avatar";
+import Button from "../../../components/ui/Button";
+import IconButton from "../../../components/ui/IconButton";
+import { cx } from "../../../utility/cx";
+import useButtonColorFix from "../../../utility/useButtonColorFix";
 
 const emojiPickerWidth = 280;
 const emojiPickerHeight = 360;
@@ -26,16 +32,24 @@ const formatMessageTime = (date) => {
   });
 };
 
+const formatFullTime = (date) => {
+  if (!date) return "";
+  const parsedDate = new Date(date);
+  if (Number.isNaN(parsedDate.getTime())) return "";
+  return parsedDate.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+};
+
 const MessageBubble = ({
   message,
   isOwn,
+  otherUser,
+  groupStart,
+  groupEnd,
   isEditing,
   isDeleting,
-  openMenu,
   editBody,
   editLoading,
   setEditBody,
-  onToggleMenu,
   onEdit,
   onDelete,
   onCancelEdit,
@@ -48,24 +62,11 @@ const MessageBubble = ({
   onOpenEmoji,
   onCloseInteraction,
 }) => {
-  const messageMenuRef = useRef(null);
   const emojiButtonRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const [emojiPickerPosition, setEmojiPickerPosition] = useState(null);
-  const [isMessageHovered, setIsMessageHovered] = useState(false);
 
-  useEffect(() => {
-    if (openMenu !== message.id) return undefined;
-
-    const handleOutsideClick = (event) => {
-      if (!messageMenuRef.current?.contains(event.target)) {
-        onCloseInteraction();
-      }
-    };
-
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, [message.id, onCloseInteraction, openMenu]);
+  const primaryFix = useButtonColorFix("primary");
 
   useLayoutEffect(() => {
     if (!emojiOpen || !emojiButtonRef.current) {
@@ -141,227 +142,182 @@ const MessageBubble = ({
       document.removeEventListener("mousedown", handleOutsideEmojiClick);
   }, [emojiOpen, onCloseInteraction]);
 
+  const showActions = selected || emojiOpen;
+
   return (
     <div
-      className={`message-row ${isOwn ? "own" : ""}`}
-      onMouseEnter={() => setIsMessageHovered(true)}
-      onMouseLeave={() => setIsMessageHovered(false)}
-      onFocus={() => setIsMessageHovered(true)}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) {
-          setIsMessageHovered(false);
-        }
-      }}
+      className={cx("flex", groupStart ? "mt-3" : "mt-0.5", isOwn ? "justify-end" : "justify-start")}
     >
-      {/* Editing */}
-      {isEditing ? (
-        <div className="message-edit-box">
-          <input
-            value={editBody}
-            onChange={(event) => setEditBody(event.target.value)}
-            autoFocus
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                onSaveEdit(message.id);
-              }
-
-              if (event.key === "Escape") {
-                onCancelEdit();
-              }
-            }}
-          />
-
-          <div className="message-edit-actions">
-            <button
-              type="button"
-              className="outline-button small"
-              onClick={onCancelEdit}
-              disabled={editLoading}
-            >
-              Cancel
-            </button>
-
-            <button
-              type="button"
-              className="primary-button small"
-              onClick={() => onSaveEdit(message.id)}
-              disabled={editLoading || !editBody.trim()}
-            >
-              {editLoading ? "Saving..." : "Save"}
-            </button>
+      <div
+        className={cx(
+          "flex max-w-[86%] items-end gap-1.5 sm:max-w-[75%]",
+          isOwn ? "flex-row-reverse" : "flex-row",
+        )}
+      >
+        {!isOwn && (
+          <div className="size-6 shrink-0">
+            {groupEnd && <Avatar person={otherUser} size="xs" />}
           </div>
-        </div>
-      ) : (
-        <div
-          className={`message-bubble ${isOwn ? "own" : ""}`}
-          onClick={() => onSelectMessage(message.id)}
-        >
-          {message.replyTo && (
-            <div className="message-reply-preview">{message.replyTo.body}</div>
+        )}
+
+        <div className="relative flex min-w-0 flex-col">
+          {isEditing ? (
+            <div className="w-64 max-w-[70vw] rounded-2xl border border-line bg-panel p-2.5 shadow-soft">
+              <input
+                value={editBody}
+                onChange={(event) => setEditBody(event.target.value)}
+                autoFocus
+                aria-label="Edit message"
+                className="w-full rounded-md border border-line bg-paper px-2.5 py-2 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    onSaveEdit(message.id);
+                  }
+                  if (event.key === "Escape") onCancelEdit();
+                }}
+              />
+              <div className="mt-2 flex justify-end gap-1.5">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={onCancelEdit}
+                  disabled={editLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  loading={editLoading}
+                  disabled={editLoading || !editBody.trim()}
+                  onClick={() => onSaveEdit(message.id)}
+                  style={primaryFix.style}
+                  onMouseEnter={primaryFix.onMouseEnter}
+                  onMouseLeave={primaryFix.onMouseLeave}
+                >
+                  Save
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              title={formatFullTime(message.createdAt)}
+              onClick={() => onSelectMessage(message.id)}
+              className={cx(
+                "min-w-0 rounded-2xl px-3.5 py-2 text-left text-sm leading-relaxed wrap-break-word shadow-sm transition-opacity",
+                isOwn ? "bg-accent text-white" : "border border-line bg-panel text-ink",
+                message.pending && "opacity-70",
+              )}
+            >
+              {message.replyTo && (
+                <div
+                  className={cx(
+                    "mb-1.5 truncate rounded-md border-l-2 px-2 py-1 text-xs",
+                    isOwn
+                      ? "border-white/50 bg-white/10 text-white/85"
+                      : "border-accent bg-soft text-muted",
+                  )}
+                >
+                  {message.replyTo.body}
+                </div>
+              )}
+
+              <span className="whitespace-pre-wrap">{message.body}</span>
+
+              <span
+                className={cx(
+                  "mt-1 flex items-center justify-end gap-1 text-[10px]",
+                  isOwn ? "text-white/75" : "text-muted",
+                )}
+              >
+                {message.editedAt && <span className="italic">edited</span>}
+                {message.pending ? (
+                  <span>Sending…</span>
+                ) : (
+                  <span>{formatMessageTime(message.createdAt)}</span>
+                )}
+                {isOwn && !message.pending && (
+                  <span className="flex items-center">
+                    {message.status === "read" || message.status === "delivered" ? (
+                      <DoneAll
+                        fontSize="inherit"
+                        className={message.status === "read" ? "text-[13px] text-sky-300" : "text-[13px]"}
+                      />
+                    ) : (
+                      <Done fontSize="inherit" className="text-[13px]" />
+                    )}
+                  </span>
+                )}
+              </span>
+            </button>
           )}
 
-          {message.body}
-
-          <span className="message-meta">
-            {message.editedAt && <small className="edited-label">edited</small>}
-
-            {message.pending && (
-              <small className="pending-label">Sending...</small>
-            )}
-
-            <small className="message-time">
-              {formatMessageTime(message.createdAt)}
-            </small>
-
-            {isOwn && !message.pending && (
-              <small
-                className={`message-status status-${message.status || "sent"}`}
-              >
-                {message.status === "read"
-                  ? ""
-                  : message.status === "delivered"
-                    ? "✓✓"
-                    : "✓"}
-              </small>
-            )}
-          </span>
-
           {message.reactions?.length > 0 && (
-            <div className="message-reactions">
+            <div className={cx("mt-1 flex flex-wrap gap-1", isOwn ? "justify-end" : "justify-start")}>
               {message.reactions.map((reaction) => (
-                <span key={`${reaction.userId}-${reaction.emoji}`}>
+                <span
+                  key={`${reaction.userId}-${reaction.emoji}`}
+                  className="rounded-full border border-line bg-panel px-1.5 py-0.5 text-xs shadow-sm"
+                >
                   {reaction.emoji}
                 </span>
               ))}
             </div>
           )}
 
-          {isOwn && (
-            <AnimatePresence>
-              {isMessageHovered && (
-                <Motion.div
-                  className="desktop-message-actions"
-                  initial={{ opacity: 0, scale: 0.94, x: 8 }}
-                  animate={{ opacity: 1, scale: 1, x: 0 }}
-                  exit={{ opacity: 0, scale: 0.94, x: 8 }}
-                  transition={{ duration: 0.16, ease: "easeOut" }}
-                  onMouseDown={(event) => event.stopPropagation()}
-                >
-                  <button
-                    type="button"
-                    className="desktop-message-action edit-item"
-                    aria-label="Edit message"
-                    title="Edit message"
-                    onClick={() => {
-                      onCloseInteraction();
-                      onEdit(message);
-                    }}
-                  >
-                    <Edit fontSize="small" />
-                  </button>
-                  <button
-                    type="button"
-                    className="desktop-message-action delete-item"
-                    aria-label={
-                      isDeleting ? "Deleting message" : "Delete message"
-                    }
-                    title={isDeleting ? "Deleting message" : "Delete message"}
-                    onClick={() => {
-                      onCloseInteraction();
-                      onDelete(message.id);
-                    }}
-                    disabled={isDeleting}
-                  >
-                    <Delete fontSize="small" />
-                  </button>
-                </Motion.div>
+          {!isEditing && showActions && (
+            <div
+              className={cx(
+                "mt-1 flex items-center gap-0.5 rounded-full border border-line bg-panel p-0.5 shadow-soft",
+                isOwn ? "self-end" : "self-start",
               )}
-            </AnimatePresence>
+            >
+              <IconButton
+                label="Reply to message"
+                icon={<Reply fontSize="small" />}
+                size="sm"
+                onClick={() => onReply(message)}
+              />
+              <IconButton
+                ref={emojiButtonRef}
+                label="React to message"
+                icon={<EmojiEmotions fontSize="small" />}
+                size="sm"
+                active={emojiOpen}
+                onClick={onOpenEmoji}
+              />
+              {isOwn && (
+                <IconButton
+                  label="Edit message"
+                  icon={<Edit fontSize="small" />}
+                  size="sm"
+                  onClick={() => onEdit(message)}
+                />
+              )}
+              {isOwn && (
+                <IconButton
+                  label={isDeleting ? "Deleting message" : "Delete message"}
+                  icon={<Delete fontSize="small" />}
+                  size="sm"
+                  variant="danger"
+                  disabled={isDeleting}
+                  onClick={() => onDelete(message.id)}
+                />
+              )}
+            </div>
           )}
         </div>
-      )}
-
-      {!isEditing && selected && (
-        <div
-          className="message-interaction"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <button
-            type="button"
-            className="message-interaction-button"
-            aria-label="Reply to message"
-            title="Reply to message"
-            onClick={() => {
-              onCloseInteraction();
-              onReply(message);
-            }}
-          >
-            <Reply fontSize="small" /> Reply
-          </button>
-
-          <div className="message-reaction-control">
-            <button
-              type="button"
-              className="message-interaction-button"
-              aria-label="React to message"
-              title="React to message"
-              ref={emojiButtonRef}
-              onClick={onOpenEmoji}
-            >
-              <EmojiEmotions fontSize="small" /> Emoji
-            </button>
-          </div>
-        </div>
-      )}
-
-      {!isEditing && !selected && (
-        <AnimatePresence>
-          {isMessageHovered && (
-            <Motion.div
-              className="message-interaction desktop-hover-interaction"
-              initial={{ opacity: 0, scale: 0.96, x: 6 }}
-              animate={{ opacity: 1, scale: 1, x: 0 }}
-              exit={{ opacity: 0, scale: 0.96, x: 6 }}
-              transition={{ duration: 0.16, ease: "easeOut" }}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <button
-                type="button"
-                className="message-interaction-button"
-                aria-label="Reply to message"
-                title="Reply to message"
-                onClick={() => {
-                  onCloseInteraction();
-                  onReply(message);
-                }}
-              >
-                <Reply fontSize="small" /> Reply
-              </button>
-
-              <div className="message-reaction-control">
-                <button
-                  type="button"
-                  className="message-interaction-button"
-                  aria-label="React to message"
-                  title="React to message"
-                  ref={emojiButtonRef}
-                  onClick={onOpenEmoji}
-                >
-                  <EmojiEmotions fontSize="small" /> Emoji
-                </button>
-              </div>
-            </Motion.div>
-          )}
-        </AnimatePresence>
-      )}
+      </div>
 
       {emojiOpen &&
         emojiPickerPosition &&
         createPortal(
           <div
             ref={emojiPickerRef}
-            className="message-reaction-picker"
+            data-emoji-picker
+            className="fixed z-40 overflow-hidden rounded-xl border border-line bg-panel shadow-soft"
             style={emojiPickerPosition}
             onMouseDown={(event) => event.stopPropagation()}
           >
@@ -379,55 +335,6 @@ const MessageBubble = ({
           </div>,
           document.body,
         )}
-
-      {/* Message Menu */}
-      {isOwn && (
-        <div className="message-menu-wrapper" ref={messageMenuRef}>
-          <button
-            type="button"
-            className="message-menu-button"
-            aria-label="Message options"
-            title="Message options"
-            onClick={(event) => {
-              event.stopPropagation();
-              onToggleMenu(message.id);
-            }}
-          >
-            <MoreVert />
-          </button>
-
-          {openMenu === message.id && (
-            <div className="message-menu">
-              <button
-                type="button"
-                className="message-menu-item edit-item"
-                aria-label="Edit message"
-                title="Edit message"
-                onClick={() => {
-                  onCloseInteraction();
-                  onEdit(message);
-                }}
-              >
-                <Edit fontSize="small" />
-              </button>
-
-              <button
-                type="button"
-                className="message-menu-item delete-item"
-                aria-label={isDeleting ? "Deleting message" : "Delete message"}
-                title={isDeleting ? "Deleting message" : "Delete message"}
-                onClick={() => {
-                  onCloseInteraction();
-                  onDelete(message.id);
-                }}
-                disabled={isDeleting}
-              >
-                <Delete fontSize="small" />
-              </button>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 };
