@@ -27,11 +27,17 @@ function splitEmojiRuns(text) {
  * 18px (confirmed clipped at 13-17px, clean at 18px+); since this app's body
  * text all renders well under that, emoji runs are scaled up relative to
  * the surrounding text so they clear the threshold regardless of context.
+ *
+ * The line-height matters as much as the font-size: the glyph needs a line
+ * box taller than its own em-square to render uncropped, so the emoji span
+ * must inherit the ancestor paragraph's `leading-relaxed` (1.625) rather
+ * than getting a tight line-height of its own — a `leading-none` override
+ * here reintroduces the exact clipping this component exists to fix.
  */
 export default function RichText({ text }) {
   return splitEmojiRuns(text ?? "").map((run, index) =>
     run.isEmoji ? (
-      <span key={index} className="inline-block align-[-0.2em] text-[1.4em] leading-none">
+      <span key={index} className="inline-block align-[-0.2em] text-[1.4em]">
         {run.text}
       </span>
     ) : (
