@@ -1,6 +1,6 @@
 import { EmojiEmotions } from "@mui/icons-material";
 import EmojiPicker from "emoji-picker-react";
-console.log(EmojiPicker)   
+ 
 const EmojiPickerButton = ({ open, onToggle, onEmoji }) => (
   <div className="emoji-wrapper">
     <button

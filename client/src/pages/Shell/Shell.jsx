@@ -14,6 +14,7 @@ import Topbar from "./components/Topbar";
 import useSocket from "./hooks/useSocket";
 import useTabNotifications from "./hooks/useTabNotifications";
 import useUserSearch from "./hooks/useUserSearch";
+import PrivacyPolicy from '../privacyPolicy/PrivacyPolicy';
 
 export default function Shell({ user, onLogout }) {
   const navigate = useNavigate();
