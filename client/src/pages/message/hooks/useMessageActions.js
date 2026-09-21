@@ -96,6 +96,74 @@ const useMessageActions = ({
     }
   };
 
+  const sendAttachment = async (file, { durationSec } = {}) => {
+    if (!conversationId || !file || sending) return;
+
+    const optimisticId = `pending-${Date.now()}`;
+    const localUrl = URL.createObjectURL(file);
+    const kind = file.type.startsWith("image/")
+      ? "image"
+      : file.type.startsWith("audio/")
+        ? "voice"
+        : "file";
+    const optimisticMessage = {
+      id: optimisticId,
+      body:
+        kind === "image" ? "📷 Photo" : kind === "voice" ? "🎤 Voice message" : `📎 ${file.name}`,
+      type: "attachment",
+      attachment: {
+        url: localUrl,
+        fileName: file.name,
+        mimeType: file.type,
+        size: file.size,
+        kind,
+        durationSec,
+      },
+      createdAt: new Date().toISOString(),
+      senderId: user.id,
+      status: "sent",
+      replyTo: null,
+      reactions: [],
+      pending: true,
+    };
+
+    setSendError("");
+    setSending(true);
+    scrollToBottom();
+    thread.setData((messages = []) => [...messages, optimisticMessage]);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      if (durationSec != null) formData.append("durationSec", String(durationSec));
+
+      const { data } = await api.post(
+        `/conversations/${conversationId}/attachments`,
+        formData,
+      );
+      const saved = data.data;
+
+      thread.setData((messages = []) =>
+        messages.map((message) =>
+          message.id === optimisticId
+            ? { ...saved, id: saved.id, senderId: String(saved.senderId), pending: false }
+            : message,
+        ),
+      );
+      conversations.reload();
+    } catch (error) {
+      thread.setData((messages = []) =>
+        messages.filter((message) => message.id !== optimisticId),
+      );
+      setSendError(
+        error.response?.data?.error?.message || "Attachment could not be sent.",
+      );
+    } finally {
+      URL.revokeObjectURL(localUrl);
+      setSending(false);
+    }
+  };
+
   const reactToMessage = async (messageId, emoji) => {
     setSelectedMessageId(messageId);
     setEmojiMessageId(null);
@@ -152,6 +220,7 @@ const useMessageActions = ({
   return {
     deleteConversation,
     sendMessage,
+    sendAttachment,
     reactToMessage,
     selectMessage,
     openEmojiPicker,

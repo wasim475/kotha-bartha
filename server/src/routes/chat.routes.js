@@ -1,4 +1,5 @@
 const express = require("express");
+const fs = require("fs");
 const mongoose = require("mongoose");
 const User = require("../models/User");
 const Conversation = require("../models/Conversation");
@@ -7,6 +8,8 @@ const { pairKey } = require("../utils/ids");
 const { safeUser } = require("../utils/serializers");
 const { emitToUser } = require("../utils/realtime");
 const { isBlockedEitherWay } = require("../utils/blocks");
+const { isOnline } = require("../utils/presence");
+const { upload, attachmentKindFor } = require("../middleware/upload");
 
 const router = express.Router();
 
@@ -120,7 +123,7 @@ router.get("/conversations", async (req, res, next) => {
 
         return {
           id: conversation._id,
-          user: safeUser(other),
+          user: { ...safeUser(other), isOnline: isOnline(other._id) },
           lastMessage: conversation.lastMessage,
           lastMessageAt: conversation.lastMessageAt,
           unreadCount:
@@ -264,6 +267,7 @@ router.get(
                 durationSec: message.call.durationSec || 0,
               }
             : null,
+          attachment: message.attachment || null,
           createdAt: message.createdAt,
           senderId: message.senderId.toString(),
           status: message.status || "sent",
@@ -531,6 +535,139 @@ router.post("/conversations/:conversationId/calls", async (req, res, next) => {
 });
 
 // ============================================================
+// ATTACHMENTS
+//
+// A single multipart request: uploads the file to local disk and creates
+// the message in one step (unlike calls, there's no separate client-side
+// report — the sender's own POST is the one and only write).
+// ============================================================
+
+const attachmentLabel = (kind, fileName) => {
+  if (kind === "image") return "📷 Photo";
+  if (kind === "voice") return "🎤 Voice message";
+  return `📎 ${fileName}`.slice(0, 120);
+};
+
+router.post(
+  "/conversations/:conversationId/attachments",
+  (req, res, next) => {
+    upload.single("file")(req, res, (error) => {
+      if (!error) return next();
+      if (error.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({
+          error: { code: "FILE_TOO_LARGE", message: "File is larger than 15MB." },
+        });
+      }
+      if (error.message === "UNSUPPORTED_FILE_TYPE") {
+        return res.status(400).json({
+          error: { code: "UNSUPPORTED_FILE_TYPE", message: "That file type isn't supported." },
+        });
+      }
+      next(error);
+    });
+  },
+  async (req, res, next) => {
+    const cleanupUploadedFile = () => {
+      if (req.file) fs.unlink(req.file.path, () => {});
+    };
+
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          error: { code: "NO_FILE", message: "No file was attached." },
+        });
+      }
+
+      const conversation = await Conversation.findOne({
+        _id: req.params.conversationId,
+        participantIds: req.user._id,
+      });
+
+      if (!conversation) {
+        cleanupUploadedFile();
+        return res.status(404).json({
+          error: { code: "NOT_FOUND", message: "Conversation not found." },
+        });
+      }
+
+      const recipientId = conversation.participantIds.find(
+        (id) => id.toString() !== req.user._id.toString(),
+      );
+
+      if (await isBlockedEitherWay(req.user._id, recipientId)) {
+        cleanupUploadedFile();
+        return res.status(403).json({
+          error: { code: "BLOCKED", message: "You can't message this user." },
+        });
+      }
+
+      const kind = attachmentKindFor(req.file.mimetype);
+      const durationSec =
+        kind === "voice" ? Math.max(0, Math.round(Number(req.body.durationSec) || 0)) : undefined;
+      const fileName = String(req.file.originalname || "file").slice(0, 200);
+      const attachment = {
+        url: `/uploads/${req.file.filename}`,
+        fileName,
+        mimeType: req.file.mimetype,
+        size: req.file.size,
+        kind,
+        durationSec,
+      };
+      const body = attachmentLabel(kind, fileName);
+
+      conversation.hiddenFor = (conversation.hiddenFor || []).filter(
+        (id) =>
+          id.toString() !== req.user._id.toString() &&
+          id.toString() !== recipientId.toString(),
+      );
+
+      const message = await Message.create({
+        conversationId: conversation._id,
+        senderId: req.user._id,
+        recipientId,
+        body,
+        type: "attachment",
+        attachment,
+        status: "delivered",
+      });
+
+      conversation.lastMessage = body;
+      conversation.lastMessageAt = message.createdAt;
+      conversation.unreadCounts?.set(
+        recipientId.toString(),
+        (conversation.unreadCounts?.get(recipientId.toString()) || 0) + 1,
+      );
+      await conversation.save();
+
+      const payload = {
+        id: message._id.toString(),
+        conversationId: conversation._id.toString(),
+        body: message.body,
+        type: "attachment",
+        attachment,
+        createdAt: message.createdAt,
+        senderId: req.user._id.toString(),
+        sender: { fullName: req.user.fullName },
+      };
+
+      emitToUser(req, recipientId, "message:new", payload);
+
+      res.status(201).json({
+        data: {
+          ...payload,
+          status: message.status,
+          replyTo: null,
+          reactions: [],
+        },
+      });
+    } catch (error) {
+      cleanupUploadedFile();
+      next(error);
+    }
+  },
+);
+
+// ============================================================
 // REACT TO MESSAGE
 // ============================================================
 
@@ -650,11 +787,11 @@ router.patch(
         });
       }
 
-      if (message.type === "call") {
+      if (message.type !== "text") {
         return res.status(400).json({
           error: {
             code: "INVALID_MESSAGE",
-            message: "Call records can't be edited.",
+            message: "This message can't be edited.",
           },
         });
       }

@@ -1,9 +1,23 @@
-import { Close, EmojiEmotions, Send } from "@mui/icons-material";
+import {
+  AttachFile,
+  Close,
+  Delete,
+  EmojiEmotions,
+  Mic,
+  Send,
+} from "@mui/icons-material";
 import EmojiPicker from "emoji-picker-react";
 import { useEffect, useRef, useState } from "react";
 
 import IconButton from "../../../components/ui/IconButton";
 import useButtonColorFix from "../../../utility/useButtonColorFix";
+import useVoiceRecorder from "../hooks/useVoiceRecorder";
+
+const formatRecordingTime = (totalSeconds) => {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+};
 
 const MessageComposer = ({
   body,
@@ -13,11 +27,22 @@ const MessageComposer = ({
   onTyping,
   replyingTo,
   onCancelReply,
+  onSendAttachment,
 }) => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const emojiWrapperRef = useRef(null);
   const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
   const sendFix = useButtonColorFix("primary");
+
+  const recorder = useVoiceRecorder({
+    onRecorded: (blob, durationSec) => {
+      const file = new File([blob], `voice-note.webm`, {
+        type: blob.type || "audio/webm",
+      });
+      onSendAttachment(file, { durationSec });
+    },
+  });
 
   const addEmoji = (emoji) => {
     setBody((current) => `${current}${emoji}`);
@@ -65,64 +90,119 @@ const MessageComposer = ({
         </div>
       )}
 
-      <form
-        className="mx-auto flex w-full max-w-4xl items-end gap-1.5 p-2.5 sm:gap-2 sm:px-6 sm:py-3 lg:px-10"
-        onSubmit={submit}
-      >
-        <div className="relative shrink-0" ref={emojiWrapperRef}>
+      {recorder.recording ? (
+        <div className="mx-auto flex w-full max-w-4xl items-center gap-2 p-2.5 sm:gap-3 sm:px-6 sm:py-3 lg:px-10">
           <IconButton
-            label="Choose emoji"
-            icon={<EmojiEmotions fontSize="small" />}
-            active={showEmojiPicker}
-            onClick={() => setShowEmojiPicker((current) => !current)}
+            label="Cancel recording"
+            icon={<Delete fontSize="small" />}
+            variant="danger"
+            onClick={recorder.cancel}
+          />
+          <div className="flex flex-1 items-center gap-2 rounded-2xl border border-line bg-paper px-3.5 py-2">
+            <span className="size-2.5 shrink-0 animate-pulse rounded-full bg-danger motion-reduce:animate-none" />
+            <span className="text-sm font-medium text-ink">Recording…</span>
+            <span className="ml-auto text-sm tabular-nums text-muted">
+              {formatRecordingTime(recorder.seconds)}
+            </span>
+          </div>
+          <button
+            type="button"
+            aria-label="Send voice message"
+            onClick={recorder.stop}
+            style={sendFix.style}
+            onMouseEnter={sendFix.onMouseEnter}
+            onMouseLeave={sendFix.onMouseLeave}
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-full font-semibold text-white shadow-sm transition-colors motion-safe:duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            <Send fontSize="small" />
+          </button>
+        </div>
+      ) : (
+        <form
+          className="mx-auto flex w-full max-w-4xl items-end gap-1.5 p-2.5 sm:gap-2 sm:px-6 sm:py-3 lg:px-10"
+          onSubmit={submit}
+        >
+          <div className="relative shrink-0" ref={emojiWrapperRef}>
+            <IconButton
+              label="Choose emoji"
+              icon={<EmojiEmotions fontSize="small" />}
+              active={showEmojiPicker}
+              onClick={() => setShowEmojiPicker((current) => !current)}
+            />
+
+            {showEmojiPicker && (
+              <div className="absolute bottom-full left-0 z-40 mb-2 overflow-hidden rounded-xl border border-line bg-panel shadow-soft">
+                <EmojiPicker
+                  onEmojiClick={(emojiData) => addEmoji(emojiData.emoji)}
+                  width={300}
+                  height={360}
+                  searchDisabled={false}
+                  previewConfig={{ showPreview: false }}
+                  lazyLoadEmojis
+                />
+              </div>
+            )}
+          </div>
+
+          <IconButton
+            label="Attach a file"
+            icon={<AttachFile fontSize="small" />}
+            onClick={() => fileInputRef.current?.click()}
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) onSendAttachment(file);
+            }}
           />
 
-          {showEmojiPicker && (
-            <div className="absolute bottom-full left-0 z-40 mb-2 overflow-hidden rounded-xl border border-line bg-panel shadow-soft">
-              <EmojiPicker
-                onEmojiClick={(emojiData) => addEmoji(emojiData.emoji)}
-                width={300}
-                height={360}
-                searchDisabled={false}
-                previewConfig={{ showPreview: false }}
-                lazyLoadEmojis
-              />
-            </div>
+          <textarea
+            ref={textareaRef}
+            value={body}
+            rows={1}
+            onChange={(event) => {
+              const value = event.target.value;
+              setBody(value);
+              onTyping(value);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                submit();
+              }
+            }}
+            placeholder="Write a message…"
+            autoFocus
+            className="min-h-9 max-h-30 flex-1 resize-none rounded-2xl border border-line bg-paper px-3.5 py-2 text-sm text-ink outline-none placeholder:text-muted focus-visible:ring-2 focus-visible:ring-accent"
+          />
+
+          {body.trim() ? (
+            <button
+              type="submit"
+              disabled={sending}
+              aria-label={sending ? "Sending message" : "Send message"}
+              style={sendFix.style}
+              onMouseEnter={sendFix.onMouseEnter}
+              onMouseLeave={sendFix.onMouseLeave}
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-full font-semibold text-white shadow-sm transition-colors motion-safe:duration-150 disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              <Send fontSize="small" />
+            </button>
+          ) : (
+            <IconButton
+              label="Record a voice message"
+              icon={<Mic fontSize="small" />}
+              disabled={sending}
+              onClick={recorder.start}
+            />
           )}
-        </div>
-
-        <textarea
-          ref={textareaRef}
-          value={body}
-          rows={1}
-          onChange={(event) => {
-            const value = event.target.value;
-            setBody(value);
-            onTyping(value);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              submit();
-            }
-          }}
-          placeholder="Write a message…"
-          autoFocus
-          className="min-h-9 max-h-30 flex-1 resize-none rounded-2xl border border-line bg-paper px-3.5 py-2 text-sm text-ink outline-none placeholder:text-muted focus-visible:ring-2 focus-visible:ring-accent"
-        />
-
-        <button
-          type="submit"
-          disabled={sending || !body.trim()}
-          aria-label={sending ? "Sending message" : "Send message"}
-          style={sendFix.style}
-          onMouseEnter={sendFix.onMouseEnter}
-          onMouseLeave={sendFix.onMouseLeave}
-          className="inline-flex size-9 shrink-0 items-center justify-center rounded-full font-semibold text-white shadow-sm transition-colors motion-safe:duration-150 disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          <Send fontSize="small" />
-        </button>
-      </form>
+        </form>
+      )}
     </div>
   );
 };

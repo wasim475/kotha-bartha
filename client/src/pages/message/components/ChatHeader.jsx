@@ -2,6 +2,7 @@ import { ArrowBackRounded, Call, CallEnd } from "@mui/icons-material";
 
 import Avatar from "../../../components/ui/Avatar";
 import IconButton from "../../../components/ui/IconButton";
+import { formatTime } from "../../../utility/helpers";
 
 const ChatHeader = ({
   selected,
@@ -34,12 +35,20 @@ const ChatHeader = ({
         <p className="min-w-0 flex-1 text-sm text-muted">Conversation not found</p>
       ) : (
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <Avatar person={selected.user} size="md" />
+          <div className="relative shrink-0">
+            <Avatar person={selected.user} size="md" />
+            {selected.user.isOnline && (
+              <span
+                className="absolute right-0 bottom-0 size-2.5 rounded-full border-2 border-panel bg-emerald-500"
+                aria-hidden="true"
+              />
+            )}
+          </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-ink">
               {selected.user.fullName}
             </p>
-            {isTyping && (
+            {isTyping ? (
               <p className="flex items-center gap-1 text-xs font-medium text-accent">
                 <span className="flex gap-0.5">
                   <span className="size-1 animate-bounce rounded-full bg-accent [animation-delay:-0.2s] motion-reduce:animate-none" />
@@ -48,7 +57,15 @@ const ChatHeader = ({
                 </span>
                 typing
               </p>
-            )}
+            ) : selected.user.isOnline ? (
+              <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                Active now
+              </p>
+            ) : selected.user.lastSeenAt ? (
+              <p className="text-xs text-muted">
+                Active {formatTime(selected.user.lastSeenAt)}
+              </p>
+            ) : null}
           </div>
         </div>
       )}

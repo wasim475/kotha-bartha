@@ -5,6 +5,7 @@ const cookieParser = require("cookie-parser");
 const rateLimit = require("express-rate-limit");
 const authRoutes = require("./routes/auth");
 const dataRoutes = require("./routes");
+const { uploadsDir } = require("./middleware/upload");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -37,6 +38,18 @@ app.use(
 
 app.get("/api/v1/health", (req, res) =>
   res.json({ data: { status: "ok", service: "kotha-bartha-api" } }),
+);
+
+// Uploaded message attachments (images/files/voice notes) — served as
+// plain static assets. Helmet's default same-origin CORP would otherwise
+// block the client (a different origin in dev) from loading them.
+app.use(
+  "/uploads",
+  (req, res, next) => {
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    next();
+  },
+  express.static(uploadsDir, { maxAge: "7d", immutable: true }),
 );
 
 app.use("/api/v1/auth", authRoutes);

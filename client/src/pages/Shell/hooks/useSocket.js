@@ -69,6 +69,7 @@ export default function useSocket(userId) {
     socket.on("typing:start", forward("typing:start"));
     socket.on("typing:stop", forward("typing:stop"));
     socket.on("call:signal", forward("call:signal"));
+    socket.on("presence:update", forward("presence:update"));
 
     return () => {
       setActiveSocket(undefined);

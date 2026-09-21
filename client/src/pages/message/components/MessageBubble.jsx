@@ -2,8 +2,10 @@ import {
   Delete,
   Done,
   DoneAll,
+  Download,
   Edit,
   EmojiEmotions,
+  InsertDriveFile,
   Reply,
 } from "@mui/icons-material";
 import EmojiPicker from "emoji-picker-react";
@@ -14,7 +16,15 @@ import Avatar from "../../../components/ui/Avatar";
 import Button from "../../../components/ui/Button";
 import IconButton from "../../../components/ui/IconButton";
 import { cx } from "../../../utility/cx";
+import { toFileUrl } from "../../../utility/fileUrl";
 import useButtonColorFix from "../../../utility/useButtonColorFix";
+
+const formatFileSize = (bytes) => {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
 
 const emojiPickerWidth = 280;
 const emojiPickerHeight = 360;
@@ -149,6 +159,8 @@ const MessageBubble = ({
   }, [emojiOpen, onCloseInteraction]);
 
   const showActions = selected || emojiOpen;
+  const isAttachment = message.type === "attachment";
+  const attachment = message.attachment || {};
 
   return (
     <div
@@ -205,6 +217,99 @@ const MessageBubble = ({
                   Save
                 </Button>
               </div>
+            </div>
+          ) : isAttachment ? (
+            <div
+              onClick={() => onSelectMessage(message.id)}
+              className={cx(
+                "min-w-0 rounded-2xl text-sm leading-relaxed shadow-sm transition-opacity",
+                attachment.kind === "image" ? "p-1" : "px-3.5 py-2",
+                isOwn ? "text-white" : "text-ink",
+                message.pending && "opacity-70",
+              )}
+              style={bubbleFix.style}
+              onMouseEnter={bubbleFix.onMouseEnter}
+              onMouseLeave={bubbleFix.onMouseLeave}
+            >
+              {message.replyTo && (
+                <div
+                  className={cx(
+                    "mb-1.5 truncate rounded-md border-l-2 px-2 py-1 text-xs",
+                    attachment.kind === "image" && "mx-1 mt-1",
+                    isOwn
+                      ? "border-white/50 bg-white/10 text-white/85"
+                      : "border-accent bg-soft text-muted",
+                  )}
+                >
+                  {message.replyTo.body}
+                </div>
+              )}
+
+              {attachment.kind === "image" && (
+                <a href={toFileUrl(attachment.url)} target="_blank" rel="noreferrer">
+                  <img
+                    src={toFileUrl(attachment.url)}
+                    alt={attachment.fileName || "Photo"}
+                    loading="lazy"
+                    className="max-h-72 max-w-72 rounded-xl object-cover"
+                  />
+                </a>
+              )}
+
+              {attachment.kind === "voice" && (
+                <audio controls src={toFileUrl(attachment.url)} className="h-10 w-56 max-w-full" />
+              )}
+
+              {attachment.kind === "file" && (
+                <a
+                  href={toFileUrl(attachment.url)}
+                  download={attachment.fileName}
+                  className={cx(
+                    "flex min-w-0 items-center gap-2 rounded-lg",
+                    isOwn ? "hover:bg-white/10" : "hover:bg-black/5",
+                  )}
+                >
+                  <InsertDriveFile fontSize="small" className="shrink-0" />
+                  <span className="min-w-0 flex-1 truncate font-medium">
+                    {attachment.fileName || "File"}
+                  </span>
+                  <span
+                    className={cx(
+                      "shrink-0 text-[10px]",
+                      isOwn ? "text-white/75" : "text-muted",
+                    )}
+                  >
+                    {formatFileSize(attachment.size)}
+                  </span>
+                  <Download fontSize="small" className="shrink-0" />
+                </a>
+              )}
+
+              <span
+                className={cx(
+                  "mt-1 flex items-center justify-end gap-1 text-[10px]",
+                  attachment.kind === "image" && "px-1.5",
+                  isOwn ? "text-white/75" : "text-muted",
+                )}
+              >
+                {message.pending ? (
+                  <span>Sending…</span>
+                ) : (
+                  <span>{formatMessageTime(message.createdAt)}</span>
+                )}
+                {isOwn && !message.pending && (
+                  <span className="flex items-center">
+                    {message.status === "read" || message.status === "delivered" ? (
+                      <DoneAll
+                        fontSize="inherit"
+                        className={message.status === "read" ? "text-[13px] text-sky-300" : "text-[13px]"}
+                      />
+                    ) : (
+                      <Done fontSize="inherit" className="text-[13px]" />
+                    )}
+                  </span>
+                )}
+              </span>
             </div>
           ) : (
             <button
@@ -297,7 +402,7 @@ const MessageBubble = ({
                 active={emojiOpen}
                 onClick={onOpenEmoji}
               />
-              {isOwn && (
+              {isOwn && !isAttachment && (
                 <IconButton
                   label="Edit message"
                   icon={<Edit fontSize="small" />}

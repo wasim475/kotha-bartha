@@ -87,6 +87,24 @@ const useMessageRealtime = ({
     }
   });
 
+  useRealtime("presence:update", (event) => {
+    const { userId, isOnline, lastSeenAt } = event.detail;
+    conversations.setData((rows = []) =>
+      rows.map((row) =>
+        row.user.id === userId
+          ? {
+              ...row,
+              user: {
+                ...row.user,
+                isOnline,
+                lastSeenAt: lastSeenAt || row.user.lastSeenAt,
+              },
+            }
+          : row,
+      ),
+    );
+  });
+
   useRealtime("realtime:connected", () => {
     conversations.reload();
     if (conversationId) {

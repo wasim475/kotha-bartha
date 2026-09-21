@@ -126,7 +126,15 @@ const ConversationList = ({
               onClick={() => onOpenConversation(conversation.id)}
               className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
-              <Avatar person={conversation.user} size="md" />
+              <div className="relative shrink-0">
+                <Avatar person={conversation.user} size="md" />
+                {conversation.user.isOnline && (
+                  <span
+                    className="absolute right-0 bottom-0 size-2.5 rounded-full border-2 border-panel bg-emerald-500"
+                    aria-hidden="true"
+                  />
+                )}
+              </div>
 
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">

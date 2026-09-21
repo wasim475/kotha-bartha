@@ -26,12 +26,20 @@ const messageSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["text", "call"],
+      enum: ["text", "call", "attachment"],
       default: "text",
     },
     call: {
       outcome: { type: String, enum: ["completed", "missed", "cancelled"] },
       durationSec: { type: Number, default: 0 },
+    },
+    attachment: {
+      url: String,
+      fileName: String,
+      mimeType: String,
+      size: Number,
+      kind: { type: String, enum: ["image", "voice", "file"] },
+      durationSec: Number,
     },
     replyTo: {
       type: mongoose.Schema.Types.ObjectId,

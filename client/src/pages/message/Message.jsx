@@ -203,6 +203,7 @@ const Message = ({ user }) => {
                 setBody={setBody}
                 sending={sending}
                 onSend={actions.sendMessage}
+                onSendAttachment={actions.sendAttachment}
                 onTyping={notifyTyping}
                 replyingTo={replyingTo}
                 onCancelReply={() => setReplyingTo(null)}
