@@ -56,7 +56,8 @@ export default function useSocket(userId) {
       forward("message:new")(payload);
     };
 
-    socket.on("connect", forward("realtime:connected"));
+    socket.on("connect", () => { console.log("DEBUG socket connected", socket.id); forward("realtime:connected")(); });
+    socket.on("connect_error", (err) => console.log("DEBUG socket connect_error", err.message));
     socket.on("message:new", forwardNewMessage);
     socket.on("message:updated", forward("message:updated"));
     socket.on("message:deleted", forward("message:deleted"));
