@@ -6,10 +6,22 @@ import useAuthForm from "./hooks/useAuthForm";
 
 export default function AuthPage({ mode, onAuth }) {
   const signup = mode === "signup";
-  const { form, error, busy, update, submit } = useAuthForm({
+  const { form, error, busy, update, submit,googleLogin } = useAuthForm({
     signup,
     onAuth,
   });
+
+   const handleGoogleLogin = async (credentialResponse) => {
+    try {
+      const credential = credentialResponse.credential;
+
+      // Backend-এ পাঠাবে
+      console.log(credential);
+
+    } catch (error) {
+      console.error("Google login failed:", error);
+    }
+  };
 
   return (
     <main className="auth-page">
@@ -37,6 +49,7 @@ export default function AuthPage({ mode, onAuth }) {
           busy={busy}
           update={update}
           onSubmit={submit}
+          onGoogleLogin={googleLogin}
         />
 
         <AuthSwitch signup={signup} />

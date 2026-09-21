@@ -17,7 +17,20 @@ const userSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
-    passwordHash: { type: String, required: true, select: false },
+    passwordHash: { 
+      type: String, 
+      required: function () {
+        // শুধু normal (non-Google) signup হলেই পাসওয়ার্ড বাধ্যতামূলক
+        return !this.googleId;
+      }, 
+      select: false
+     },
+      googleId: {
+      type: String,
+      unique: true,
+      sparse: true, // যাদের googleId নেই, তাদের জন্য unique constraint স্কিপ হবে
+      index: true,
+    },
     bio: { type: String, trim: true, maxlength: 240, default: "" },
     avatar: { publicId: String, secureUrl: String },
     cover: { publicId: String, secureUrl: String },

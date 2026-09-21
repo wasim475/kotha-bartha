@@ -38,5 +38,27 @@ export default function useAuthForm({ signup, onAuth }) {
     }
   };
 
-  return { form, error, busy, update, submit };
+   // Google Login
+  const googleLogin = async (credentialResponse) => {
+    setBusy(true);
+    setError("");
+
+    try {
+      const { data } = await api.post("/auth/google", {
+        credential: credentialResponse.credential,
+      });
+
+      onAuth(data.data);
+      navigate("/app/feed");
+    } catch (requestError) {
+      setError(
+        requestError.response?.data?.error?.message ||
+          "Google login failed. Please try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return { form, error, busy, update, submit,googleLogin };
 }

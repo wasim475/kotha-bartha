@@ -1,4 +1,5 @@
 import { Send } from "@mui/icons-material";
+import GoogleLoginButton from './GoogleLogin';
 
 export default function AuthForm({
   signup,
@@ -7,6 +8,7 @@ export default function AuthForm({
   busy,
   update,
   onSubmit,
+  onGoogleLogin,
 }) {
   return (
     <form onSubmit={onSubmit} className="auth-form">
@@ -57,6 +59,10 @@ export default function AuthForm({
           />
         </label>
       )}
+
+       <GoogleLoginButton
+        onSuccess={onGoogleLogin}
+      />
 
       {error && <div className="form-error">{error}</div>}
 
