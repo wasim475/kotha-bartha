@@ -37,6 +37,7 @@ export default function ReactionButton({
   const pickerEnabled = types.length > 1;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [offset, setOffset] = useState(0);
+  const [placement, setPlacement] = useState("top");
   const [openedByKeyboard, setOpenedByKeyboard] = useState(false);
 
   const wrapRef = useRef(null);
@@ -136,7 +137,10 @@ export default function ReactionButton({
     };
   }, [pickerOpen, closePicker]);
 
-  // Keep the picker inside the viewport horizontally.
+  // Keep the picker inside the viewport — horizontally centered where
+  // possible, and flipped below the trigger instead of above it when there
+  // isn't enough room above (e.g. a reaction near the top of the screen,
+  // right under a sticky header).
   useLayoutEffect(() => {
     if (!pickerOpen) return;
     const wrap = wrapRef.current;
@@ -145,6 +149,7 @@ export default function ReactionButton({
 
     const wrapRect = wrap.getBoundingClientRect();
     const pickerWidth = picker.offsetWidth;
+    const pickerHeight = picker.offsetHeight;
     const margin = 8;
 
     const centeredOffset = wrapRect.width / 2 - pickerWidth / 2;
@@ -154,6 +159,7 @@ export default function ReactionButton({
     setOffset(
       Math.min(Math.max(centeredOffset, minOffset), Math.max(minOffset, maxOffset)),
     );
+    setPlacement(wrapRect.top - pickerHeight - margin < 0 ? "bottom" : "top");
   }, [pickerOpen]);
 
   useEffect(() => () => {
@@ -199,7 +205,10 @@ export default function ReactionButton({
         <AnimatePresence>
           {pickerOpen && (
             <div
-              className="absolute bottom-full left-0 z-20 mb-2"
+              className={cx(
+                "absolute left-0 z-20",
+                placement === "bottom" ? "top-full mt-2" : "bottom-full mb-2",
+              )}
               style={{ transform: `translateX(${offset}px)` }}
             >
               <ReactionPicker
@@ -208,6 +217,7 @@ export default function ReactionButton({
                 onSelect={handlePick}
                 types={types}
                 autoFocus={openedByKeyboard}
+                placement={placement}
               />
             </div>
           )}

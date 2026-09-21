@@ -23,11 +23,6 @@
   overflow: hidden;
 }
 
-.chat-container > .empty-note {
-  width: 100%;
-  min-height: 0;
-}
-
 .chat-panel .chat-header,
 .chat-panel .call-banner,
 .chat-panel > audio,

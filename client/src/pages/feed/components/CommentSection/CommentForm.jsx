@@ -1,6 +1,7 @@
 import { Send } from "@mui/icons-material";
 
 import Avatar from "../../../../components/ui/Avatar";
+import Spinner from "../../../../components/ui/Spinner";
 import EmojiPickerButton from "./EmojiPickerButton";
 
 const CommentForm = ({
@@ -8,6 +9,7 @@ const CommentForm = ({
   value,
   onChange,
   onSubmit,
+  submitting = false,
   emojiOpen,
   onToggleEmoji,
   onEmoji,
@@ -26,11 +28,11 @@ const CommentForm = ({
       <EmojiPickerButton open={emojiOpen} onToggle={onToggleEmoji} onEmoji={onEmoji} />
       <button
         type="submit"
-        disabled={!value.trim()}
+        disabled={!value.trim() || submitting}
         aria-label="Post comment"
         className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-accent transition-colors motion-safe:duration-150 hover:bg-soft disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
-        <Send fontSize="small" />
+        {submitting ? <Spinner size="xs" /> : <Send fontSize="small" />}
       </button>
     </div>
   </form>

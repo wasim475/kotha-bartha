@@ -8,9 +8,9 @@ export default function NotificationItem({ notification, onClick }) {
       type="button"
       onClick={() => onClick(notification)}
       className={cx(
-        "flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors motion-safe:duration-150",
+        "flex w-full items-center gap-3 border-l-2 px-4 py-3.5 text-left transition-colors motion-safe:duration-150",
         "hover:bg-soft focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent",
-        !notification.read && "bg-accent/5",
+        notification.read ? "border-l-transparent" : "border-l-accent bg-accent/8",
       )}
     >
       <Avatar person={notification.actor} size="md" />

@@ -1,4 +1,5 @@
 import Avatar from "../../../../components/ui/Avatar";
+import RichText from "../../../../components/ui/RichText";
 import { cx } from "../../../../utility/cx";
 import CommentActions from "./CommentActions";
 import CommentEditForm from "./CommentEditForm";
@@ -24,6 +25,10 @@ const CommentItem = ({
   onReplyBodyChange,
   onSubmitReply,
   onCancelReply,
+  replySubmitting,
+  replyEmojiOpen,
+  onToggleReplyEmoji,
+  onReplyEmoji,
   onEdit,
   onDelete,
   replies,
@@ -60,7 +65,9 @@ const CommentItem = ({
             onCancel={onCancelEdit}
           />
         ) : (
-          <p className="min-w-0 wrap-break-word text-sm leading-relaxed text-ink">{entry.body}</p>
+          <p className="min-w-0 wrap-break-word text-sm leading-relaxed text-ink">
+            <RichText text={entry.body} />
+          </p>
         )}
       </div>
 
@@ -81,6 +88,10 @@ const CommentItem = ({
           onChange={onReplyBodyChange}
           onSubmit={onSubmitReply}
           onCancel={onCancelReply}
+          submitting={replySubmitting}
+          emojiOpen={replyEmojiOpen}
+          onToggleEmoji={onToggleReplyEmoji}
+          onEmoji={onReplyEmoji}
         />
       )}
 

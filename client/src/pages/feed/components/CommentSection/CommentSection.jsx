@@ -42,6 +42,9 @@ const CommentSection = ({
   const [replyingTo, setReplyingTo] = useState(null);
   const [replyBody, setReplyBody] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showReplyEmojiPicker, setShowReplyEmojiPicker] = useState(false);
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [submittingReply, setSubmittingReply] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editBody, setEditBody] = useState("");
   const [commentsExpanded, setCommentsExpanded] = useState(false);
@@ -150,29 +153,44 @@ const CommentSection = ({
     event.preventDefault();
     const value = parentId ? replyBody.trim() : comment.trim();
     if (!value) return;
+    // Guards against a duplicate comment/reply being created when the
+    // submit button is double-clicked (or Enter is pressed while a click is
+    // still in flight) — without this, both requests would succeed and the
+    // same text would appear twice.
+    if (parentId ? submittingReply : submittingComment) return;
 
-    const { data } = await api.post(`/posts/${postId}/comments`, {
-      body: value,
-      parentId,
-    });
-    setComments((current) => [...current, data.data]);
-    if (parentId) {
-      const topLevelId = findTopLevelId(parentId, comments);
-      setExpandedReplyThreads((current) => new Set(current).add(topLevelId));
-    } else {
-      setCommentsExpanded(true);
+    if (parentId) setSubmittingReply(true);
+    else setSubmittingComment(true);
+
+    try {
+      const { data } = await api.post(`/posts/${postId}/comments`, {
+        body: value,
+        parentId,
+      });
+      setComments((current) => [...current, data.data]);
+      if (parentId) {
+        const topLevelId = findTopLevelId(parentId, comments);
+        setExpandedReplyThreads((current) => new Set(current).add(topLevelId));
+      } else {
+        setCommentsExpanded(true);
+      }
+      setComment("");
+      setReplyBody("");
+      setReplyingTo(null);
+      setShowEmojiPicker(false);
+      setShowReplyEmojiPicker(false);
+      setShowComments(true);
+      onChanged?.();
+    } finally {
+      if (parentId) setSubmittingReply(false);
+      else setSubmittingComment(false);
     }
-    setComment("");
-    setReplyBody("");
-    setReplyingTo(null);
-    setShowEmojiPicker(false);
-    setShowComments(true);
-    onChanged?.();
   };
 
   const startReply = (targetId) => {
     setReplyingTo((current) => (current === targetId ? null : targetId));
     setReplyBody("");
+    setShowReplyEmojiPicker(false);
   };
 
   // Builds every prop a <CommentItem>/<ReplyItem> needs. Called once per
@@ -210,7 +228,14 @@ const CommentSection = ({
             replyBody,
             onReplyBodyChange: setReplyBody,
             onSubmitReply: (event) => addComment(event, replyingTo),
-            onCancelReply: () => setReplyingTo(null),
+            onCancelReply: () => {
+              setReplyingTo(null);
+              setShowReplyEmojiPicker(false);
+            },
+            replySubmitting: submittingReply,
+            replyEmojiOpen: showReplyEmojiPicker,
+            onToggleReplyEmoji: () => setShowReplyEmojiPicker((current) => !current),
+            onReplyEmoji: (emoji) => setReplyBody((current) => `${current}${emoji}`),
             replies,
             repliesExpanded: expandedReplyThreads.has(entry.id),
             onExpandReplies: () =>
@@ -243,6 +268,7 @@ const CommentSection = ({
         value={comment}
         onChange={setComment}
         onSubmit={(event) => addComment(event)}
+        submitting={submittingComment}
         emojiOpen={showEmojiPicker}
         onToggleEmoji={() => setShowEmojiPicker((current) => !current)}
         onEmoji={(emoji) => setComment((current) => `${current}${emoji}`)}

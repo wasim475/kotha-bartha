@@ -18,11 +18,22 @@ import { REACTION_LABELS, REACTION_TYPES } from "./reactionTypes";
  * quick-like default.
  */
 const ReactionPicker = forwardRef(function ReactionPicker(
-  { selected, onSelect, types = REACTION_TYPES, className = "", autoFocus = false },
+  {
+    selected,
+    onSelect,
+    types = REACTION_TYPES,
+    className = "",
+    autoFocus = false,
+    placement = "top",
+  },
   forwardedRef,
 ) {
   const reduceMotion = useReducedMotion();
   const containerRef = useRef(null);
+  // Slide in from the side the picker is anchored to, not always upward —
+  // it reads oddly for a picker sitting below its trigger to animate as if
+  // it were still opening from above.
+  const travel = placement === "bottom" ? -8 : 8;
 
   const setRefs = (node) => {
     containerRef.current = node;
@@ -47,9 +58,9 @@ const ReactionPicker = forwardRef(function ReactionPicker(
       ref={setRefs}
       role="menu"
       aria-label="Pick a reaction"
-      initial={reduceMotion ? false : { opacity: 0, scale: 0.85, y: 8 }}
+      initial={reduceMotion ? false : { opacity: 0, scale: 0.85, y: travel }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 6 }}
+      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: travel * 0.75 }}
       transition={{ duration: reduceMotion ? 0 : 0.16, ease: "easeOut" }}
       className={cx(
         "flex items-center gap-1 rounded-full border border-line bg-panel p-1.5 shadow-soft",

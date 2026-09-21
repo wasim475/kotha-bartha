@@ -8,6 +8,7 @@ import Button from "../../../components/ui/Button";
 import Card from "../../../components/ui/Card";
 import IconButton from "../../../components/ui/IconButton";
 import Menu from "../../../components/ui/Menu";
+import RichText from "../../../components/ui/RichText";
 import ReactionButton from "../../../components/ui/reactions/ReactionButton";
 import ReactionSummary from "../../../components/ui/reactions/ReactionSummary";
 import { REACTION_TYPES } from "../../../components/ui/reactions/reactionTypes";
@@ -140,7 +141,7 @@ export default function PostCard({
               isLong && "line-clamp-6",
             )}
           >
-            {post.body}
+            <RichText text={post.body} />
           </p>
           {isLong && (
             <button

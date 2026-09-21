@@ -1,5 +1,6 @@
+import { ErrorOutlined } from "@mui/icons-material";
 import { useEffect, useState } from "react";
-import loadingSvg from "../assets/loading.svg";
+import Spinner from "../components/ui/Spinner";
 export const realtime = new EventTarget();
 export let activeSocket;
 export const setActiveSocket = (socket) => {
@@ -67,27 +68,29 @@ export const formatTime = (date) => {
 export function ResourceState({ loading, error, empty, children }) {
   if (loading)
     return (
-      <div className="empty-note">
-        <img
-          className="w-1/4 h-fit text-green-500"
-          src={loadingSvg}
-          alt=""
-          srcset=""
-        />
+      <div
+        aria-busy="true"
+        aria-label="Loading"
+        className="flex w-full min-h-0 flex-col items-center gap-3 py-16 text-muted"
+      >
+        <Spinner size="md" />
       </div>
     );
 
   if (error)
     return (
-      <div className="empty-note">
-        <p>{error}</p>
+      <div className="flex w-full min-h-0 flex-col items-center gap-3 py-16 text-center">
+        <div className="flex size-11 items-center justify-center rounded-full bg-danger-soft text-danger">
+          <ErrorOutlined fontSize="small" />
+        </div>
+        <p className="max-w-xs text-sm text-muted">{error}</p>
       </div>
     );
 
   if (empty)
     return (
-      <div className="empty-note">
-        <p>{empty}</p>
+      <div className="flex w-full min-h-0 flex-col items-center gap-2 py-16 text-center">
+        <p className="max-w-xs text-sm text-muted">{empty}</p>
       </div>
     );
 

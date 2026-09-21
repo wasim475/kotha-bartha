@@ -1,4 +1,5 @@
 import Avatar from "../../../../components/ui/Avatar";
+import RichText from "../../../../components/ui/RichText";
 import { cx } from "../../../../utility/cx";
 import CommentActions from "./CommentActions";
 import CommentEditForm from "./CommentEditForm";
@@ -59,7 +60,9 @@ const ReplyItem = ({
             onCancel={onCancelEdit}
           />
         ) : (
-          <p className="min-w-0 wrap-break-word text-[13px] leading-relaxed text-ink">{entry.body}</p>
+          <p className="min-w-0 wrap-break-word text-[13px] leading-relaxed text-ink">
+            <RichText text={entry.body} />
+          </p>
         )}
       </div>
 

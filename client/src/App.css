@@ -778,17 +778,6 @@ button {
   border-radius: 50%;
   background: #55ad72;
 }
-.empty-note {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-  margin-top: 80px;
-  color: var(--muted);
-  text-align: center;
-}
-.empty-note p {
-  font-size: 12px;
-}
 .profile-cover {
   display: grid;
   align-items: end;
@@ -846,9 +835,6 @@ button {
 .profile-posts .eyebrow {
   display: block;
   margin: 4px 0 13px;
-}
-.profile-posts .empty-note {
-  margin-top: 25px;
 }
 .profile-about,
 .profile-preview {
@@ -1045,12 +1031,20 @@ button {
 
 .emoji-button {
   border: none;
+  border-radius: 999px;
   background: transparent;
+  color: var(--muted);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 8px;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.emoji-button:hover {
+  background: var(--soft);
+  color: var(--ink);
 }
 
 .emoji-picker {
@@ -1186,25 +1180,3 @@ button {
   background: var(--accent-deep);
 }
 
-.emoji-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.emoji-button {
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px;
-}
-
-.emoji-picker {
-  position: absolute;
-  bottom: 48px;
-  left: 0;
-  z-index: 1000;
-}
