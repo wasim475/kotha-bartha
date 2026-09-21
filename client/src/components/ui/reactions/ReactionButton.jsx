@@ -86,6 +86,14 @@ export default function ReactionButton({
       suppressClick.current = false;
       return;
     }
+    // Touch devices have no hover, so a tap is the only way to reach the
+    // picker — it must open it rather than instantly reacting, or the
+    // other four reactions become unreachable without a long-press.
+    if (pickerEnabled && !CAN_HOVER) {
+      if (pickerOpen) closePicker(false);
+      else openPicker();
+      return;
+    }
     onChange(value ? value : "like");
   };
 
@@ -117,10 +125,13 @@ export default function ReactionButton({
       if (event.key === "Escape") closePicker(true);
     };
 
-    document.addEventListener("mousedown", handlePointerDown);
+    // Pointer Events (not "mousedown") so a tap outside the picker closes
+    // it reliably on touch — iOS Safari doesn't always synthesize a mouse
+    // event for the first tap after content changes underneath it.
+    document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [pickerOpen, closePicker]);

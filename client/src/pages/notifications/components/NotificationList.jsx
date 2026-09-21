@@ -5,7 +5,7 @@ export default function NotificationList({
   onNotificationClick,
 }) {
   return (
-    <div className="notification-list">
+    <div className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-panel shadow-soft">
       {notifications.map((notification) => (
         <NotificationItem
           key={notification.id}

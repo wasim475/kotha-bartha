@@ -4,7 +4,18 @@ const { emitToUser } = require("../utils/realtime");
 
 async function createNotification(
   req,
-  { recipientId, actorId, type, entityType, entityId, payload, uniqueEventId },
+  {
+    recipientId,
+    actorId,
+    type,
+    entityType,
+    entityId,
+    postId,
+    commentId,
+    replyId,
+    payload,
+    uniqueEventId,
+  },
 ) {
   const notification = await Notification.findOneAndUpdate(
     { uniqueEventId },
@@ -15,6 +26,9 @@ async function createNotification(
         type,
         entityType,
         entityId,
+        postId: postId || null,
+        commentId: commentId || null,
+        replyId: replyId || null,
         payload,
         readAt: null,
       },
@@ -32,6 +46,9 @@ async function createNotification(
     createdAt: notification.createdAt,
     actor: notification.actorId ? safeUser(notification.actorId) : null,
     payload: notification.payload,
+    postId: notification.postId ? notification.postId.toString() : null,
+    commentId: notification.commentId ? notification.commentId.toString() : null,
+    replyId: notification.replyId ? notification.replyId.toString() : null,
   };
 
   emitToUser(req, recipientId, "notification:new", data);

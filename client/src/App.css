@@ -510,13 +510,11 @@ button {
   padding: 19px;
 }
 .friend-card strong,
-.conversation strong,
-.notification strong {
+.conversation strong {
   font-size: 12px;
 }
 .friend-card span,
-.conversation span,
-.notification span {
+.conversation span {
   color: var(--muted);
   font-size: 11px;
 }
@@ -579,21 +577,17 @@ button {
   font-size: 10px;
 }
 
-.message-list,
-.notification-list {
+.message-list {
   display: grid;
   border-top: 1px solid var(--line);
 }
-.conversation,
-.notification {
+.conversation {
   display: flex;
   align-items: center;
   gap: 13px;
   padding: 15px 8px;
   border-bottom: 1px solid var(--line);
   text-align: left;
-}
-.conversation {
   width: 100%;
 }
 .conversation-main {
@@ -609,8 +603,7 @@ button {
   text-align: left;
   cursor: pointer;
 }
-.conversation-main > div:nth-child(2),
-.notification > div:nth-child(2) {
+.conversation-main > div:nth-child(2) {
   display: grid;
   flex: 1;
   gap: 3px;
@@ -795,18 +788,6 @@ button {
 }
 .empty-note p {
   font-size: 12px;
-}
-.notification {
-  position: relative;
-}
-.notification.unread {
-  background: var(--soft);
-}
-.notification > i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
 }
 .profile-cover {
   display: grid;

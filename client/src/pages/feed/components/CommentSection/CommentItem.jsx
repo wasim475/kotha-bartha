@@ -1,4 +1,5 @@
 import Avatar from "../../../../components/ui/Avatar";
+import { cx } from "../../../../utility/cx";
 import CommentActions from "./CommentActions";
 import CommentEditForm from "./CommentEditForm";
 import CommentMenu from "./CommentMenu";
@@ -9,6 +10,7 @@ const CommentItem = ({
   entry,
   postAuthorId,
   user,
+  highlighted,
   editing,
   editBody,
   onEditBodyChange,
@@ -26,8 +28,16 @@ const CommentItem = ({
   onDelete,
   replies,
   renderReply,
+  repliesExpanded,
+  onExpandReplies,
 }) => (
-  <div className="flex gap-3">
+  <div
+    id={`comment-${entry.id}`}
+    className={cx(
+      "flex gap-3 rounded-xl p-1 -m-1 transition-colors motion-safe:duration-500",
+      highlighted && "bg-accent/15 ring-2 ring-accent",
+    )}
+  >
     <Avatar person={entry.author} size="sm" className="mt-0.5 shrink-0" />
 
     <div className="min-w-0 flex-1">
@@ -75,7 +85,13 @@ const CommentItem = ({
       )}
 
       {replies.length > 0 && (
-        <RepliesList replies={replies} postAuthorId={postAuthorId} renderReply={renderReply} />
+        <RepliesList
+          replies={replies}
+          postAuthorId={postAuthorId}
+          renderReply={renderReply}
+          expanded={repliesExpanded}
+          onExpand={onExpandReplies}
+        />
       )}
     </div>
   </div>

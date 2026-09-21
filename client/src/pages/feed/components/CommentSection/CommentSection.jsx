@@ -1,8 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { api } from "../../../../utility/api";
 import CommentForm from "./CommentForm";
 import CommentList from "./CommentList";
+
+const prefersReducedMotion =
+  typeof window !== "undefined" &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // All descendants of a top-level comment, any depth, flattened into one
 // chronological list — the approved "flatten to one visual level" reply
@@ -13,6 +17,16 @@ function collectDescendants(parentId, allComments) {
   return direct.flatMap((item) => [item, ...collectDescendants(item.id, allComments)]);
 }
 
+// Walks parentId links up to the root so a reply-to-a-reply can still be
+// attributed to the top-level comment thread it visually belongs to.
+function findTopLevelId(id, allComments) {
+  let current = allComments.find((item) => item.id === id);
+  while (current?.parentId) {
+    current = allComments.find((item) => item.id === current.parentId);
+  }
+  return current?.id ?? id;
+}
+
 const CommentSection = ({
   postId,
   postAuthorId,
@@ -20,6 +34,8 @@ const CommentSection = ({
   showComments,
   setShowComments,
   onChanged,
+  targetCommentId = null,
+  targetReplyId = null,
 }) => {
   const [comments, setComments] = useState([]);
   const [comment, setComment] = useState("");
@@ -28,6 +44,10 @@ const CommentSection = ({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editBody, setEditBody] = useState("");
+  const [commentsExpanded, setCommentsExpanded] = useState(false);
+  const [expandedReplyThreads, setExpandedReplyThreads] = useState(() => new Set());
+  const [highlightId, setHighlightId] = useState(null);
+  const pendingHighlightRef = useRef(targetReplyId || targetCommentId || null);
 
   useEffect(() => {
     if (!showComments) return;
@@ -35,6 +55,42 @@ const CommentSection = ({
       .get(`/posts/${postId}/comments`)
       .then(({ data }) => setComments(data.data));
   }, [postId, showComments]);
+
+  // A deep-linked comment/reply target: reveal whatever collapsed sections
+  // are hiding it as soon as the comments load, then (in the effect below)
+  // scroll to it and flash a highlight once its DOM node actually exists.
+  useEffect(() => {
+    const targetId = targetReplyId || targetCommentId;
+    if (!targetId || !comments.some((entry) => entry.id === targetId)) return;
+
+    pendingHighlightRef.current = targetId;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCommentsExpanded(true);
+    if (targetReplyId) {
+      const topLevelId = findTopLevelId(targetReplyId, comments);
+      setExpandedReplyThreads((current) => new Set(current).add(topLevelId));
+    }
+  }, [targetCommentId, targetReplyId, comments]);
+
+  // Runs after every render (no dependency array) so it can keep checking
+  // for the target's DOM node — it only exists once the expand states set
+  // above have actually propagated into a rendered CommentItem/ReplyItem.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const targetId = pendingHighlightRef.current;
+    if (!targetId) return;
+    const node = document.getElementById(`comment-${targetId}`);
+    if (!node) return;
+
+    pendingHighlightRef.current = null;
+    node.scrollIntoView({
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+      block: "center",
+    });
+    setHighlightId(targetId);
+    const timer = setTimeout(() => setHighlightId(null), 2200);
+    return () => clearTimeout(timer);
+  });
 
   const saveComment = async (commentId) => {
     if (!editBody.trim()) return;
@@ -100,6 +156,12 @@ const CommentSection = ({
       parentId,
     });
     setComments((current) => [...current, data.data]);
+    if (parentId) {
+      const topLevelId = findTopLevelId(parentId, comments);
+      setExpandedReplyThreads((current) => new Set(current).add(topLevelId));
+    } else {
+      setCommentsExpanded(true);
+    }
     setComment("");
     setReplyBody("");
     setReplyingTo(null);
@@ -125,6 +187,7 @@ const CommentSection = ({
 
     return {
       entry,
+      highlighted: entry.id === highlightId,
       editing: editingId === entry.id,
       editBody,
       onEditBodyChange: setEditBody,
@@ -149,6 +212,9 @@ const CommentSection = ({
             onSubmitReply: (event) => addComment(event, replyingTo),
             onCancelReply: () => setReplyingTo(null),
             replies,
+            repliesExpanded: expandedReplyThreads.has(entry.id),
+            onExpandReplies: () =>
+              setExpandedReplyThreads((current) => new Set(current).add(entry.id)),
             renderReply: (reply) => ({
               ...buildEntryProps(reply, { topLevelId: entry.id }),
               replyingToName:
@@ -187,6 +253,8 @@ const CommentSection = ({
         postAuthorId={postAuthorId}
         user={user}
         renderComment={renderComment}
+        expanded={commentsExpanded}
+        onExpand={() => setCommentsExpanded(true)}
       />
     </div>
   );

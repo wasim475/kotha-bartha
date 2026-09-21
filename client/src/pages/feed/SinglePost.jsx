@@ -1,5 +1,5 @@
 import { ArrowBack } from "@mui/icons-material";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { ResourceState, useResource } from "../../utility/helpers";
 import PostCard from "./components/PostCard";
@@ -7,6 +7,9 @@ import PostCard from "./components/PostCard";
 export default function SinglePost({ user }) {
   const { postId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const targetCommentId = searchParams.get("commentId");
+  const targetReplyId = searchParams.get("replyId");
   const post = useResource(`/posts/${postId}`);
 
   return (
@@ -33,6 +36,10 @@ export default function SinglePost({ user }) {
             user={user}
             onChanged={post.reload}
             initialShowComments
+            truncate={false}
+            highlightPost={!targetCommentId && !targetReplyId}
+            targetCommentId={targetCommentId}
+            targetReplyId={targetReplyId}
           />
         ) : null}
       </ResourceState>

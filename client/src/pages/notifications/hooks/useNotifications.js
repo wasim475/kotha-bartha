@@ -27,16 +27,20 @@ export default function useNotifications() {
       }
     }
 
-    if (notification.type === "friend_request") {
+    if (
+      notification.type === "friend_request" ||
+      notification.type === "friend_accepted"
+    ) {
       navigate("/app/friends");
       return;
     }
 
-    if (
-      notification.type === "post_like" ||
-      notification.type === "post_comment"
-    ) {
-      navigate(`/app/feed?post=${notification.entityId}`);
+    if (notification.postId) {
+      const params = new URLSearchParams();
+      if (notification.commentId) params.set("commentId", notification.commentId);
+      if (notification.replyId) params.set("replyId", notification.replyId);
+      const query = params.toString();
+      navigate(`/app/post/${notification.postId}${query ? `?${query}` : ""}`);
     }
   };
 

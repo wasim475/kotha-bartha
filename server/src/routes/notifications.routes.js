@@ -134,6 +134,11 @@ router.get("/notifications", async (req, res, next) => {
         entityId: notification.entityId
           ? notification.entityId.toString()
           : null,
+        postId: notification.postId ? notification.postId.toString() : null,
+        commentId: notification.commentId
+          ? notification.commentId.toString()
+          : null,
+        replyId: notification.replyId ? notification.replyId.toString() : null,
       })),
       meta: {
         hasMore: false,

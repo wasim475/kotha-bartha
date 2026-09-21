@@ -1,5 +1,7 @@
 import { ChatBubbleOutlined, Delete, Edit, MoreHoriz } from "@mui/icons-material";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+import { cx } from "../../../utility/cx";
 
 import Avatar from "../../../components/ui/Avatar";
 import Button from "../../../components/ui/Button";
@@ -14,6 +16,15 @@ import usePostActions from "../hooks/usePostActions";
 
 import CommentSection from "./CommentSection/CommentSection";
 
+// Character-count based, not a fixed pixel/line height — a long post gets
+// clamped by line count (which scales with font size and column width, so
+// it can't overflow on mobile the way a hardcoded max-height would).
+const POST_PREVIEW_LIMIT = 320;
+
+const prefersReducedMotion =
+  typeof window !== "undefined" &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 export default function PostCard({
   post,
   user,
@@ -21,16 +32,47 @@ export default function PostCard({
   onPostUpdated,
   onOpenPost = () => {},
   initialShowComments = false,
+  truncate = true,
+  highlightPost = false,
+  targetCommentId = null,
+  targetReplyId = null,
 }) {
   const [showComments, setShowComments] = useState(initialShowComments);
+  const [postHighlighted, setPostHighlighted] = useState(false);
   const { editing, setEditing, body, setBody, savePost, deletePost, reactToPost } =
     usePostActions({ post, onChanged, onPostUpdated });
+  const isLong = truncate && post.body.length > POST_PREVIEW_LIMIT;
 
   const openComments = () => setShowComments(true);
   const toggleComments = () => setShowComments((current) => !current);
 
+  // A post-only notification (no target comment/reply) lands here and the
+  // whole card should read as "this is what you clicked" — scroll it into
+  // view and flash it briefly, same idea as the comment/reply highlight in
+  // CommentSection below.
+  useEffect(() => {
+    if (!highlightPost) return;
+    const node = document.getElementById(`post-${post.id}`);
+    node?.scrollIntoView({
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+      block: "start",
+    });
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPostHighlighted(true);
+    const timer = setTimeout(() => setPostHighlighted(false), 2200);
+    return () => clearTimeout(timer);
+  }, [highlightPost, post.id]);
+
   return (
-    <Card as="article" id={`post-${post.id}`} padded={false} className="mb-4 overflow-hidden">
+    <Card
+      as="article"
+      id={`post-${post.id}`}
+      padded={false}
+      className={cx(
+        "mb-4 overflow-hidden transition-shadow motion-safe:duration-500",
+        postHighlighted && "ring-2 ring-accent ring-offset-2 ring-offset-paper",
+      )}
+    >
       {/* Author */}
       <div className="flex items-center gap-3 p-4">
         <Avatar person={post.author} size="md" />
@@ -82,20 +124,34 @@ export default function PostCard({
           </div>
         </form>
       ) : (
-        <p
-          onClick={() => onOpenPost(post.id)}
-          role="link"
-          tabIndex={0}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              onOpenPost(post.id);
-            }
-          }}
-          className="cursor-pointer px-4 pb-4 text-[15px] leading-relaxed text-ink transition-colors hover:text-accent"
-        >
-          {post.body}
-        </p>
+        <div className="px-4 pb-4">
+          <p
+            onClick={() => onOpenPost(post.id)}
+            role="link"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onOpenPost(post.id);
+              }
+            }}
+            className={cx(
+              "cursor-pointer text-[15px] leading-relaxed text-ink transition-colors hover:text-accent",
+              isLong && "line-clamp-6",
+            )}
+          >
+            {post.body}
+          </p>
+          {isLong && (
+            <button
+              type="button"
+              onClick={() => onOpenPost(post.id)}
+              className="mt-1 text-sm font-semibold text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              See more
+            </button>
+          )}
+        </div>
       )}
 
       {/* Reaction + comment summary */}
@@ -143,6 +199,8 @@ export default function PostCard({
           showComments={showComments}
           setShowComments={setShowComments}
           onChanged={onChanged}
+          targetCommentId={targetCommentId}
+          targetReplyId={targetReplyId}
         />
       </div>
     </Card>

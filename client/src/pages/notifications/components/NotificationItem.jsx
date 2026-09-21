@@ -1,20 +1,35 @@
-import { Avatar, formatTime } from "../../../utility/helpers";
+import Avatar from "../../../components/ui/Avatar";
+import { cx } from "../../../utility/cx";
+import { formatTime } from "../../../utility/helpers";
 
 export default function NotificationItem({ notification, onClick }) {
   return (
     <button
-      className={`notification ${notification.read ? "" : "unread"}`}
+      type="button"
       onClick={() => onClick(notification)}
+      className={cx(
+        "flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors motion-safe:duration-150",
+        "hover:bg-soft focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent",
+        !notification.read && "bg-accent/5",
+      )}
     >
-      <Avatar person={notification.actor} />
+      <Avatar person={notification.actor} size="md" />
 
-      <div>
-        <strong>{notification.payload?.message || notification.type}</strong>
-
-        <span>{formatTime(notification.createdAt)}</span>
+      <div className="min-w-0 flex-1">
+        <p
+          className={cx(
+            "text-sm leading-snug text-ink",
+            !notification.read && "font-semibold",
+          )}
+        >
+          {notification.payload?.message || notification.type}
+        </p>
+        <p className="mt-0.5 text-xs text-muted">{formatTime(notification.createdAt)}</p>
       </div>
 
-      {!notification.read && <i />}
+      {!notification.read && (
+        <span className="size-2 shrink-0 rounded-full bg-accent" aria-hidden="true" />
+      )}
     </button>
   );
 }

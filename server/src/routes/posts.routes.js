@@ -3,6 +3,7 @@ const User = require("../models/User");
 const Post = require("../models/Post");
 const Friendship = require("../models/Friendship");
 const Reaction = require("../models/Reaction");
+const Notification = require("../models/Notification");
 const { serializePost } = require("../utils/serializers");
 const { emitToUser } = require("../utils/realtime");
 const { createNotification } = require("../services/notification.service");
@@ -212,6 +213,7 @@ router.put("/posts/:postId/like", async (req, res, next) => {
         type: "post_like",
         entityType: "post",
         entityId: post._id,
+        postId: post._id,
         payload: {
           message: `${req.user.fullName} liked your post.`,
         },
@@ -280,6 +282,7 @@ router.put("/posts/:postId/reaction", async (req, res, next) => {
           type: "post_reaction",
           entityType: "post",
           entityId: post._id,
+          postId: post._id,
           payload: {
             message: `${req.user.fullName} reacted to your post.`,
           },
@@ -360,6 +363,11 @@ router.delete("/posts/:postId", async (req, res, next) => {
         error: { code: "NOT_FOUND", message: "Post not found." },
       });
     }
+
+    // Every notification about this post (post reactions, comments and
+    // replies alike) points at content that no longer exists — clean them
+    // all up in one shot rather than leaving dead links behind.
+    await Notification.deleteMany({ postId: post._id });
 
     res.json({ data: { id: post._id.toString(), deleted: true } });
   } catch (error) {
