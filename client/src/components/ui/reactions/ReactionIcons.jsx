@@ -62,9 +62,17 @@ function AngryFace() {
   );
 }
 
+// MUI's SvgIcon sets its own width/height: 1em (resolving to a fixed 24px at
+// the default font-size) via a CSS class, which wins the cascade over the
+// Tailwind `size-full` class below regardless of the parent box size — the
+// icon then overflows whatever compact box it's placed in (comment/reply
+// reaction rows) instead of filling it. An inline `style` always beats a
+// class rule, so it's used here to force the icon to actually fill its box.
+const FILL_BOX = { width: "100%", height: "100%" };
+
 const renderers = {
-  like: () => <ThumbUpAlt className="size-full text-accent" />,
-  love: () => <Favorite className="size-full text-danger" />,
+  like: () => <ThumbUpAlt className="size-full text-accent" style={FILL_BOX} />,
+  love: () => <Favorite className="size-full text-danger" style={FILL_BOX} />,
   haha: HahaFace,
   sad: SadFace,
   angry: AngryFace,
