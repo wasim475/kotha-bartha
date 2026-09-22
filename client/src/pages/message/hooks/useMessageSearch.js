@@ -14,7 +14,7 @@ const useMessageSearch = ({ conversationId, selected, thread }) => {
   const [error, setError] = useState("");
 
   const trimmed = query.trim();
-  const useClientSearch = !selected?.isGroup && Boolean(selected?.user?.publicKey);
+  const useClientSearch = !selected?.isGroup && Boolean(selected?.user?.publicKeys?.length);
 
   const clientResults = useMemo(() => {
     if (!useClientSearch || !trimmed) return [];

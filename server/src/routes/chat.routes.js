@@ -72,11 +72,14 @@ const blockSets = async (userId) => {
 
 // Shared shape for the "other participant" of a 1-to-1 conversation, as
 // seen by `userId` — their nickname for that person (private, only ever set
-// by `userId` themself) plus the block status in both directions.
+// by `userId` themself), the block status in both directions, and every
+// public key they've published across all their devices (see
+// User.getPublicKeys() — includes their legacy single-device key too, if
+// any, so old conversations keep decrypting).
 const otherParticipantView = (conversation, other, userId, blocks) => ({
   ...safeUser(other),
   isOnline: isOnline(other._id),
-  publicKey: other.publicKey || null,
+  publicKeys: other.getPublicKeys ? other.getPublicKeys() : [],
   nickname: conversation.nicknames?.get?.(userId) || null,
   isBlocked: blocks.blockedByMe.has(other._id.toString()),
   hasBlockedMe: blocks.blockedMe.has(other._id.toString()),
@@ -105,17 +108,89 @@ const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // Shared shape for a message's encrypted-or-plaintext content, used by every
 // route that returns a message so the client always sees the same fields.
+// Handles both the current multi-device format (one ciphertext per target
+// deviceId, plus the sending device's own public key) and the legacy
+// single-shared-key format older messages were stored in — never both at
+// once on the same message, so the client can tell which one it's looking
+// at just from which field is populated.
 const contentFields = (message) =>
   message.encrypted
     ? {
         encrypted: true,
-        encryptedBody: {
-          ciphertext: message.encryptedBody?.ciphertext || "",
-          iv: message.encryptedBody?.iv || "",
-        },
+        encryptedBody: message.encryptedPayloads?.length
+          ? null
+          : {
+              ciphertext: message.encryptedBody?.ciphertext || "",
+              iv: message.encryptedBody?.iv || "",
+            },
+        encryptedPayloads: message.encryptedPayloads?.length
+          ? message.encryptedPayloads.map((payload) => ({
+              deviceId: payload.deviceId,
+              ciphertext: payload.ciphertext,
+              iv: payload.iv,
+            }))
+          : null,
+        senderPublicKey: message.senderPublicKey || null,
         body: message.body,
       }
-    : { encrypted: false, encryptedBody: null, body: message.body };
+    : { encrypted: false, encryptedBody: null, encryptedPayloads: null, senderPublicKey: null, body: message.body };
+
+const MAX_CIPHERTEXT_LENGTH = 20000;
+const MAX_DEVICE_TARGETS = 20;
+
+const validEncryptedPayloads = (payloads) =>
+  Array.isArray(payloads) &&
+  payloads.length > 0 &&
+  payloads.length <= MAX_DEVICE_TARGETS &&
+  payloads.every(
+    (payload) =>
+      payload &&
+      typeof payload.deviceId === "string" &&
+      payload.deviceId.length > 0 &&
+      payload.deviceId.length <= 100 &&
+      typeof payload.ciphertext === "string" &&
+      payload.ciphertext.length > 0 &&
+      payload.ciphertext.length <= MAX_CIPHERTEXT_LENGTH &&
+      typeof payload.iv === "string" &&
+      payload.iv.length > 0,
+  );
+
+// Normalizes an incoming encrypted-or-plaintext message body from the
+// client into one shape, accepting both the legacy single-shared-key
+// format (one top-level ciphertext/iv) and the current multi-device format
+// (one ciphertext/iv per target device, plus the sending device's own
+// public key) — see client/src/utility/crypto.js's encryptForDevices for
+// how the client builds the latter.
+const parseIncomingContent = (payload) => {
+  const legacyEncrypted =
+    payload.encrypted === true &&
+    typeof payload.ciphertext === "string" &&
+    typeof payload.iv === "string";
+  const multiDeviceEncrypted =
+    payload.encrypted === true &&
+    !legacyEncrypted &&
+    validEncryptedPayloads(payload.encryptedPayloads) &&
+    typeof payload.senderPublicKey === "string" &&
+    payload.senderPublicKey.length > 0 &&
+    payload.senderPublicKey.length <= 2000;
+  const isEncrypted = legacyEncrypted || multiDeviceEncrypted;
+
+  return {
+    isEncrypted,
+    valid: !payload.encrypted || legacyEncrypted || multiDeviceEncrypted,
+    oversized: legacyEncrypted && payload.ciphertext.length > MAX_CIPHERTEXT_LENGTH,
+    body: isEncrypted ? "🔒 Encrypted message" : String(payload.body || "").trim(),
+    encryptedBody: legacyEncrypted ? { ciphertext: payload.ciphertext, iv: payload.iv } : undefined,
+    encryptedPayloads: multiDeviceEncrypted
+      ? payload.encryptedPayloads.map((entry) => ({
+          deviceId: String(entry.deviceId).slice(0, 100),
+          ciphertext: String(entry.ciphertext).slice(0, MAX_CIPHERTEXT_LENGTH),
+          iv: String(entry.iv).slice(0, 64),
+        }))
+      : undefined,
+    senderPublicKey: multiDeviceEncrypted ? payload.senderPublicKey : undefined,
+  };
+};
 
 router.post("/conversations", async (req, res, next) => {
   try {
@@ -798,7 +873,7 @@ router.get(
         deletedAt: null,
         deletedFor: { $ne: req.user._id },
       })
-        .populate("replyTo", "body senderId encrypted encryptedBody")
+        .populate("replyTo", "body senderId encrypted encryptedBody encryptedPayloads senderPublicKey")
         .populate("senderId", "fullName avatar")
         .populate("mentions", "fullName")
         .sort({
@@ -870,13 +945,17 @@ router.post(
       // `body`), and a 1-to-1 message stays plaintext until both clients
       // have published a public key and the sender's client chooses to
       // encrypt. The server never sees the plaintext of an encrypted send.
-      const isEncrypted =
-        req.body.encrypted === true &&
-        typeof req.body.ciphertext === "string" &&
-        typeof req.body.iv === "string";
-      const body = isEncrypted
-        ? "🔒 Encrypted message"
-        : String(req.body.body || "").trim();
+      // Accepts either the legacy single-shared-key format or the current
+      // multi-device format — see parseIncomingContent above.
+      const parsed = parseIncomingContent(req.body);
+      const isEncrypted = parsed.isEncrypted;
+      const body = parsed.body;
+
+      if (!parsed.valid || parsed.oversized) {
+        return res.status(400).json({
+          error: { code: "INVALID_MESSAGE", message: "Invalid encrypted message." },
+        });
+      }
 
       const conversation = await Conversation.findOne({
         _id: req.params.conversationId,
@@ -897,11 +976,6 @@ router.post(
             code: "INVALID_MESSAGE",
             message: "Message cannot be empty.",
           },
-        });
-      }
-      if (isEncrypted && req.body.ciphertext.length > 20000) {
-        return res.status(400).json({
-          error: { code: "INVALID_MESSAGE", message: "Message is too large." },
         });
       }
 
@@ -962,9 +1036,9 @@ router.post(
         replyTo: replyTo?._id || null,
         status: "delivered",
         encrypted: isEncrypted,
-        encryptedBody: isEncrypted
-          ? { ciphertext: req.body.ciphertext, iv: req.body.iv }
-          : undefined,
+        encryptedBody: parsed.encryptedBody,
+        encryptedPayloads: parsed.encryptedPayloads,
+        senderPublicKey: parsed.senderPublicKey,
       });
 
       conversation.lastMessage = body;
@@ -1318,14 +1392,15 @@ router.patch(
   "/conversations/:conversationId/messages/:messageId",
   async (req, res, next) => {
     try {
-      const isEncrypted =
-        req.body.encrypted === true &&
-        typeof req.body.ciphertext === "string" &&
-        typeof req.body.iv === "string";
-      const body = isEncrypted
-        ? "🔒 Encrypted message"
-        : String(req.body.body || "").trim();
+      const parsed = parseIncomingContent(req.body);
+      const isEncrypted = parsed.isEncrypted;
+      const body = parsed.body;
 
+      if (!parsed.valid || parsed.oversized) {
+        return res.status(400).json({
+          error: { code: "INVALID_MESSAGE", message: "Invalid encrypted message." },
+        });
+      }
       if (!isEncrypted && !body) {
         return res.status(400).json({
           error: {
@@ -1377,9 +1452,9 @@ router.patch(
 
       message.body = body;
       message.encrypted = isEncrypted;
-      message.encryptedBody = isEncrypted
-        ? { ciphertext: req.body.ciphertext, iv: req.body.iv }
-        : undefined;
+      message.encryptedBody = parsed.encryptedBody;
+      message.encryptedPayloads = parsed.encryptedPayloads;
+      message.senderPublicKey = parsed.senderPublicKey;
 
       message.editedAt = new Date();
 

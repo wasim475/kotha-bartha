@@ -87,13 +87,30 @@ const messageSchema = new mongoose.Schema(
     },
     // E2E encryption (1-to-1 text messages only — see server/src/routes
     // chat.routes.js). When `encrypted` is true, `body` is a placeholder,
-    // never the plaintext; the real content lives only in `encryptedBody`
-    // and can only be read by clients holding the matching private key.
+    // never the plaintext; the real content lives only in the fields below
+    // and can only be read by clients holding a matching private key.
     encrypted: { type: Boolean, default: false },
+    // Legacy single-shared-key format — one ciphertext for the entire
+    // conversation, decryptable only by whichever exact keypair pair
+    // produced it. No longer written by current clients; kept so
+    // pre-multi-device messages stay readable exactly as before.
     encryptedBody: {
       ciphertext: String,
       iv: String,
     },
+    // Current multi-device format — one ciphertext per target device (the
+    // recipient's devices plus the sender's own other devices), each
+    // decryptable by that one device's private key together with
+    // `senderPublicKey` below (the exact key the sending device used).
+    encryptedPayloads: [
+      {
+        _id: false,
+        deviceId: String,
+        ciphertext: String,
+        iv: String,
+      },
+    ],
+    senderPublicKey: String,
   },
   { timestamps: true },
 );

@@ -195,30 +195,49 @@ const uploadProfileImage = (field, folder) => [
 ];
 
 // ============================================================
-// E2E ENCRYPTION PUBLIC KEY
+// E2E ENCRYPTION PUBLIC KEY — multi-device
 //
-// Publishes this device's ECDH public key (JWK JSON) so other users'
-// clients can derive a shared key for encrypting 1-to-1 messages to this
-// user. The matching private key is generated and kept client-side only —
-// it is never sent here or stored on the server.
+// Publishes one device's ECDH public key (JWK JSON), upserted by that
+// device's own stable `deviceId` (see client/src/utility/crypto.js) so
+// other users' clients can derive a shared key for encrypting 1-to-1
+// messages to *every* device this account is using, and so one device
+// publishing a key can never clobber another device's already-published
+// entry. The matching private key is generated and kept client-side only —
+// it is never sent here or stored on the server. The legacy single
+// `publicKey` field is intentionally left untouched by this route — see
+// User.getPublicKeys() for how it's preserved and surfaced alongside these.
 // ============================================================
 router.patch("/users/me/public-key", async (req, res, next) => {
   try {
+    const deviceId = String(req.body.deviceId || "").trim();
     const publicKey = String(req.body.publicKey || "").trim();
 
+    if (!deviceId || deviceId.length > 100) {
+      return res.status(400).json({
+        error: { code: "INVALID_DEVICE", message: "Invalid device id." },
+      });
+    }
     if (!publicKey || publicKey.length > 2000) {
       return res.status(400).json({
         error: { code: "INVALID_KEY", message: "Invalid public key." },
       });
     }
 
-    const user = await User.findByIdAndUpdate(
-      req.user._id,
-      { $set: { publicKey } },
+    const updatedExisting = await User.findOneAndUpdate(
+      { _id: req.user._id, "publicKeys.deviceId": deviceId },
+      { $set: { "publicKeys.$.jwk": publicKey, "publicKeys.$.updatedAt": new Date() } },
       { new: true },
     );
 
-    res.json({ data: { publicKey: user.publicKey } });
+    const user =
+      updatedExisting ||
+      (await User.findByIdAndUpdate(
+        req.user._id,
+        { $push: { publicKeys: { deviceId, jwk: publicKey, updatedAt: new Date() } } },
+        { new: true },
+      ));
+
+    res.json({ data: { deviceId, publicKeys: user.getPublicKeys() } });
   } catch (error) {
     next(error);
   }

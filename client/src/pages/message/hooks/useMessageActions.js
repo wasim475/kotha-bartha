@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { api } from "../../../utility/api";
 import { sendTypingSignal } from "../../../utility/helpers";
-import { deriveSharedKey, encryptMessage, getOrCreateKeyPair } from "../../../utility/crypto";
+import { encryptForDevices, getOrCreateKeyPair } from "../../../utility/crypto";
 import { playReactionSound } from "../../../utility/sound";
 
 const useMessageActions = ({
@@ -125,15 +125,25 @@ const useMessageActions = ({
 
     try {
       // Opportunistic E2E: only for 1-to-1 conversations where the peer
-      // has published a public key. Falls back to plaintext otherwise —
-      // nothing about sending breaks if encryption isn't available.
-      const peerPublicKey = !selected?.isGroup ? selected?.user?.publicKey : null;
-      const sharedKey = peerPublicKey
-        ? await deriveSharedKey(conversationId, peerPublicKey, user.id)
+      // has published at least one device's public key. Encrypted once per
+      // known device on both sides — the peer's, so any of their open
+      // browsers can read it, and this account's own other devices, so a
+      // refresh or a second browser for the *same* account can too. Falls
+      // back to plaintext otherwise — nothing about sending breaks if
+      // encryption isn't available.
+      const targets = !selected?.isGroup
+        ? [...(selected?.user?.publicKeys || []), ...(user?.publicKeys || [])]
+        : [];
+      const encrypted = targets.length
+        ? await encryptForDevices(conversationId, targets, text, user.id)
         : null;
 
-      const requestBody = sharedKey
-        ? { encrypted: true, ...(await encryptMessage(sharedKey, text)) }
+      const requestBody = encrypted
+        ? {
+            encrypted: true,
+            senderPublicKey: encrypted.senderPublicKey,
+            encryptedPayloads: encrypted.payloads,
+          }
         : { body: text };
 
       const { data } = await api.post(`/conversations/${conversationId}/messages`, {
@@ -342,13 +352,20 @@ const useMessageActions = ({
   // send, one target at a time.
   const forwardPlaintext = async (targetConversationId, text) => {
     const target = conversations.data?.find((c) => c.id === targetConversationId);
-    const peerPublicKey = target && !target.isGroup ? target.user?.publicKey : null;
-    const sharedKey = peerPublicKey
-      ? await deriveSharedKey(targetConversationId, peerPublicKey, user.id)
+    const targets =
+      target && !target.isGroup
+        ? [...(target.user?.publicKeys || []), ...(user?.publicKeys || [])]
+        : [];
+    const encrypted = targets.length
+      ? await encryptForDevices(targetConversationId, targets, text, user.id)
       : null;
 
-    const requestBody = sharedKey
-      ? { encrypted: true, ...(await encryptMessage(sharedKey, text)) }
+    const requestBody = encrypted
+      ? {
+          encrypted: true,
+          senderPublicKey: encrypted.senderPublicKey,
+          encryptedPayloads: encrypted.payloads,
+        }
       : { body: text };
 
     await api.post(`/conversations/${targetConversationId}/messages`, requestBody);

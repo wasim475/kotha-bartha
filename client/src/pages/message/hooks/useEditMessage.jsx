@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api } from "../../../utility/api";
-import { deriveSharedKey, encryptMessage } from "../../../utility/crypto";
+import { encryptForDevices } from "../../../utility/crypto";
 
 const useEditMessage = ({
   conversationId,
@@ -8,6 +8,7 @@ const useEditMessage = ({
   conversations,
   selected,
   userId,
+  myPublicKeys,
   preserveScrollPosition,
 }) => {
   const [editingMessage, setEditingMessage] = useState(null);
@@ -35,14 +36,20 @@ const useEditMessage = ({
 
     try {
       const original = (thread.data || []).find((message) => message.id === messageId);
-      const peerPublicKey = !selected?.isGroup ? selected?.user?.publicKey : null;
-      const sharedKey =
-        original?.encrypted && peerPublicKey
-          ? await deriveSharedKey(conversationId, peerPublicKey, userId)
-          : null;
+      const targets =
+        original?.encrypted && !selected?.isGroup
+          ? [...(selected?.user?.publicKeys || []), ...(myPublicKeys || [])]
+          : [];
+      const encrypted = targets.length
+        ? await encryptForDevices(conversationId, targets, text, userId)
+        : null;
 
-      const requestBody = sharedKey
-        ? { encrypted: true, ...(await encryptMessage(sharedKey, text)) }
+      const requestBody = encrypted
+        ? {
+            encrypted: true,
+            senderPublicKey: encrypted.senderPublicKey,
+            encryptedPayloads: encrypted.payloads,
+          }
         : { body: text };
 
       const { data } = await api.patch(

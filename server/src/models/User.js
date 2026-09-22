@@ -42,13 +42,55 @@ const userSchema = new mongoose.Schema(
       rememberLogin: { type: Boolean, default: true },
     },
     lastSeenAt: Date,
-    // E2E encryption public key (JWK JSON string) for this device's most
-    // recently generated ECDH keypair — see client/src/utility/crypto.js.
-    // The matching private key never leaves the browser.
+    // Legacy E2E encryption public key (JWK JSON string) — pre-multi-device,
+    // a single key per account regardless of how many browsers/devices used
+    // it. Superseded by `publicKeys` below; kept (never deleted) so old
+    // messages encrypted under it stay decryptable on whichever device
+    // originally generated it — see getPublicKeys() and
+    // client/src/utility/crypto.js's LEGACY_DEVICE_ID.
     publicKey: { type: String, default: null },
+    // One ECDH public key per device that's ever published one for this
+    // account, keyed by that device's stable, self-assigned `deviceId` (see
+    // client/src/utility/crypto.js). Each device's matching private key
+    // never leaves its own browser. Upserted by deviceId only — see
+    // PATCH /users/me/public-key — so one device publishing never
+    // overwrites another's entry.
+    publicKeys: {
+      type: [
+        {
+          _id: false,
+          deviceId: { type: String, required: true },
+          jwk: { type: String, required: true },
+          updatedAt: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+    },
   },
   { timestamps: true },
 );
+
+// Identifies the synthesized entry getPublicKeys() adds for a pre-existing
+// `publicKey` value — must match client/src/utility/crypto.js's exported
+// LEGACY_DEVICE_ID exactly, since the client uses this id to know which of
+// a peer's keys was used to encrypt old-format messages.
+const LEGACY_DEVICE_ID = "legacy";
+
+// The full, effective list of this account's public keys for encrypting
+// to it — every device that's registered one via the multi-device flow,
+// plus (if present) the old single `publicKey` field surfaced as a
+// synthetic "legacy" device entry, so callers never need to look at both
+// fields separately and old conversations keep working.
+userSchema.methods.getPublicKeys = function getPublicKeys() {
+  const keys = (this.publicKeys || []).map((entry) => ({
+    deviceId: entry.deviceId,
+    jwk: entry.jwk,
+  }));
+  if (this.publicKey && !keys.some((key) => key.deviceId === LEGACY_DEVICE_ID)) {
+    keys.push({ deviceId: LEGACY_DEVICE_ID, jwk: this.publicKey });
+  }
+  return keys;
+};
 
 userSchema.methods.toSafeJSON = function toSafeJSON() {
   return {
@@ -63,8 +105,11 @@ userSchema.methods.toSafeJSON = function toSafeJSON() {
     cover: this.cover,
     settings: this.settings,
     lastSeenAt: this.lastSeenAt,
+    // Kept for any lingering consumer of the old single-key shape.
     publicKey: this.publicKey,
+    publicKeys: this.getPublicKeys(),
   };
 };
 
 module.exports = mongoose.model("User", userSchema);
+module.exports.LEGACY_DEVICE_ID = LEGACY_DEVICE_ID;

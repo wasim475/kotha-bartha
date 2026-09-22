@@ -90,6 +90,7 @@ const Message = ({ user }) => {
     conversations,
     selected,
     userId: user.id,
+    myPublicKeys: user.publicKeys,
     preserveScrollPosition: scroll.preserveScrollPosition,
   });
   const deletion = useDeleteMessage({

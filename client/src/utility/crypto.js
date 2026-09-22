@@ -1,16 +1,24 @@
-// Client-side end-to-end encryption for 1-to-1 text messages.
+// Client-side end-to-end encryption for 1-to-1 text messages — multi-device.
 //
-// Each device generates its own ECDH (P-256) keypair the first time it's
-// needed. The private key is created non-extractable — normal application
-// code (and the server, which never receives it) can never read its raw
-// bytes, only use it via the CryptoKey object to derive a shared secret.
-// The public key is published to the server so the other participant's
-// browser can derive the same shared AES-GCM key locally (ECDH) and
-// encrypt/decrypt without the server ever seeing plaintext.
+// Every browser/origin ("device") gets its own stable random deviceId
+// (localStorage) and its own ECDH (P-256) keypair, generated the first time
+// it's needed. The private key is created non-extractable — normal
+// application code (and the server, which never receives it) can never
+// read its raw bytes, only use it via the CryptoKey object to derive a
+// shared secret. The public key is published to the server, namespaced by
+// deviceId, alongside every other device this account (or the person
+// they're talking to) has ever registered — see User.publicKeys on the
+// server. A message is encrypted once per known device on both sides (the
+// recipient's devices, so any of their open browsers can read it, and the
+// sender's own other devices, so a refresh or a second browser for the
+// *same* account can too), so any one of them can independently derive the
+// same per-device shared secret and decrypt without the server ever seeing
+// plaintext.
 //
 // Scope: 1-to-1 text message bodies only — see server/src/routes/chat.routes.js
 // and the E2E section of the implementation plan for what's intentionally
-// out of scope (attachments, groups, multi-device key sync).
+// out of scope (attachments, groups, real-time key propagation faster than
+// the normal conversation-list refresh cadence).
 
 import { api } from "./api";
 
@@ -27,7 +35,18 @@ const STORE = "keys";
 // their current key rather than losing history unnecessarily).
 const keyRecordId = (userId) => `device-keypair:${userId}`;
 const LEGACY_KEY_ID = "device-keypair";
-const PUBLISHED_FLAG_PREFIX = "kotha-e2e-published-";
+
+// Identifies the pre-multi-device key entry the server preserves under
+// User.publicKeys when it migrates an account's old single `publicKey`
+// field (see server/src/models/User.js — this exact string must match its
+// LEGACY_DEVICE_ID). A device only has a usable private key for this entry
+// if it's the same browser/origin that generated the account's original,
+// pre-migration keypair (still stored under the un-namespaced
+// device-keypair record this module adopts below) — every other device
+// simply can't decrypt old-format messages, which is expected.
+export const LEGACY_DEVICE_ID = "legacy";
+
+const DEVICE_ID_STORAGE_KEY = "kotha-e2e-device-id";
 
 const cryptoAvailable = () =>
   typeof window !== "undefined" && window.crypto?.subtle && window.indexedDB;
@@ -81,12 +100,19 @@ const base64ToBuf = (base64) =>
 // switching accounts without a full page reload) can never hand one
 // user's in-memory keypair to another.
 const keyPairPromises = new Map();
-// conversationId -> { peerPublicKeyJwkString, key } — keyed on the exact
-// peer public key the shared secret was derived from, not just the
-// conversation id, so a key rotation (peer re-generating a keypair on a
-// new/cleared device) invalidates the cache instead of silently reusing a
-// shared secret that no longer matches either side's current key.
+// `${conversationId}:${peerPublicKeyJwkString}` -> Promise<CryptoKey> — a
+// conversation can now involve several target keys at once (one per device
+// on each side), so this is no longer a single cached entry per
+// conversation; it's keyed on the exact peer key a secret was derived from,
+// so a key rotation (or simply a different target device) never reuses a
+// shared secret that doesn't match.
 const sharedKeyCache = new Map();
+
+// Not persisted — reset on every fresh page load/tab, so a device always
+// reconciles with the server at least once per session instead of trusting
+// a potentially-stale local flag left over from a previous one (see
+// publishPublicKeyIfNeeded below for why that used to be unsafe).
+const publishedThisSession = new Set();
 
 async function generateKeyPair() {
   return crypto.subtle.generateKey(
@@ -96,12 +122,41 @@ async function generateKeyPair() {
   );
 }
 
-// Loads (or creates) this specific user's own keypair record. A pre-fix
-// browser may still have one keypair stored under the old shared,
-// un-namespaced record — the first account that finds it here adopts it
-// (preserving that account's existing message history instead of orphaning
-// it for no reason) and the record is removed so no other account can also
-// claim it later.
+// A stable, random identifier for *this browser/origin*, independent of
+// which account is logged into it — deliberately not derived from the key
+// material itself (a device's identity and its key are separate concerns;
+// the id is just a lookup handle for "which of my devices published this
+// key"). Falls back to an in-memory-only id for the rare case localStorage
+// itself is unavailable (e.g. a fully locked-down private-browsing mode) —
+// that device simply won't have a stable identity across reloads, which is
+// no worse than today's behavior for such a browser.
+function getOrCreateDeviceId() {
+  try {
+    let id = localStorage.getItem(DEVICE_ID_STORAGE_KEY);
+    if (!id) {
+      id =
+        typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `dev-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      localStorage.setItem(DEVICE_ID_STORAGE_KEY, id);
+    }
+    return id;
+  } catch {
+    return `session-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+}
+
+export function getDeviceId() {
+  return getOrCreateDeviceId();
+}
+
+// Loads (or creates) this specific user's own keypair record on this
+// device. A pre-fix browser may still have one keypair stored under the
+// old shared, un-namespaced record — the first account that finds it here
+// adopts it (preserving that account's existing message history instead of
+// orphaning it for no reason, and becoming this device's "legacy" identity
+// for decrypting old-format messages) and the record is removed so no
+// other account can also claim it later.
 async function loadOrCreateKeyPair(userId) {
   const recordId = keyRecordId(userId);
   const existing = await idbGet(recordId).catch(() => null);
@@ -115,39 +170,51 @@ async function loadOrCreateKeyPair(userId) {
   }
 
   const keyPair = await generateKeyPair();
+
+  // Two-tab safety: another tab may have generated and stored its own
+  // keypair for this exact user while we were generating ours (both saw
+  // "nothing stored yet" at the same time). Re-check right before writing
+  // and defer to whichever one got there first, so both tabs converge on
+  // the same private key instead of silently diverging.
+  const raceWinner = await idbGet(recordId).catch(() => null);
+  if (raceWinner) return raceWinner;
+
   await idbSet(recordId, keyPair);
   return keyPair;
 }
 
-// The "have we published this" flag stores the exact JWK we last published,
-// not just a boolean — so if the local key ever ends up not matching what
-// the server has on file for us (e.g. a browser affected by the old
-// shared-keypair bug above, before this fix), this notices the mismatch and
-// republishes automatically instead of silently staying wrong forever.
-async function publishPublicKeyIfNeeded(publicKey, userId) {
-  const flagKey = `${PUBLISHED_FLAG_PREFIX}${userId}`;
+// Publishes this device's public key under its own deviceId (upsert — see
+// PATCH /users/me/public-key), never touching any other device's entry.
+// Runs at most once per tab session per user: unlike the old
+// localStorage-flag check this replaces (which only ever compared against
+// what *this device* last thought it told the server, and could never
+// notice the server had since been overwritten by a different device),
+// this always checks in with the server once per fresh load — cheap, since
+// it's an idempotent upsert — so a device can never end up silently stale.
+async function publishPublicKeyIfNeeded(publicKey, userId, deviceId) {
+  const sessionKey = `${userId}:${deviceId}`;
+  if (publishedThisSession.has(sessionKey)) return;
 
   try {
     const jwk = JSON.stringify(await crypto.subtle.exportKey("jwk", publicKey));
-    if (localStorage.getItem(flagKey) === jwk) return;
-
-    await api.patch("/users/me/public-key", { publicKey: jwk });
-    localStorage.setItem(flagKey, jwk);
+    await api.patch("/users/me/public-key", { deviceId, publicKey: jwk });
+    publishedThisSession.add(sessionKey);
   } catch {
-    // Non-fatal — retried next time getOrCreateKeyPair runs (e.g. next
-    // app load), since the flag was never updated to match.
+    // Non-fatal — retried next time getOrCreateKeyPair runs in this tab
+    // (sessionKey was never added), or on the next full page load.
   }
 }
 
-// Resolves to { privateKey, publicKey } (CryptoKey objects), or null if the
-// Web Crypto / IndexedDB APIs aren't available in this browser context.
+// Resolves to { privateKey, publicKey } (CryptoKey objects) for this
+// device's keypair, or null if the Web Crypto / IndexedDB APIs aren't
+// available in this browser context.
 export function getOrCreateKeyPair(userId) {
   if (!userId || !cryptoAvailable()) return Promise.resolve(null);
   if (keyPairPromises.has(userId)) return keyPairPromises.get(userId);
 
   const promise = (async () => {
     const keyPair = await loadOrCreateKeyPair(userId);
-    publishPublicKeyIfNeeded(keyPair.publicKey, userId);
+    publishPublicKeyIfNeeded(keyPair.publicKey, userId, getOrCreateDeviceId());
     return keyPair;
   })();
 
@@ -155,16 +222,14 @@ export function getOrCreateKeyPair(userId) {
   return promise;
 }
 
-// Derives (and caches) the AES-GCM key shared with a specific conversation's
-// peer, from our private key and their published public key (JWK JSON
-// string, as stored on User.publicKey).
+// Derives (and caches) the AES-GCM key shared with one specific target
+// device's public key (JWK JSON string, as stored in User.publicKeys),
+// from this device's own private key.
 export async function deriveSharedKey(conversationId, peerPublicKeyJwkString, userId) {
   if (!peerPublicKeyJwkString) return null;
 
-  const cached = sharedKeyCache.get(conversationId);
-  if (cached && cached.peerPublicKeyJwkString === peerPublicKeyJwkString) {
-    return cached.key;
-  }
+  const cacheKey = `${conversationId}:${peerPublicKeyJwkString}`;
+  if (sharedKeyCache.has(cacheKey)) return sharedKeyCache.get(cacheKey);
 
   const keyPair = await getOrCreateKeyPair(userId);
   if (!keyPair) return null;
@@ -185,7 +250,7 @@ export async function deriveSharedKey(conversationId, peerPublicKeyJwkString, us
       false,
       ["encrypt", "decrypt"],
     );
-    sharedKeyCache.set(conversationId, { peerPublicKeyJwkString, key: sharedKey });
+    sharedKeyCache.set(cacheKey, sharedKey);
     return sharedKey;
   } catch {
     return null;
@@ -209,4 +274,35 @@ export async function decryptMessage(sharedKey, { ciphertext, iv }) {
     base64ToBuf(ciphertext),
   );
   return new TextDecoder().decode(plaintextBuffer);
+}
+
+// Encrypts `plaintext` once per target device (deduped by deviceId — the
+// caller typically passes the peer's devices concatenated with this
+// account's own other devices, so any of them can read it later), all
+// under this device's own current keypair. Returns null if there's nothing
+// to encrypt for (no known target devices, or Web Crypto unavailable) so
+// callers can cleanly fall back to a plaintext send exactly as before.
+export async function encryptForDevices(conversationId, targets, plaintext, userId) {
+  const keyPair = await getOrCreateKeyPair(userId);
+  if (!keyPair) return null;
+
+  const dedupedTargets = new Map();
+  for (const target of targets || []) {
+    if (target?.deviceId && target?.jwk && !dedupedTargets.has(target.deviceId)) {
+      dedupedTargets.set(target.deviceId, target.jwk);
+    }
+  }
+  if (!dedupedTargets.size) return null;
+
+  const payloads = [];
+  for (const [deviceId, jwk] of dedupedTargets) {
+    const sharedKey = await deriveSharedKey(conversationId, jwk, userId);
+    if (!sharedKey) continue;
+    const { ciphertext, iv } = await encryptMessage(sharedKey, plaintext);
+    payloads.push({ deviceId, ciphertext, iv });
+  }
+  if (!payloads.length) return null;
+
+  const senderPublicKey = JSON.stringify(await crypto.subtle.exportKey("jwk", keyPair.publicKey));
+  return { senderPublicKey, payloads };
 }
