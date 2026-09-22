@@ -1,5 +1,5 @@
-import { Add, Block, CheckCircle } from "@mui/icons-material";
-import { useState } from "react";
+import { Add, Block, CheckCircle, Close, Image as ImageIcon } from "@mui/icons-material";
+import { useEffect, useRef, useState } from "react";
 
 import Button from "../../../components/ui/Button";
 import Card from "../../../components/ui/Card";
@@ -10,6 +10,7 @@ import AddNameDialog from "./AddNameDialog";
 
 const OPTION_LABELS = ["A", "B", "C", "D"];
 const EMPTY_OPTIONS = ["", "", "", ""];
+const MAX_QUESTION_IMAGES = 4;
 
 /**
  * Admin/moderator quiz management, reached from inside the Quiz section
@@ -33,9 +34,27 @@ export default function QuizAdmin({ user }) {
   const [question, setQuestion] = useState("");
   const [options, setOptions] = useState(EMPTY_OPTIONS);
   const [correctIndex, setCorrectIndex] = useState(null);
+  // Each item is { file, previewUrl } — the object URL is created the
+  // moment a file is added and revoked the moment it's removed/reset, so
+  // there's no separate effect deriving preview state from the file list.
+  const [images, setImages] = useState([]);
+  const [imageCaption, setImageCaption] = useState("");
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [justPublishedSet, setJustPublishedSet] = useState(null);
+  const imageInputRef = useRef(null);
+  const imagesRef = useRef(images);
+  useEffect(() => {
+    imagesRef.current = images;
+  }, [images]);
+
+  // Only runs on unmount, to revoke any object URLs still outstanding if
+  // the admin navigates away mid-selection.
+  useEffect(() => {
+    return () => {
+      imagesRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    };
+  }, []);
 
   const categories = useResource("/quiz/categories");
   const classLevels = useResource(category === "class" ? "/quiz/class-levels" : null);
@@ -84,6 +103,32 @@ export default function QuizAdmin({ user }) {
     setQuestion("");
     setOptions(EMPTY_OPTIONS);
     setCorrectIndex(null);
+    setImages((current) => {
+      current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+      return [];
+    });
+    setImageCaption("");
+  };
+
+  const addImages = (files) => {
+    if (!files.length) return;
+    setImages((current) => {
+      const remaining = MAX_QUESTION_IMAGES - current.length;
+      if (remaining <= 0) return current;
+      const accepted = files.slice(0, remaining).map((file) => ({
+        file,
+        previewUrl: URL.createObjectURL(file),
+      }));
+      return [...current, ...accepted];
+    });
+  };
+
+  const removeImage = (index) => {
+    setImages((current) => {
+      const target = current[index];
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return current.filter((_, i) => i !== index);
+    });
   };
 
   const submitQuestion = async (event) => {
@@ -101,11 +146,22 @@ export default function QuizAdmin({ user }) {
     setFormError("");
     setJustPublishedSet(null);
     try {
-      const { data } = await api.post(`/quiz/chapters/${chapter.id}/questions`, {
-        question: trimmedQuestion,
-        options: trimmedOptions,
-        correctIndex,
-      });
+      let data;
+      if (images.length) {
+        const formData = new FormData();
+        formData.append("question", trimmedQuestion);
+        formData.append("options", JSON.stringify(trimmedOptions));
+        formData.append("correctIndex", correctIndex);
+        formData.append("imageCaption", imageCaption.trim());
+        images.forEach((item) => formData.append("images", item.file));
+        ({ data } = await api.post(`/quiz/chapters/${chapter.id}/questions`, formData));
+      } else {
+        ({ data } = await api.post(`/quiz/chapters/${chapter.id}/questions`, {
+          question: trimmedQuestion,
+          options: trimmedOptions,
+          correctIndex,
+        }));
+      }
       summary.setData(data.data.summary);
       if (data.data.setJustPublished) setJustPublishedSet(data.data.setNumber);
       resetForm();
@@ -317,40 +373,116 @@ export default function QuizAdmin({ user }) {
                     placeholder="Type the question…"
                     className="mt-1.5 w-full resize-none rounded-md border border-line bg-paper p-2.5 text-sm text-ink outline-none placeholder:text-muted focus-visible:ring-2 focus-visible:ring-accent"
                   />
+
+                  {images.length > 0 && (
+                    <div className="mt-2 grid grid-cols-4 gap-1.5 sm:grid-cols-6">
+                      {images.map((item, index) => (
+                        <div
+                          key={item.previewUrl}
+                          className="relative aspect-square overflow-hidden rounded-md border border-line bg-soft"
+                        >
+                          <img src={item.previewUrl} alt="" className="size-full object-cover" />
+                          <button
+                            type="button"
+                            aria-label="Remove image"
+                            onClick={() => removeImage(index)}
+                            className="absolute top-0.5 right-0.5 flex size-4.5 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
+                          >
+                            <Close style={{ fontSize: 12 }} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="mt-2 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={images.length >= MAX_QUESTION_IMAGES}
+                      className="flex items-center gap-1.5 rounded-md border border-line px-2.5 py-1.5 text-xs font-semibold text-muted transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <ImageIcon style={{ fontSize: 15 }} />
+                      Add images
+                    </button>
+                    {images.length > 0 && (
+                      <span className="text-[11px] text-muted">
+                        {images.length} / {MAX_QUESTION_IMAGES} added
+                      </span>
+                    )}
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      multiple
+                      className="hidden"
+                      accept="image/png,image/jpeg,image/gif,image/webp"
+                      onChange={(event) => {
+                        const files = Array.from(event.target.files || []);
+                        event.target.value = "";
+                        addImages(files);
+                      }}
+                    />
+                  </div>
+
+                  {images.length > 0 && (
+                    <input
+                      value={imageCaption}
+                      onChange={(event) => setImageCaption(event.target.value)}
+                      placeholder="Caption for these images (optional)"
+                      maxLength={300}
+                      className="mt-2 w-full rounded-md border border-line bg-paper px-3 py-2 text-sm text-ink outline-none placeholder:text-muted focus-visible:ring-2 focus-visible:ring-accent"
+                    />
+                  )}
                 </div>
 
-                <div className="grid gap-2.5">
-                  {options.map((optionValue, index) => (
-                    <div key={index} className="flex items-center gap-2.5">
-                      <button
-                        type="button"
+                <div className="grid gap-2.5" role="radiogroup" aria-label="Correct answer">
+                  {options.map((optionValue, index) => {
+                    const isCorrect = correctIndex === index;
+                    return (
+                      <div
+                        key={index}
                         onClick={() => setCorrectIndex(index)}
-                        aria-label={`Mark option ${OPTION_LABELS[index]} as correct`}
                         className={cx(
-                          "flex size-8 shrink-0 items-center justify-center rounded-full border text-xs font-bold transition-colors",
-                          correctIndex === index
-                            ? "border-green-500 bg-green-500 text-white"
-                            : "border-line text-muted hover:border-accent hover:text-accent",
+                          "flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-3 transition-colors motion-safe:duration-150",
+                          isCorrect
+                            ? "border-green-500 bg-green-500/10"
+                            : "border-line bg-panel hover:border-accent hover:bg-soft",
                         )}
                       >
-                        {OPTION_LABELS[index]}
-                      </button>
-                      <input
-                        value={optionValue}
-                        onChange={(event) =>
-                          setOptions((current) =>
-                            current.map((value, i) => (i === index ? event.target.value : value)),
-                          )
-                        }
-                        placeholder={`Option ${OPTION_LABELS[index]}`}
-                        maxLength={300}
-                        className="min-w-0 flex-1 rounded-md border border-line bg-paper px-3 py-2 text-sm text-ink outline-none placeholder:text-muted focus-visible:ring-2 focus-visible:ring-accent"
-                      />
-                    </div>
-                  ))}
+                        <input
+                          type="radio"
+                          name="correctOption"
+                          checked={isCorrect}
+                          onChange={() => setCorrectIndex(index)}
+                          aria-label={`Mark option ${OPTION_LABELS[index]} as the correct answer`}
+                          className="size-5 shrink-0 cursor-pointer accent-green-600 dark:accent-green-400"
+                        />
+                        <span
+                          className={cx(
+                            "flex size-7 shrink-0 items-center justify-center rounded-full border text-xs font-bold transition-colors",
+                            isCorrect ? "border-green-500 bg-green-500 text-white" : "border-line text-muted",
+                          )}
+                        >
+                          {OPTION_LABELS[index]}
+                        </span>
+                        <input
+                          value={optionValue}
+                          onChange={(event) =>
+                            setOptions((current) =>
+                              current.map((value, i) => (i === index ? event.target.value : value)),
+                            )
+                          }
+                          onClick={(event) => event.stopPropagation()}
+                          placeholder={`Option ${OPTION_LABELS[index]}`}
+                          maxLength={300}
+                          className="min-w-0 flex-1 rounded-md border border-line bg-paper px-3 py-2 text-sm text-ink outline-none placeholder:text-muted focus-visible:ring-2 focus-visible:ring-accent"
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
                 <p className="text-[11px] text-muted">
-                  Tap the letter beside an option to mark it as the correct answer.
+                  Tap anywhere on an option row to mark it as the correct answer.
                 </p>
 
                 {formError && <p className="text-xs font-medium text-danger">{formError}</p>}

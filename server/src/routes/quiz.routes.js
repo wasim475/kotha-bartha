@@ -5,6 +5,8 @@ const Chapter = require("../models/Chapter");
 const QuizQuestion = require("../models/QuizQuestion");
 const QuizAttempt = require("../models/QuizAttempt");
 const { requireRole } = require("../middleware/requireRole");
+const { upload } = require("../middleware/upload");
+const { uploadBuffer } = require("../utils/cloudinary");
 
 const router = express.Router();
 
@@ -312,9 +314,35 @@ router.get(
   },
 );
 
+const MAX_QUESTION_IMAGES = 4;
+
 router.post(
   "/quiz/chapters/:chapterId/questions",
   requireRole("admin", "moderator"),
+  // A plain JSON (no images) request never has a multipart Content-Type,
+  // so multer passes it straight through unchanged — this only actually
+  // parses requests that include image files (same pattern as posts.routes.js).
+  (req, res, next) => {
+    upload.array("images", MAX_QUESTION_IMAGES)(req, res, (error) => {
+      if (!error) return next();
+      if (error.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({
+          error: { code: "FILE_TOO_LARGE", message: "One of your images is larger than 15MB." },
+        });
+      }
+      if (error.code === "LIMIT_FILE_COUNT" || error.code === "LIMIT_UNEXPECTED_FILE") {
+        return res.status(400).json({
+          error: { code: "TOO_MANY_FILES", message: `You can add up to ${MAX_QUESTION_IMAGES} images per question.` },
+        });
+      }
+      if (error.message === "UNSUPPORTED_FILE_TYPE") {
+        return res.status(400).json({
+          error: { code: "UNSUPPORTED_FILE_TYPE", message: "Choose images for this question." },
+        });
+      }
+      next(error);
+    });
+  },
   async (req, res, next) => {
     try {
       const chapter = await Chapter.findById(req.params.chapterId);
@@ -323,10 +351,23 @@ router.post(
       }
 
       const question = String(req.body.question || "").trim();
-      const options = Array.isArray(req.body.options)
-        ? req.body.options.map((option) => String(option || "").trim())
+      // multipart requests (when images are attached) send `options` as a
+      // JSON string, since FormData can't carry a real array — plain JSON
+      // requests still send it as an actual array.
+      let rawOptions = req.body.options;
+      if (typeof rawOptions === "string") {
+        try {
+          rawOptions = JSON.parse(rawOptions);
+        } catch {
+          rawOptions = [];
+        }
+      }
+      const options = Array.isArray(rawOptions)
+        ? rawOptions.map((option) => String(option || "").trim())
         : [];
       const correctIndex = Number(req.body.correctIndex);
+      const imageCaption = String(req.body.imageCaption || "").trim();
+      const files = req.files || [];
 
       if (!question) {
         return res.status(400).json({
@@ -343,6 +384,21 @@ router.post(
           error: { code: "VALIDATION_ERROR", message: "Choose the correct option." },
         });
       }
+      if (files.some((file) => !file.mimetype.startsWith("image/"))) {
+        return res.status(400).json({
+          error: { code: "INVALID_FILE", message: "Choose images for this question." },
+        });
+      }
+
+      const images = await Promise.all(
+        files.map(async (file) => {
+          const result = await uploadBuffer(file.buffer, {
+            kind: "image",
+            folder: "kotha-bartha/quiz-questions",
+          });
+          return { publicId: result.public_id, secureUrl: result.secure_url, kind: "image" };
+        }),
+      );
 
       const slotIndex = await QuizQuestion.countDocuments({ chapterId: chapter._id });
       const setNumber = Math.floor(slotIndex / QUESTIONS_PER_SET) + 1;
@@ -356,6 +412,8 @@ router.post(
           question,
           options,
           correctIndex,
+          images,
+          imageCaption,
           slotIndex,
           setNumber,
           createdBy: req.user._id,
@@ -376,7 +434,14 @@ router.post(
       const setJustPublished = summary.questionsInCurrentSet === 0 && summary.publishedSets === setNumber;
 
       res.status(201).json({
-        data: { id: created._id.toString(), setNumber, summary, setJustPublished },
+        data: {
+          id: created._id.toString(),
+          setNumber,
+          summary,
+          setJustPublished,
+          images: created.images,
+          imageCaption: created.imageCaption,
+        },
       });
     } catch (error) {
       next(error);

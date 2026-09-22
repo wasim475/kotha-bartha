@@ -29,6 +29,16 @@ const quizQuestionSchema = new mongoose.Schema(
       },
     },
     correctIndex: { type: Number, required: true, min: 0, max: 3 },
+    // Optional reference images for the question (see Post.media for the
+    // same {publicId, secureUrl, kind} convention — `kind` instead of
+    // `type` because Mongoose reserves `type` for the path's own schema
+    // type inside a nested definition). `imageCaption` is one caption for
+    // the whole set of images, not per-image.
+    images: {
+      type: [{ publicId: String, secureUrl: String, kind: String }],
+      default: [],
+    },
+    imageCaption: { type: String, trim: true, maxlength: 300, default: "" },
     // This question's position within its chapter, 0-based, assigned once
     // at creation from the chapter's question count at that moment and
     // never recalculated — what makes set numbering stable regardless of
