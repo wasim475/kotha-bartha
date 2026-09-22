@@ -4,11 +4,11 @@ import { Link } from "react-router-dom";
 
 import { cx } from "../../../utility/cx";
 
-import Avatar from "../../../components/ui/Avatar";
 import Button from "../../../components/ui/Button";
 import Card from "../../../components/ui/Card";
 import IconButton from "../../../components/ui/IconButton";
 import Menu from "../../../components/ui/Menu";
+import ProfileAvatarLink from "../../../components/ui/ProfileAvatarLink";
 import RichText from "../../../components/ui/RichText";
 import ReactionButton from "../../../components/ui/reactions/ReactionButton";
 import ReactionSummary from "../../../components/ui/reactions/ReactionSummary";
@@ -79,18 +79,16 @@ export default function PostCard({
     >
       {/* Author */}
       <div className="flex items-center gap-3 p-4">
+        <ProfileAvatarLink person={post.author} size="md" className="shrink-0 rounded-full" />
+
         <Link
           to={`/app/profile/${post.author.id}`}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          className="min-w-0 flex-1 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
-          <Avatar person={post.author} size="md" />
-
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-ink hover:underline">
-              {post.author.fullName}
-            </p>
-            <p className="text-xs text-muted">{formatTime(post.createdAt)}</p>
-          </div>
+          <p className="truncate text-sm font-semibold text-ink hover:underline">
+            {post.author.fullName}
+          </p>
+          <p className="text-xs text-muted">{formatTime(post.createdAt)}</p>
         </Link>
 
         {post.editable && (

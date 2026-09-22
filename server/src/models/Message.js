@@ -111,6 +111,30 @@ const messageSchema = new mongoose.Schema(
       },
     ],
     senderPublicKey: String,
+    // Set only on the plaintext "reacted to your Story"/"reacted to your
+    // Note" and text-reply messages created from stories.routes.js /
+    // notes.routes.js — never on a normal typed message. `snapshot` is a
+    // denormalized copy of the story/note's content taken at the moment
+    // this message was sent, so the compact context card in MessageBubble
+    // can still render it after the original Story/Note document is gone
+    // (TTL-expired) — the client never re-fetches the original by refId.
+    // `kind`, not `type`, inside `snapshot` for the same reason Post.media
+    // and Message.attachment use `kind` — see those models' own comments.
+    storyContext: {
+      refType: { type: String, enum: ["story", "note"] },
+      refId: mongoose.Schema.Types.ObjectId,
+      action: { type: String, enum: ["reaction", "reply"] },
+      reactionEmoji: { type: String, maxlength: 8 },
+      authorId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      expiresAt: Date,
+      snapshot: {
+        kind: String,
+        text: { type: String, maxlength: 500 },
+        textColor: String,
+        backgroundColor: String,
+        mediaUrl: String,
+      },
+    },
   },
   { timestamps: true },
 );

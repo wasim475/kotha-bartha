@@ -968,6 +968,17 @@ router.get(
             userId: reaction.userId.toString(),
             emoji: reaction.emoji,
           })),
+          storyContext: message.storyContext?.refId
+            ? {
+                refType: message.storyContext.refType,
+                refId: message.storyContext.refId.toString(),
+                action: message.storyContext.action,
+                reactionEmoji: message.storyContext.reactionEmoji || null,
+                authorId: message.storyContext.authorId?.toString() || null,
+                expiresAt: message.storyContext.expiresAt,
+                snapshot: message.storyContext.snapshot || null,
+              }
+            : null,
         })),
         meta: { firstUnreadMessageId },
       });

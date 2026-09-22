@@ -108,4 +108,22 @@ function serializeStory(story) {
   };
 }
 
-module.exports = { initials, safeUser, serializePost, serializeComment, serializeStory };
+function serializeNote(note) {
+  const authorId = note.authorId?._id || note.authorId;
+  return {
+    id: note._id.toString(),
+    authorId: authorId.toString(),
+    text: note.text,
+    createdAt: note.createdAt,
+    expiresAt: note.expiresAt,
+  };
+}
+
+module.exports = {
+  initials,
+  safeUser,
+  serializePost,
+  serializeComment,
+  serializeStory,
+  serializeNote,
+};

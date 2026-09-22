@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-import Avatar from "../../../../components/ui/Avatar";
+import ProfileAvatarLink from "../../../../components/ui/ProfileAvatarLink";
 import RichText from "../../../../components/ui/RichText";
 import { cx } from "../../../../utility/cx";
 import CommentActions from "./CommentActions";
@@ -36,9 +36,7 @@ const ReplyItem = ({
       highlighted && "bg-accent/15 ring-2 ring-accent",
     )}
   >
-    <Link to={`/app/profile/${entry.author.id}`} className="shrink-0">
-      <Avatar person={entry.author} size="xs" className="mt-0.5" />
-    </Link>
+    <ProfileAvatarLink person={entry.author} size="xs" className="mt-0.5 shrink-0 rounded-full" />
 
     <div className="min-w-0 flex-1">
       <div

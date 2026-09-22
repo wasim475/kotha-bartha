@@ -5,11 +5,62 @@ const { safeUser, serializeStory } = require("../utils/serializers");
 const { emitToUser } = require("../utils/realtime");
 const { upload } = require("../middleware/upload");
 const { uploadBuffer, destroyAsset } = require("../utils/cloudinary");
+const { isBlockedEitherWay } = require("../utils/blocks");
+const { sendContextMessage } = require("../utils/contextMessages");
 
 const router = express.Router();
 
 const MAX_TEXT_LENGTH = 500;
 const MAX_COLOR_LENGTH = 20;
+
+// Shared guard for both the react and reply routes below: loads the story
+// (must still be active — an expired one is already gone via the TTL
+// index, so this doubles as the "story expired" check), rejects reacting
+// to your own story, and enforces the same friends-only + not-blocked
+// rules the rest of the app's messaging already does.
+async function loadReactableStory(req, res) {
+  const story = await Story.findOne({
+    _id: req.params.storyId,
+    expiresAt: { $gt: new Date() },
+  }).populate("authorId");
+
+  if (!story) {
+    res.status(404).json({
+      error: { code: "NOT_FOUND", message: "This story is no longer available." },
+    });
+    return null;
+  }
+  if (story.authorId._id.toString() === req.user._id.toString()) {
+    res.status(400).json({
+      error: { code: "INVALID_TARGET", message: "You can't react to your own story." },
+    });
+    return null;
+  }
+  const isFriend = await Friendship.exists({
+    userIds: { $all: [req.user._id, story.authorId._id] },
+  });
+  if (!isFriend) {
+    res.status(404).json({
+      error: { code: "NOT_FOUND", message: "This story is no longer available." },
+    });
+    return null;
+  }
+  if (await isBlockedEitherWay(req.user._id, story.authorId._id)) {
+    res.status(403).json({
+      error: { code: "BLOCKED", message: "You can't message this user." },
+    });
+    return null;
+  }
+  return story;
+}
+
+const storySnapshot = (story) => ({
+  kind: story.type,
+  text: story.text,
+  textColor: story.textColor,
+  backgroundColor: story.backgroundColor,
+  mediaUrl: story.media?.secureUrl || null,
+});
 
 // Same friendIds-from-Friendship derivation posts.routes.js's own
 // GET /posts/feed already uses — a story is visible to exactly the same
@@ -193,6 +244,79 @@ router.delete("/stories/:storyId", async (req, res, next) => {
     );
 
     res.json({ data: { id: story._id.toString(), deleted: true } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
+// STORY REACTION / REPLY — both send a normal 1:1 message to the story's
+// owner (reusing the existing messaging pipeline, see contextMessages.js)
+// carrying a `storyContext` the chat UI renders as a compact, muted
+// "replying to a Story" card. The story itself is never sent as a new
+// chat attachment/image — only a denormalized text/color/media-url
+// snapshot, so the recipient has context even after the story expires.
+// ============================================================
+
+router.post("/stories/:storyId/react", async (req, res, next) => {
+  try {
+    const emoji = String(req.body.emoji || "").trim().slice(0, 8);
+    if (!emoji) {
+      return res.status(400).json({
+        error: { code: "VALIDATION_ERROR", message: "Choose a reaction." },
+      });
+    }
+
+    const story = await loadReactableStory(req, res);
+    if (!story) return;
+
+    const { payload, deduped } = await sendContextMessage(req, {
+      owner: story.authorId,
+      body: `Reacted ${emoji} to your Story`,
+      storyContext: {
+        refType: "story",
+        refId: story._id,
+        action: "reaction",
+        reactionEmoji: emoji,
+        authorId: story.authorId._id,
+        expiresAt: story.expiresAt,
+        snapshot: storySnapshot(story),
+      },
+    });
+
+    res.status(201).json({ data: { sent: true, deduped, message: payload } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/stories/:storyId/reply", async (req, res, next) => {
+  try {
+    const text = String(req.body.text || "").trim().slice(0, 2000);
+    if (!text) {
+      return res.status(400).json({
+        error: { code: "VALIDATION_ERROR", message: "Write a reply." },
+      });
+    }
+
+    const story = await loadReactableStory(req, res);
+    if (!story) return;
+
+    const { payload } = await sendContextMessage(req, {
+      owner: story.authorId,
+      body: text,
+      storyContext: {
+        refType: "story",
+        refId: story._id,
+        action: "reply",
+        reactionEmoji: null,
+        authorId: story.authorId._id,
+        expiresAt: story.expiresAt,
+        snapshot: storySnapshot(story),
+      },
+    });
+
+    res.status(201).json({ data: { sent: true, message: payload } });
   } catch (error) {
     next(error);
   }

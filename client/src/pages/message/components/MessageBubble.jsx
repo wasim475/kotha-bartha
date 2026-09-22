@@ -40,6 +40,58 @@ const formatFileSize = (bytes) => {
 
 const fileExtension = (fileName = "") => fileName.split(".").pop()?.slice(0, 5).toUpperCase() || "";
 
+// Compact, visually-secondary "replying to a Story/Note" card — the
+// reaction/reply text itself stays the primary, readable content; this is
+// just muted context underneath it (see server/src/routes/stories.routes.js
+// and notes.routes.js, which attach `storyContext` to these messages).
+// Never re-fetches the original Story/Note — everything it needs is a
+// snapshot already denormalized onto the message, so it still renders
+// correctly (as "expired") long after the original TTL-expires and is
+// gone from the database.
+const isStoryContextExpired = (expiresAt) => new Date(expiresAt).getTime() < Date.now();
+
+function StoryContextCard({ context, isOwn }) {
+  const expired = isStoryContextExpired(context.expiresAt);
+  const snapshot = context.snapshot || {};
+  const label = context.refType === "story" ? "Story" : "Note";
+
+  return (
+    <div
+      className={cx(
+        "mb-1.5 flex items-center gap-2 rounded-lg border px-2 py-1.5 opacity-70",
+        isOwn ? "border-white/25 bg-white/10" : "border-line bg-soft",
+      )}
+    >
+      {expired ? (
+        <span className="text-[11px] italic">{label} expired</span>
+      ) : (
+        <>
+          {snapshot.mediaUrl ? (
+            <img
+              src={snapshot.mediaUrl}
+              alt=""
+              className="size-8 shrink-0 rounded object-cover blur-[1.5px] brightness-90"
+            />
+          ) : (
+            <span
+              className="flex size-8 shrink-0 items-center justify-center rounded text-[10px] font-semibold"
+              style={{
+                backgroundColor: snapshot.backgroundColor || "var(--soft)",
+                color: snapshot.textColor || "inherit",
+              }}
+            >
+              {label[0]}
+            </span>
+          )}
+          <span className="min-w-0 flex-1 truncate text-[11px] italic">
+            {snapshot.text ? `"${snapshot.text}"` : `Their ${label.toLowerCase()}`}
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
 const emojiPickerWidth = 280;
 const emojiPickerHeight = 360;
 const reactionBarWidth = 268;
@@ -517,6 +569,10 @@ const MessageBubble = ({
               onMouseEnter={bubbleFix.onMouseEnter}
               onMouseLeave={bubbleFix.onMouseLeave}
             >
+              {message.storyContext && (
+                <StoryContextCard context={message.storyContext} isOwn={isOwn} />
+              )}
+
               {message.replyTo && (
                 <div
                   className={cx(

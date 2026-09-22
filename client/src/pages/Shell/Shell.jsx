@@ -2,6 +2,8 @@ import { useContext, useEffect, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { Utility } from "../../provider/UtilityProvider";
+import { NotesProvider } from "../../provider/NotesProvider";
+import { StoriesProvider } from "../../provider/StoriesProvider";
 import { cx } from "../../utility/cx";
 
 import Navbar from "../../pages/SharePage/Navbar/Navbar";
@@ -70,6 +72,8 @@ export default function Shell({ user, onLogout }) {
   const toggleProfile = () => setProfileOpen((current) => !current);
 
   return (
+    <StoriesProvider currentUserId={user.id}>
+    <NotesProvider>
     <div className="app-shell">
       <Topbar
         theme={theme}
@@ -117,5 +121,7 @@ export default function Shell({ user, onLogout }) {
         onRemoved={messagePopups.removeToast}
       />
     </div>
+    </NotesProvider>
+    </StoriesProvider>
   );
 }
