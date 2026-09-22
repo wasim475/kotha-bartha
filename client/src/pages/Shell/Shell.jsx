@@ -78,6 +78,7 @@ export default function Shell({ user, onLogout }) {
         onSelectSearchResult={selectSearchResult}
         onProfileDefault={() => navigate("/app/profile/me")}
         onBrandClick={() => navigate("/app/feed")}
+        onStudyClick={() => navigate("/study")}
         profileOpen={profileOpen}
         onToggleProfile={toggleProfile}
         onProfile={handleProfile}
@@ -87,7 +88,7 @@ export default function Shell({ user, onLogout }) {
       />
 
       <div className={cx("app-body", isMessagesRoute && "app-body--full")}>
-        <Navbar onLogout={onLogout} />
+        <Navbar user={user} />
 
         <main className="page-content">
           <Routes>

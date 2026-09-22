@@ -1,0 +1,164 @@
+/*
+  কথা-স্টাডি is a design-only extension of the main app: it reuses the
+  shared .app-shell/.app-body/.desktop-nav/.bottom-nav/.nav-item layout and
+  tokens (--paper, --panel, --ink, --line, --muted, --soft, --shadow) so it
+  stays a natural extension of কথা-বার্তা, but swaps in a scoped accent
+  (--study-accent) so the section still reads as visually distinct.
+*/
+.study-shell {
+  --study-accent: #5b6ee8;
+  --study-accent-deep: #4655c9;
+  --study-accent-soft: rgba(91, 110, 232, 0.12);
+}
+:root[data-theme="dark"] .study-shell {
+  --study-accent: #8b98ff;
+  --study-accent-deep: #a5b0ff;
+  --study-accent-soft: rgba(139, 152, 255, 0.16);
+}
+
+.study-topbar {
+  position: sticky;
+  z-index: 4;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 72px;
+  padding: 0 clamp(18px, 4vw, 65px);
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+}
+.study-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.study-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px 9px 9px 2px;
+  background: var(--study-accent);
+  color: #fff;
+  font:
+    600 15px Fraunces,
+    serif;
+}
+.study-wordmark {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.study-wordmark span {
+  color: var(--study-accent);
+}
+.study-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.study-back-button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 15px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  background: var(--panel);
+  font-size: 11px;
+  font-weight: 700;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    background 0.2s ease;
+}
+.study-back-button:hover,
+.study-back-button:focus-visible {
+  border-color: var(--study-accent);
+  color: var(--study-accent);
+  background: var(--study-accent-soft);
+}
+
+.study-nav .nav-item:hover,
+.study-nav .nav-item.active {
+  color: var(--study-accent);
+  background: var(--study-accent-soft);
+}
+.study-nav .nav-icon b {
+  background: var(--study-accent);
+}
+.study-nav.bottom-nav .nav-item.active .nav-icon {
+  color: var(--study-accent);
+}
+
+.study-placeholder {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  max-width: 420px;
+  margin: 60px auto;
+  padding: 44px 30px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.study-placeholder-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--study-accent-soft);
+  color: var(--study-accent);
+  font-size: 26px;
+}
+.study-placeholder h1 {
+  margin: 0;
+  font:
+    600 22px Fraunces,
+    serif;
+  letter-spacing: -0.02em;
+}
+.study-placeholder p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.study-placeholder-tag {
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--study-accent-soft);
+  color: var(--study-accent-deep);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 760px) {
+  .study-topbar {
+    height: 62px;
+    gap: 10px;
+    padding: 0 15px;
+  }
+  .study-back-button span {
+    display: none;
+  }
+  .study-back-button {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
+  }
+  .study-placeholder {
+    margin: 30px auto;
+    padding: 32px 20px;
+  }
+}

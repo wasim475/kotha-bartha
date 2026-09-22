@@ -4,7 +4,7 @@ import {
   NotificationsNone,
   PeopleAlt,
 } from "@mui/icons-material";
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { Utility } from "../../../provider/UtilityProvider";
@@ -40,7 +40,7 @@ const navItems = [
   },
 ];
 
-export default function Navbar({ onLogout }) {
+export default function Navbar({ user }) {
   const { theme, setTheme } = useContext(Utility);
   const location = useLocation();
   const navigate = useNavigate();
@@ -77,6 +77,8 @@ export default function Navbar({ onLogout }) {
         theme={theme}
         setTheme={setTheme}
         profileRef={desktopProfileRef}
+        user={user}
+        onNavigateProfile={() => navigate("/app/profile/me")}
       />
       <MobileNavbar
         {...sharedProps}

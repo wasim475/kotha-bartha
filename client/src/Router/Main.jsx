@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Auth } from "../provider/AuthProvider";
 import AuthPage from "../pages/Auth/AuthPage";
 import Shell from "../pages/Shell/Shell";
+import StudyShell from "../pages/Study/StudyShell";
 import PrivacyPolicy from '../pages/privacyPolicy/PrivacyPolicy';
 import DataDeletion from '../pages/privacyPolicy/DataDeletation';
 
@@ -17,6 +18,7 @@ export default function MainRouter() {
     <Route path="/login" element={user ? <Navigate to="/app/feed" replace /> : <AuthPage mode="login" onAuth={setUser} />} />
     <Route path="/signup" element={user ? <Navigate to="/app/feed" replace /> : <AuthPage mode="signup" onAuth={setUser} />} />
     <Route path="/app/*" element={user ? <Shell user={user} onLogout={logout} /> : <Navigate to="/login" replace />} />
+    <Route path="/study/*" element={user ? <StudyShell /> : <Navigate to="/login" replace />} />
     <Route path="*" element={<Navigate to={user ? "/app/feed" : "/login"} replace />} />
   </Routes></BrowserRouter>;
 }

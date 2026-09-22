@@ -96,3 +96,93 @@
     display: none;
   }
 }
+
+/* Premium "current user" entry above the desktop nav list. */
+.nav-profile-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 22px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  text-align: left;
+  transition:
+    border-color 0.2s ease,
+    transform 0.15s ease;
+}
+.nav-profile-card:hover,
+.nav-profile-card:focus-visible {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.nav-profile-meta {
+  display: block;
+  min-width: 0;
+}
+.nav-profile-name {
+  display: block;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-profile-hint {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+/* কথা-স্টাডি entry point, shown in the Topbar on both desktop and mobile. */
+.study-pill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 15px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  background: var(--panel);
+  font-size: 11px;
+  font-weight: 700;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    background 0.2s ease;
+}
+.study-pill:hover,
+.study-pill:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--soft);
+}
+
+/* Slightly more premium hover/active feel on the shared nav items. */
+.nav-item {
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.nav-item.active {
+  font-weight: 700;
+}
+
+@media (max-width: 760px) {
+  .study-pill {
+    gap: 0;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
+  }
+  .study-pill-label {
+    display: none;
+  }
+}

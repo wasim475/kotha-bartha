@@ -1,4 +1,4 @@
-import { DarkMode, WbSunny } from "@mui/icons-material";
+import { AutoStories, DarkMode, WbSunny } from "@mui/icons-material";
 import ProfileMenu from "../../SharePage/Navbar/components/ProfileMenu";
 
 export default function UserActions({
@@ -9,10 +9,21 @@ export default function UserActions({
   onToggleProfile,
   onProfile,
   onLogout,
+  onStudyClick,
   profileRef,
 }) {
   return (
     <div className="top-actions">
+
+      <button
+        type="button"
+        className="study-pill"
+        onClick={onStudyClick}
+        aria-label="কথা-স্টাডি"
+      >
+        <AutoStories fontSize="small" />
+        <span className="study-pill-label">কথা-স্টাডি</span>
+      </button>
 
       <button
         type="button"

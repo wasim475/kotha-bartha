@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import "./App.css";
 import "./CSS/feed.css";
 import "./CSS/navbar.css";
+import "./CSS/study.css";
 import "./index.css";
 import "./message.css";
 import "./CSS/comment.css";
