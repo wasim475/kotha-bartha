@@ -27,6 +27,10 @@ const useMessageRealtime = ({
           ? {
               ...message,
               body: event.detail.body,
+              encrypted: event.detail.encrypted,
+              encryptedBody: event.detail.encryptedBody,
+              // Reset so useE2EDecryption re-decrypts the new ciphertext.
+              _decryptState: event.detail.encrypted ? undefined : "ok",
               editedAt: event.detail.editedAt,
             }
           : message,

@@ -42,6 +42,10 @@ const userSchema = new mongoose.Schema(
       rememberLogin: { type: Boolean, default: true },
     },
     lastSeenAt: Date,
+    // E2E encryption public key (JWK JSON string) for this device's most
+    // recently generated ECDH keypair — see client/src/utility/crypto.js.
+    // The matching private key never leaves the browser.
+    publicKey: { type: String, default: null },
   },
   { timestamps: true },
 );
@@ -59,6 +63,7 @@ userSchema.methods.toSafeJSON = function toSafeJSON() {
     cover: this.cover,
     settings: this.settings,
     lastSeenAt: this.lastSeenAt,
+    publicKey: this.publicKey,
   };
 };
 

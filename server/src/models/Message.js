@@ -71,7 +71,29 @@ const messageSchema = new mongoose.Schema(
       default: "sent",
     },
     editedAt: Date,
+    // Global "deleted for everyone" marker (sender-only, time-limited).
     deletedAt: Date,
+    // Per-user "deleted for me" list — hides the message for these users
+    // only; everyone else still sees it normally.
+    deletedFor: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    forwardedFrom: {
+      originalMessageId: { type: mongoose.Schema.Types.ObjectId, ref: "Message" },
+      originalSenderId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    },
+    // E2E encryption (1-to-1 text messages only — see server/src/routes
+    // chat.routes.js). When `encrypted` is true, `body` is a placeholder,
+    // never the plaintext; the real content lives only in `encryptedBody`
+    // and can only be read by clients holding the matching private key.
+    encrypted: { type: Boolean, default: false },
+    encryptedBody: {
+      ciphertext: String,
+      iv: String,
+    },
   },
   { timestamps: true },
 );

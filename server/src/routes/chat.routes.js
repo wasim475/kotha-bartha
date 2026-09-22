@@ -10,6 +10,7 @@ const { isBlockedEitherWay } = require("../utils/blocks");
 const { isOnline } = require("../utils/presence");
 const { upload, attachmentKindFor } = require("../middleware/upload");
 const { uploadBuffer, destroyAsset } = require("../utils/cloudinary");
+const { UNSEND_WINDOW_MS } = require("../utils/config");
 
 const router = express.Router();
 
@@ -57,10 +58,34 @@ const groupSummary = (conversation) => ({
   avatar: conversation.groupAvatar,
   memberCount: conversation.participantIds.length,
   adminIds: (conversation.adminIds || []).map((id) => id.toString()),
+  pinnedMessages: (conversation.pinnedMessages || []).map((pin) => ({
+    messageId: pin.messageId.toString(),
+    pinnedBy: pin.pinnedBy.toString(),
+    pinnedAt: pin.pinnedAt,
+  })),
 });
 
 const isGroupAdmin = (conversation, userId) =>
   (conversation.adminIds || []).some((id) => id.toString() === userId.toString());
+
+const unsendExpiresAt = (message) =>
+  new Date(new Date(message.createdAt).getTime() + UNSEND_WINDOW_MS);
+
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Shared shape for a message's encrypted-or-plaintext content, used by every
+// route that returns a message so the client always sees the same fields.
+const contentFields = (message) =>
+  message.encrypted
+    ? {
+        encrypted: true,
+        encryptedBody: {
+          ciphertext: message.encryptedBody?.ciphertext || "",
+          iv: message.encryptedBody?.iv || "",
+        },
+        body: message.body,
+      }
+    : { encrypted: false, encryptedBody: null, body: message.body };
 
 router.post("/conversations", async (req, res, next) => {
   try {
@@ -184,17 +209,44 @@ router.get("/conversations/:conversationId", async (req, res, next) => {
         data: {
           id: conversation._id.toString(),
           isGroup: false,
-          user: other ? { ...safeUser(other), isOnline: isOnline(other._id) } : null,
+          user: other
+            ? { ...safeUser(other), isOnline: isOnline(other._id), publicKey: other.publicKey || null }
+            : null,
         },
       });
     }
 
     const members = await User.find({ _id: { $in: conversation.participantIds } });
+
+    const pinnedIds = (conversation.pinnedMessages || []).map((pin) => pin.messageId);
+    const pinnedDocs = pinnedIds.length
+      ? await Message.find({ _id: { $in: pinnedIds }, deletedAt: null })
+          .populate("senderId", "fullName")
+          .lean()
+      : [];
+    const pinnedById = new Map(pinnedDocs.map((doc) => [doc._id.toString(), doc]));
+    const pinnedMessagesDetail = (conversation.pinnedMessages || [])
+      .map((pin) => {
+        const doc = pinnedById.get(pin.messageId.toString());
+        if (!doc) return null;
+        return {
+          id: doc._id.toString(),
+          body: doc.encrypted ? "🔒 Encrypted message" : doc.body,
+          type: doc.type || "text",
+          senderId: doc.senderId._id.toString(),
+          senderName: doc.senderId.fullName,
+          pinnedBy: pin.pinnedBy.toString(),
+          pinnedAt: pin.pinnedAt,
+        };
+      })
+      .filter(Boolean);
+
     res.json({
       data: {
         id: conversation._id.toString(),
         isGroup: true,
         ...groupSummary(conversation),
+        pinnedMessagesDetail,
         members: members.map((member) => ({
           ...safeUser(member),
           isOnline: isOnline(member._id),
@@ -418,6 +470,7 @@ router.delete(
 router.get("/conversations", async (req, res, next) => {
   try {
     const userId = req.user._id.toString();
+    const wantArchived = req.query.archived === "true";
     const conversations = await Conversation.find({
       participantIds: req.user._id,
     })
@@ -427,6 +480,9 @@ router.get("/conversations", async (req, res, next) => {
       .limit(50);
 
     const visibleConversations = conversations.filter((conversation) => {
+      const isArchived = conversation.archivedFor?.some((id) => id.toString() === userId);
+      if (Boolean(isArchived) !== wantArchived) return false;
+
       if (!conversation.hiddenFor?.some((id) => id.toString() === userId)) {
         return true;
       }
@@ -465,7 +521,9 @@ router.get("/conversations", async (req, res, next) => {
         return {
           id: conversation._id,
           isGroup: false,
-          user: other ? { ...safeUser(other), isOnline: isOnline(other._id) } : null,
+          user: other
+            ? { ...safeUser(other), isOnline: isOnline(other._id), publicKey: other.publicKey || null }
+            : null,
           lastMessage: conversation.lastMessage,
           lastMessageAt: conversation.lastMessageAt,
           unreadCount: conversation.unreadCounts?.get?.(userId) || 0,
@@ -515,6 +573,51 @@ router.delete("/conversations/:conversationId", async (req, res, next) => {
 });
 
 // ============================================================
+// ARCHIVE / UNARCHIVE CONVERSATION (per-user; never affects the
+// other participant's own list)
+// ============================================================
+
+router.post("/conversations/:conversationId/archive", async (req, res, next) => {
+  try {
+    const conversation = await Conversation.findOneAndUpdate(
+      { _id: req.params.conversationId, participantIds: req.user._id },
+      { $addToSet: { archivedFor: req.user._id } },
+      { new: true },
+    );
+
+    if (!conversation) {
+      return res.status(404).json({
+        error: { code: "NOT_FOUND", message: "Conversation not found." },
+      });
+    }
+
+    res.json({ data: { id: conversation._id.toString(), archived: true } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/conversations/:conversationId/unarchive", async (req, res, next) => {
+  try {
+    const conversation = await Conversation.findOneAndUpdate(
+      { _id: req.params.conversationId, participantIds: req.user._id },
+      { $pull: { archivedFor: req.user._id } },
+      { new: true },
+    );
+
+    if (!conversation) {
+      return res.status(404).json({
+        error: { code: "NOT_FOUND", message: "Conversation not found." },
+      });
+    }
+
+    res.json({ data: { id: conversation._id.toString(), archived: false } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
 // GET MESSAGES
 //
 // Opening a conversation automatically marks
@@ -545,9 +648,13 @@ router.get(
         ...(deletedAt ? { createdAt: { $gt: deletedAt } } : {}),
         status: { $ne: "read" },
         deletedAt: null,
+        deletedFor: { $ne: req.user._id },
       })
         .select("_id senderId")
+        .sort({ createdAt: 1 })
         .lean();
+
+      const firstUnreadMessageId = unreadMessages[0]?._id.toString() || null;
 
       await Message.updateMany(
         {
@@ -569,7 +676,8 @@ router.get(
       });
 
       // Mark conversation as read
-      conversation.unreadCounts?.set(req.user._id.toString(), 0);
+      conversation.unreadCounts?.set(userId, 0);
+      conversation.lastReadAt?.set(userId, new Date());
 
       await conversation.save();
 
@@ -577,8 +685,9 @@ router.get(
         conversationId: conversation._id,
         ...(deletedAt ? { createdAt: { $gt: deletedAt } } : {}),
         deletedAt: null,
+        deletedFor: { $ne: req.user._id },
       })
-        .populate("replyTo", "body senderId")
+        .populate("replyTo", "body senderId encrypted")
         .populate("senderId", "fullName avatar")
         .populate("mentions", "fullName")
         .sort({
@@ -589,7 +698,7 @@ router.get(
       res.json({
         data: messages.map((message) => ({
           id: message._id.toString(),
-          body: message.body,
+          ...contentFields(message),
           type: message.type || "text",
           call: message.call
             ? {
@@ -610,10 +719,18 @@ router.get(
             avatar: message.senderId.avatar,
           },
           status: message.status || "sent",
+          unsendExpiresAt: unsendExpiresAt(message),
+          forwardedFrom: message.forwardedFrom?.originalMessageId
+            ? {
+                originalMessageId: message.forwardedFrom.originalMessageId.toString(),
+                originalSenderId: message.forwardedFrom.originalSenderId?.toString() || null,
+              }
+            : null,
           replyTo: message.replyTo
             ? {
                 id: message.replyTo._id.toString(),
-                body: message.replyTo.body,
+                body: message.replyTo.encrypted ? "🔒 Encrypted message" : message.replyTo.body,
+                encrypted: Boolean(message.replyTo.encrypted),
                 senderId: message.replyTo.senderId.toString(),
               }
             : null,
@@ -622,6 +739,7 @@ router.get(
             emoji: reaction.emoji,
           })),
         })),
+        meta: { firstUnreadMessageId },
       });
     } catch (error) {
       next(error);
@@ -637,19 +755,43 @@ router.post(
   "/conversations/:conversationId/messages",
   async (req, res, next) => {
     try {
-      const body = String(req.body.body || "").trim();
+      // E2E encryption is opportunistic and 1-to-1 only — a group message
+      // is always plaintext (mentions/search depend on the server reading
+      // `body`), and a 1-to-1 message stays plaintext until both clients
+      // have published a public key and the sender's client chooses to
+      // encrypt. The server never sees the plaintext of an encrypted send.
+      const isEncrypted =
+        req.body.encrypted === true &&
+        typeof req.body.ciphertext === "string" &&
+        typeof req.body.iv === "string";
+      const body = isEncrypted
+        ? "🔒 Encrypted message"
+        : String(req.body.body || "").trim();
 
       const conversation = await Conversation.findOne({
         _id: req.params.conversationId,
         participantIds: req.user._id,
       });
 
-      if (!conversation || !body) {
+      if (!conversation || (isEncrypted && conversation.isGroup)) {
         return res.status(400).json({
           error: {
             code: "INVALID_MESSAGE",
             message: "Message cannot be empty.",
           },
+        });
+      }
+      if (!isEncrypted && !body) {
+        return res.status(400).json({
+          error: {
+            code: "INVALID_MESSAGE",
+            message: "Message cannot be empty.",
+          },
+        });
+      }
+      if (isEncrypted && req.body.ciphertext.length > 20000) {
+        return res.status(400).json({
+          error: { code: "INVALID_MESSAGE", message: "Message is too large." },
         });
       }
 
@@ -709,6 +851,10 @@ router.post(
         mentions: mentionIds,
         replyTo: replyTo?._id || null,
         status: "delivered",
+        encrypted: isEncrypted,
+        encryptedBody: isEncrypted
+          ? { ciphertext: req.body.ciphertext, iv: req.body.iv }
+          : undefined,
       });
 
       conversation.lastMessage = body;
@@ -719,7 +865,7 @@ router.post(
       const payload = {
         id: message._id.toString(),
         conversationId: conversation._id.toString(),
-        body: message.body,
+        ...contentFields(message),
         mentions,
         createdAt: message.createdAt,
         senderId: req.user._id.toString(),
@@ -728,6 +874,8 @@ router.post(
           fullName: req.user.fullName,
           avatar: req.user.avatar,
         },
+        unsendExpiresAt: unsendExpiresAt(message),
+        forwardedFrom: null,
       };
       broadcastToOthers(req, others, "message:new", payload);
 
@@ -738,7 +886,8 @@ router.post(
           replyTo: replyTo
             ? {
                 id: replyTo._id.toString(),
-                body: replyTo.body,
+                body: replyTo.encrypted ? "🔒 Encrypted message" : replyTo.body,
+                encrypted: Boolean(replyTo.encrypted),
                 senderId: replyTo.senderId.toString(),
               }
             : null,
@@ -830,6 +979,8 @@ router.post("/conversations/:conversationId/calls", async (req, res, next) => {
       createdAt: message.createdAt,
       senderId: req.user._id.toString(),
       sender: { id: req.user._id.toString(), fullName: req.user.fullName, avatar: req.user.avatar },
+      unsendExpiresAt: unsendExpiresAt(message),
+      forwardedFrom: null,
     };
 
     emitToUser(req, recipientId, "message:new", payload);
@@ -960,6 +1111,8 @@ router.post(
         createdAt: message.createdAt,
         senderId: req.user._id.toString(),
         sender: { id: req.user._id.toString(), fullName: req.user.fullName, avatar: req.user.avatar },
+        unsendExpiresAt: unsendExpiresAt(message),
+        forwardedFrom: null,
       };
 
       broadcastToOthers(req, others, "message:new", payload);
@@ -1053,9 +1206,15 @@ router.patch(
   "/conversations/:conversationId/messages/:messageId",
   async (req, res, next) => {
     try {
-      const body = String(req.body.body || "").trim();
+      const isEncrypted =
+        req.body.encrypted === true &&
+        typeof req.body.ciphertext === "string" &&
+        typeof req.body.iv === "string";
+      const body = isEncrypted
+        ? "🔒 Encrypted message"
+        : String(req.body.body || "").trim();
 
-      if (!body) {
+      if (!isEncrypted && !body) {
         return res.status(400).json({
           error: {
             code: "INVALID_MESSAGE",
@@ -1105,6 +1264,10 @@ router.patch(
       }
 
       message.body = body;
+      message.encrypted = isEncrypted;
+      message.encryptedBody = isEncrypted
+        ? { ciphertext: req.body.ciphertext, iv: req.body.iv }
+        : undefined;
 
       message.editedAt = new Date();
 
@@ -1114,7 +1277,7 @@ router.patch(
       broadcastToOthers(req, otherParticipants(conversation, req.user._id), "message:updated", {
         id: message._id.toString(),
         conversationId: conversation._id.toString(),
-        body: message.body,
+        ...contentFields(message),
         senderId: message.senderId.toString(),
         editedAt: message.editedAt,
       });
@@ -1133,7 +1296,7 @@ router.patch(
       res.json({
         data: {
           id: message._id.toString(),
-          body: message.body,
+          ...contentFields(message),
           createdAt: message.createdAt,
           editedAt: message.editedAt,
           senderId: message.senderId.toString(),
@@ -1184,12 +1347,30 @@ router.delete(
         });
       }
 
+      if (Date.now() > unsendExpiresAt(message).getTime()) {
+        return res.status(403).json({
+          error: {
+            code: "UNSEND_EXPIRED",
+            message: "This message can no longer be deleted for everyone.",
+          },
+        });
+      }
+
       // Soft delete
       message.deletedAt = new Date();
 
       await message.save();
       if (message.attachment?.publicId) {
-        destroyAsset(message.attachment.publicId, message.attachment.kind);
+        // Don't destroy the Cloudinary asset if another (e.g. forwarded)
+        // message still points at the same publicId.
+        const stillReferenced = await Message.exists({
+          "attachment.publicId": message.attachment.publicId,
+          deletedAt: null,
+          _id: { $ne: message._id },
+        });
+        if (!stillReferenced) {
+          destroyAsset(message.attachment.publicId, message.attachment.kind);
+        }
       }
 
       const others = otherParticipants(conversation, req.user._id);
@@ -1232,5 +1413,272 @@ router.delete(
     }
   },
 );
+
+// ============================================================
+// DELETE FOR ME
+//
+// Hides a message for the caller only — no time limit, no sender
+// restriction (any participant can clear a message from their own view),
+// and no realtime broadcast since it doesn't change what anyone else sees.
+// ============================================================
+
+router.post(
+  "/conversations/:conversationId/messages/:messageId/delete-for-me",
+  async (req, res, next) => {
+    try {
+      const conversation = await Conversation.findOne({
+        _id: req.params.conversationId,
+        participantIds: req.user._id,
+      });
+
+      if (!conversation) {
+        return res.status(404).json({
+          error: { code: "NOT_FOUND", message: "Conversation not found." },
+        });
+      }
+
+      const message = await Message.findOneAndUpdate(
+        { _id: req.params.messageId, conversationId: conversation._id },
+        { $addToSet: { deletedFor: req.user._id } },
+        { new: true },
+      );
+
+      if (!message) {
+        return res.status(404).json({
+          error: { code: "NOT_FOUND", message: "Message not found." },
+        });
+      }
+
+      res.json({ data: { id: message._id.toString(), deletedForMe: true } });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// ============================================================
+// MESSAGE SEARCH
+//
+// Server-side regex search over a conversation's plaintext bodies. For an
+// E2E-encrypted 1-to-1 conversation the server can't search ciphertext —
+// the client falls back to filtering its already-loaded, locally-decrypted
+// thread instead of calling this route.
+// ============================================================
+
+router.get(
+  "/conversations/:conversationId/messages/search",
+  async (req, res, next) => {
+    try {
+      const query = String(req.query.q || "").trim();
+      if (!query) {
+        return res.json({ data: [], meta: { hasMore: false } });
+      }
+
+      const conversation = await Conversation.findOne({
+        _id: req.params.conversationId,
+        participantIds: req.user._id,
+      });
+
+      if (!conversation) {
+        return res.status(404).json({
+          error: { code: "NOT_FOUND", message: "Conversation not found." },
+        });
+      }
+
+      const messages = await Message.find({
+        conversationId: conversation._id,
+        deletedAt: null,
+        deletedFor: { $ne: req.user._id },
+        encrypted: { $ne: true },
+        body: { $regex: escapeRegExp(query), $options: "i" },
+      })
+        .populate("senderId", "fullName avatar")
+        .sort({ createdAt: -1 })
+        .limit(30)
+        .lean();
+
+      res.json({
+        data: messages.map((message) => ({
+          id: message._id.toString(),
+          body: message.body,
+          type: message.type || "text",
+          createdAt: message.createdAt,
+          senderId: message.senderId._id.toString(),
+          sender: { id: message.senderId._id.toString(), fullName: message.senderId.fullName },
+        })),
+        meta: { hasMore: false },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// ============================================================
+// FORWARD MESSAGE
+// ============================================================
+
+router.post(
+  "/conversations/:conversationId/messages/:messageId/forward",
+  async (req, res, next) => {
+    try {
+      const sourceConversation = await Conversation.findOne({
+        _id: req.params.conversationId,
+        participantIds: req.user._id,
+      });
+
+      if (!sourceConversation) {
+        return res.status(404).json({
+          error: { code: "NOT_FOUND", message: "Conversation not found." },
+        });
+      }
+
+      const sourceMessage = await Message.findOne({
+        _id: req.params.messageId,
+        conversationId: sourceConversation._id,
+        deletedAt: null,
+        deletedFor: { $ne: req.user._id },
+        type: { $ne: "call" },
+      });
+
+      if (!sourceMessage) {
+        return res.status(404).json({
+          error: { code: "NOT_FOUND", message: "Message not found." },
+        });
+      }
+      if (sourceMessage.encrypted) {
+        return res.status(400).json({
+          error: {
+            code: "ENCRYPTED_MESSAGE",
+            message: "Encrypted messages must be forwarded from the client after decrypting.",
+          },
+        });
+      }
+
+      const targetIds = Array.isArray(req.body.targetConversationIds)
+        ? [...new Set(req.body.targetConversationIds)].filter((id) => mongoose.isValidObjectId(id))
+        : [];
+
+      if (!targetIds.length) {
+        return res.status(400).json({
+          error: { code: "INVALID_TARGET", message: "Choose at least one conversation to forward to." },
+        });
+      }
+
+      const targetConversations = await Conversation.find({
+        _id: { $in: targetIds },
+        participantIds: req.user._id,
+      });
+
+      const results = [];
+      for (const target of targetConversations) {
+        const targetOthers = otherParticipants(target, req.user._id);
+        if (await isBlockedForSend(target, req.user._id, targetOthers)) continue;
+
+        clearHiddenFor(target, [req.user._id, ...targetOthers]);
+
+        const forwarded = await Message.create({
+          conversationId: target._id,
+          senderId: req.user._id,
+          recipientId: target.isGroup ? null : targetOthers[0],
+          body: sourceMessage.body,
+          type: sourceMessage.type,
+          attachment: sourceMessage.attachment,
+          status: "delivered",
+          forwardedFrom: {
+            originalMessageId: sourceMessage._id,
+            originalSenderId: sourceMessage.senderId,
+          },
+        });
+
+        target.lastMessage = forwarded.body;
+        target.lastMessageAt = forwarded.createdAt;
+        bumpUnreadFor(target, targetOthers);
+        await target.save();
+
+        const payload = {
+          id: forwarded._id.toString(),
+          conversationId: target._id.toString(),
+          ...contentFields(forwarded),
+          type: forwarded.type,
+          attachment: forwarded.attachment || null,
+          createdAt: forwarded.createdAt,
+          senderId: req.user._id.toString(),
+          sender: { id: req.user._id.toString(), fullName: req.user.fullName, avatar: req.user.avatar },
+          unsendExpiresAt: unsendExpiresAt(forwarded),
+          forwardedFrom: {
+            originalMessageId: sourceMessage._id.toString(),
+            originalSenderId: sourceMessage.senderId.toString(),
+          },
+        };
+        broadcastToOthers(req, targetOthers, "message:new", payload);
+        results.push(payload);
+      }
+
+      res.status(201).json({ data: results });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// ============================================================
+// PIN / UNPIN MESSAGE — GROUP CHATS ONLY
+// ============================================================
+
+const setPinned = (pinned) => async (req, res, next) => {
+  try {
+    const conversation = await Conversation.findOne({
+      _id: req.params.conversationId,
+      participantIds: req.user._id,
+      isGroup: true,
+    });
+
+    if (!conversation) {
+      return res.status(404).json({
+        error: { code: "NOT_FOUND", message: "Group not found." },
+      });
+    }
+
+    const message = await Message.findOne({
+      _id: req.params.messageId,
+      conversationId: conversation._id,
+      deletedAt: null,
+    });
+
+    if (!message) {
+      return res.status(404).json({
+        error: { code: "NOT_FOUND", message: "Message not found." },
+      });
+    }
+
+    conversation.pinnedMessages = conversation.pinnedMessages || [];
+    conversation.pinnedMessages = conversation.pinnedMessages.filter(
+      (pin) => pin.messageId.toString() !== message._id.toString(),
+    );
+    if (pinned) {
+      conversation.pinnedMessages.push({
+        messageId: message._id,
+        pinnedBy: req.user._id,
+        pinnedAt: new Date(),
+      });
+    }
+
+    await conversation.save();
+
+    const others = otherParticipants(conversation, req.user._id);
+    broadcastToOthers(req, others, "conversation:updated", {
+      id: conversation._id.toString(),
+      ...groupSummary(conversation),
+    });
+
+    res.json({ data: { id: conversation._id.toString(), ...groupSummary(conversation) } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+router.post("/conversations/:conversationId/messages/:messageId/pin", setPinned(true));
+router.delete("/conversations/:conversationId/messages/:messageId/pin", setPinned(false));
 
 module.exports = router;

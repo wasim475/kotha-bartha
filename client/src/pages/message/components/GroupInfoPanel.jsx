@@ -4,6 +4,7 @@ import {
   Logout,
   PersonAdd,
   PersonRemove,
+  PushPin,
 } from "@mui/icons-material";
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from "@headlessui/react";
 import { useRef, useState } from "react";
@@ -12,7 +13,6 @@ import Avatar from "../../../components/ui/Avatar";
 import Button from "../../../components/ui/Button";
 import IconButton from "../../../components/ui/IconButton";
 import { api } from "../../../utility/api";
-import { cx } from "../../../utility/cx";
 import useButtonColorFix from "../../../utility/useButtonColorFix";
 
 export default function GroupInfoPanel({
@@ -22,8 +22,10 @@ export default function GroupInfoPanel({
   groupDetail,
   currentUserId,
   onLeft,
+  onJumpToMessage,
 }) {
   const [adding, setAdding] = useState(false);
+  const [unpinningId, setUnpinningId] = useState(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [error, setError] = useState("");
@@ -43,6 +45,20 @@ export default function GroupInfoPanel({
   const detail = groupDetail?.data;
   const members = detail?.members || [];
   const isAdmin = members.find((member) => member.id === currentUserId)?.isAdmin;
+  const pinnedMessages = detail?.pinnedMessagesDetail || [];
+
+  const unpinMessage = async (messageId) => {
+    setUnpinningId(messageId);
+    setError("");
+    try {
+      await api.delete(`/conversations/${conversationId}/messages/${messageId}/pin`);
+      await groupDetail.reload();
+    } catch (unpinError) {
+      setError(unpinError.response?.data?.error?.message || "Couldn't unpin that message.");
+    } finally {
+      setUnpinningId(null);
+    }
+  };
 
   const runSearch = async (value) => {
     setQuery(value);
@@ -223,6 +239,41 @@ export default function GroupInfoPanel({
                     <PersonAdd fontSize="small" /> Add members
                   </button>
                 )}
+              </div>
+            )}
+
+            {pinnedMessages.length > 0 && (
+              <div className="mb-2 border-b border-line px-2 pb-2">
+                <p className="mb-1 flex items-center gap-1 px-1 text-xs font-semibold text-muted">
+                  <PushPin fontSize="inherit" /> Pinned messages
+                </p>
+                {pinnedMessages.map((pin) => (
+                  <div
+                    key={pin.id}
+                    className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-soft"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onJumpToMessage?.(pin.id);
+                      }}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <span className="block truncate text-xs font-medium text-ink">
+                        {pin.senderName}
+                      </span>
+                      <span className="block truncate text-xs text-muted">{pin.body}</span>
+                    </button>
+                    <IconButton
+                      label="Unpin message"
+                      icon={<Close fontSize="small" />}
+                      size="sm"
+                      disabled={unpinningId === pin.id}
+                      onClick={() => unpinMessage(pin.id)}
+                    />
+                  </div>
+                ))}
               </div>
             )}
 

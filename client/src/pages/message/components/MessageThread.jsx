@@ -87,6 +87,12 @@ const MessageThread = ({
   onSaveEdit,
   onReply,
   onReact,
+  onForward,
+  onTogglePin,
+  pinnedMessageIds,
+  firstUnreadMessageId,
+  onJumpToUnread,
+  highlightedMessageId,
   selectedMessageId,
   emojiMessageId,
   onSelectMessage,
@@ -111,9 +117,13 @@ const MessageThread = ({
   }
 
   return (
-    <div className="flex flex-1 flex-col overflow-y-auto px-3 py-4 sm:px-6 lg:px-10" ref={threadRef}>
-      <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col justify-end gap-0.5">
-        {messages.map((message, index) => {
+    <div className="relative flex min-h-0 flex-1">
+      <div
+        className="flex flex-1 flex-col overflow-y-auto px-3 py-4 sm:px-6 lg:px-10"
+        ref={threadRef}
+      >
+        <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col justify-end gap-0.5">
+          {messages.map((message, index) => {
           const previous = messages[index - 1];
           const next = messages[index + 1];
           const isOwn = String(message.senderId) === String(userId);
@@ -134,7 +144,7 @@ const MessageThread = ({
             Math.abs(new Date(next.createdAt) - new Date(message.createdAt)) < GROUP_GAP_MS;
 
           return (
-            <div key={message.id} data-message-row>
+            <div key={message.id} id={`message-${message.id}`} data-message-row>
               {showDateSeparator && (
                 <div className="my-3 flex items-center justify-center first:mt-0">
                   <span className="rounded-full bg-soft px-3 py-1 text-[11px] font-semibold text-muted">
@@ -142,38 +152,70 @@ const MessageThread = ({
                   </span>
                 </div>
               )}
-              {message.type === "call" ? (
-                <CallRecordRow message={message} isOwn={isOwn} groupStart={!groupedWithPrevious} />
-              ) : (
-                <MessageBubble
-                  message={message}
-                  isOwn={isOwn}
-                  otherUser={isGroup ? message.sender : otherUser}
-                  showSenderName={isGroup && !groupedWithPrevious}
-                  groupStart={!groupedWithPrevious}
-                  groupEnd={!groupedWithNext}
-                  isEditing={editingMessage === message.id}
-                  isDeleting={deletingMessage === message.id}
-                  editBody={editBody}
-                  editLoading={editLoading}
-                  setEditBody={setEditBody}
-                  onEdit={onEdit}
-                  onDelete={onDelete}
-                  onCancelEdit={onCancelEdit}
-                  onSaveEdit={onSaveEdit}
-                  onReply={onReply}
-                  onReact={onReact}
-                  selected={selectedMessageId === message.id}
-                  emojiOpen={emojiMessageId === message.id}
-                  onSelectMessage={onSelectMessage}
-                  onOpenEmoji={() => onOpenEmoji(message.id)}
-                  onCloseInteraction={onCloseInteraction}
-                />
+              {firstUnreadMessageId === message.id && (
+                <div className="my-3 flex items-center gap-2">
+                  <span className="h-px flex-1 bg-danger/40" />
+                  <span className="rounded-full bg-danger-soft px-3 py-1 text-[11px] font-semibold text-danger">
+                    Unread messages
+                  </span>
+                  <span className="h-px flex-1 bg-danger/40" />
+                </div>
               )}
+              <div
+                className={
+                  highlightedMessageId === message.id
+                    ? "rounded-xl bg-accent/15 transition-colors duration-1000"
+                    : "rounded-xl transition-colors duration-1000"
+                }
+              >
+                {message.type === "call" ? (
+                  <CallRecordRow message={message} isOwn={isOwn} groupStart={!groupedWithPrevious} />
+                ) : (
+                  <MessageBubble
+                    message={message}
+                    isOwn={isOwn}
+                    otherUser={isGroup ? message.sender : otherUser}
+                    showSenderName={isGroup && !groupedWithPrevious}
+                    groupStart={!groupedWithPrevious}
+                    groupEnd={!groupedWithNext}
+                    isEditing={editingMessage === message.id}
+                    isDeleting={deletingMessage === message.id}
+                    editBody={editBody}
+                    editLoading={editLoading}
+                    setEditBody={setEditBody}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                    onCancelEdit={onCancelEdit}
+                    onSaveEdit={onSaveEdit}
+                    onReply={onReply}
+                    onReact={onReact}
+                    onForward={onForward}
+                    onTogglePin={onTogglePin}
+                    isGroup={isGroup}
+                    isPinned={pinnedMessageIds?.has(message.id)}
+                    selected={selectedMessageId === message.id}
+                    emojiOpen={emojiMessageId === message.id}
+                    onSelectMessage={onSelectMessage}
+                    onOpenEmoji={() => onOpenEmoji(message.id)}
+                    onCloseInteraction={onCloseInteraction}
+                  />
+                )}
+              </div>
             </div>
           );
-        })}
+          })}
+        </div>
       </div>
+
+      {firstUnreadMessageId && (
+        <button
+          type="button"
+          onClick={onJumpToUnread}
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-line bg-panel px-3.5 py-1.5 text-xs font-semibold text-accent shadow-soft hover:bg-soft"
+        >
+          Jump to first unread
+        </button>
+      )}
     </div>
   );
 };

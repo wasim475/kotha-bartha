@@ -5,16 +5,20 @@ import { useNavigate, useParams } from "react-router-dom";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import { cx } from "../../utility/cx";
 import useDeleteMessage from "./hooks/useDeleteMessage";
+import useE2EDecryption from "./hooks/useE2EDecryption";
 import useEditMessage from "./hooks/useEditMessage";
 import useMessageActions from "./hooks/useMessageActions";
 import useMessageRealtime from "./hooks/useMessageRealtime";
 import useMessageResources from "./hooks/useMessageResources";
 import useMessageScroll from "./hooks/useMessageScroll";
+import useMessageSearch from "./hooks/useMessageSearch";
 import useMessageState from "./hooks/useMessageState";
 import useVoiceCall from "./hooks/useVoiceCall";
 
 import ChatHeader from "./components/ChatHeader";
 import ConversationList from "./components/ConversationList";
+import DeleteMessageDialog from "./components/DeleteMessageDialog";
+import ForwardMessageDialog from "./components/ForwardMessageDialog";
 import GroupInfoPanel from "./components/GroupInfoPanel";
 import MessageComposer from "./components/MessageComposer";
 import MessageThread from "./components/MessageThread";
@@ -28,20 +32,25 @@ const confirmCopy = {
     confirmLabel: "Delete",
     variant: "danger",
   },
-  message: {
-    title: "Delete this message?",
-    description: "This removes the message for everyone in the conversation. This can't be undone.",
-    confirmLabel: "Delete",
-    variant: "danger",
-  },
 };
 
 const Message = ({ user }) => {
   const { conversationId } = useParams();
   const navigate = useNavigate();
-  const { conversations, thread, selected, groupDetail } =
-    useMessageResources(conversationId);
+  const {
+    conversations,
+    archived,
+    archiveView,
+    setArchiveView,
+    thread,
+    selected,
+    groupDetail,
+  } = useMessageResources(conversationId);
   const isGroup = Boolean(selected?.isGroup);
+  useE2EDecryption({ conversationId, selected, userId: user.id, thread });
+  const search = useMessageSearch({ conversationId, selected, thread });
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [highlightedMessageId, setHighlightedMessageId] = useState(null);
   const state = useMessageState({ conversationId, selected });
   const {
     body,
@@ -68,6 +77,7 @@ const Message = ({ user }) => {
     selected,
     thread,
     conversations,
+    archived,
     state,
     scrollToBottom: scroll.scrollToBottom,
   });
@@ -75,6 +85,8 @@ const Message = ({ user }) => {
     conversationId,
     thread,
     conversations,
+    selected,
+    userId: user.id,
     preserveScrollPosition: scroll.preserveScrollPosition,
   });
   const deletion = useDeleteMessage({
@@ -84,6 +96,15 @@ const Message = ({ user }) => {
     preserveScrollPosition: scroll.preserveScrollPosition,
   });
   const call = useVoiceCall({ selected, conversationId, thread, conversations });
+
+  const jumpToMessage = (messageId) => {
+    if (!messageId) return;
+    const row = document.getElementById(`message-${messageId}`);
+    if (!row) return;
+    row.scrollIntoView({ block: "center", behavior: "smooth" });
+    setHighlightedMessageId(messageId);
+    setTimeout(() => setHighlightedMessageId((current) => (current === messageId ? null : current)), 2000);
+  };
 
   useMessageRealtime({
     conversationId,
@@ -96,10 +117,12 @@ const Message = ({ user }) => {
     prepareForIncomingMessage: scroll.prepareForIncomingMessage,
   });
 
-  const [pendingConfirm, setPendingConfirm] = useState(null); // { type: "conversation"|"message", id }
+  const [pendingConfirm, setPendingConfirm] = useState(null); // { type: "conversation", id }
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const [groupInfoOpen, setGroupInfoOpen] = useState(false);
+  const [deleteDialogMessageId, setDeleteDialogMessageId] = useState(null);
+  const [forwardingMessage, setForwardingMessage] = useState(null);
 
   const openConversation = (id) => navigate(`/app/messages/${id}`);
   const closeConfirm = () => {
@@ -110,13 +133,8 @@ const Message = ({ user }) => {
     if (!pendingConfirm) return;
     setConfirmLoading(true);
     try {
-      if (pendingConfirm.type === "conversation") {
-        await actions.deleteConversation(pendingConfirm.id);
-        if (pendingConfirm.id === conversationId) navigate("/app/messages");
-      } else {
-        const error = await deletion.handleDelete(pendingConfirm.id);
-        if (error) setSendError(error);
-      }
+      await actions.deleteConversation(pendingConfirm.id);
+      if (pendingConfirm.id === conversationId) navigate("/app/messages");
     } catch (error) {
       setSendError(
         error.response?.data?.error?.message || "Something went wrong.",
@@ -126,6 +144,45 @@ const Message = ({ user }) => {
       setPendingConfirm(null);
     }
   };
+
+  const [canDeleteForEveryone, setCanDeleteForEveryone] = useState(false);
+  const openDeleteDialog = (id) => {
+    const message = thread.data?.find((row) => row.id === id);
+    const eligible =
+      message &&
+      String(message.senderId) === String(user.id) &&
+      message.unsendExpiresAt &&
+      Date.now() < new Date(message.unsendExpiresAt).getTime();
+    setDeleteDialogMessageId(id);
+    setCanDeleteForEveryone(Boolean(eligible));
+  };
+
+  const runDeleteForMe = async () => {
+    const error = await deletion.deleteForMe(deleteDialogMessageId);
+    if (error) setSendError(error);
+    setDeleteDialogMessageId(null);
+  };
+  const runDeleteForEveryone = async () => {
+    const error = await deletion.deleteForEveryone(deleteDialogMessageId);
+    if (error) setSendError(error);
+    setDeleteDialogMessageId(null);
+  };
+
+  const submitForward = async (message, targetConversationIds) => {
+    if (message.encrypted) {
+      // The server never saw this message's plaintext, so it can't copy
+      // it for us — send it fresh (re-encrypted per target) instead.
+      for (const targetId of targetConversationIds) {
+        await actions.forwardPlaintext(targetId, message.body);
+      }
+      return;
+    }
+    await actions.forwardMessage(message.id, targetConversationIds);
+  };
+
+  const pinnedMessageIds = new Set(
+    (groupDetail?.data?.pinnedMessages || []).map((pin) => pin.messageId),
+  );
 
   const dialogCopy = pendingConfirm ? confirmCopy[pendingConfirm.type] : null;
   const showingThread = Boolean(conversationId);
@@ -149,12 +206,16 @@ const Message = ({ user }) => {
           )}
         >
           <ConversationList
-            conversations={conversations}
+            conversations={archiveView ? archived : conversations}
             userId={user.id}
             activeId={conversationId}
             onOpenConversation={openConversation}
             onRequestDelete={(id) => setPendingConfirm({ type: "conversation", id })}
             onNewConversation={() => setNewConversationOpen(true)}
+            archiveView={archiveView}
+            onToggleArchiveView={() => setArchiveView((current) => !current)}
+            onArchive={actions.archiveConversation}
+            onUnarchive={actions.unarchiveConversation}
           />
         </div>
 
@@ -177,6 +238,16 @@ const Message = ({ user }) => {
                 startCall={call.startCall}
                 finishCall={call.finishCall}
                 isTyping={isTyping}
+                search={search}
+                searchOpen={searchOpen}
+                onToggleSearch={() => {
+                  setSearchOpen((open) => !open);
+                  search.setQuery("");
+                }}
+                onSelectSearchResult={(messageId) => {
+                  setSearchOpen(false);
+                  jumpToMessage(messageId);
+                }}
               />
               {!isGroup && (
                 <VoiceCall
@@ -202,11 +273,17 @@ const Message = ({ user }) => {
                 editLoading={edit.editLoading}
                 setEditBody={edit.setEditBody}
                 onEdit={edit.handleEdit}
-                onDelete={(id) => setPendingConfirm({ type: "message", id })}
+                onDelete={openDeleteDialog}
                 onCancelEdit={edit.cancelEdit}
                 onSaveEdit={edit.saveEdit}
                 onReply={actions.replyToMessage}
                 onReact={actions.reactToMessage}
+                onForward={(message) => setForwardingMessage(message)}
+                onTogglePin={actions.togglePin}
+                pinnedMessageIds={pinnedMessageIds}
+                firstUnreadMessageId={thread.meta?.firstUnreadMessageId}
+                onJumpToUnread={() => jumpToMessage(thread.meta?.firstUnreadMessageId)}
+                highlightedMessageId={highlightedMessageId}
                 selectedMessageId={selectedMessageId}
                 emojiMessageId={emojiMessageId}
                 onSelectMessage={actions.selectMessage}
@@ -274,6 +351,23 @@ const Message = ({ user }) => {
         }}
       />
 
+      <DeleteMessageDialog
+        open={Boolean(deleteDialogMessageId)}
+        canDeleteForEveryone={canDeleteForEveryone}
+        loading={deletion.deletingMessage === deleteDialogMessageId}
+        onDeleteForMe={runDeleteForMe}
+        onDeleteForEveryone={runDeleteForEveryone}
+        onCancel={() => setDeleteDialogMessageId(null)}
+      />
+
+      <ForwardMessageDialog
+        open={Boolean(forwardingMessage)}
+        message={forwardingMessage}
+        conversations={conversations.data}
+        onClose={() => setForwardingMessage(null)}
+        onForward={submitForward}
+      />
+
       {isGroup && (
         <GroupInfoPanel
           open={groupInfoOpen}
@@ -281,6 +375,7 @@ const Message = ({ user }) => {
           conversationId={conversationId}
           groupDetail={groupDetail}
           currentUserId={user.id}
+          onJumpToMessage={jumpToMessage}
           onLeft={() => {
             setGroupInfoOpen(false);
             conversations.reload();

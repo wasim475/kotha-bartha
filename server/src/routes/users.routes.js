@@ -194,6 +194,36 @@ const uploadProfileImage = (field, folder) => [
   },
 ];
 
+// ============================================================
+// E2E ENCRYPTION PUBLIC KEY
+//
+// Publishes this device's ECDH public key (JWK JSON) so other users'
+// clients can derive a shared key for encrypting 1-to-1 messages to this
+// user. The matching private key is generated and kept client-side only —
+// it is never sent here or stored on the server.
+// ============================================================
+router.patch("/users/me/public-key", async (req, res, next) => {
+  try {
+    const publicKey = String(req.body.publicKey || "").trim();
+
+    if (!publicKey || publicKey.length > 2000) {
+      return res.status(400).json({
+        error: { code: "INVALID_KEY", message: "Invalid public key." },
+      });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { $set: { publicKey } },
+      { new: true },
+    );
+
+    res.json({ data: { publicKey: user.publicKey } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.patch(
   "/users/me/avatar",
   ...uploadProfileImage("avatar", "kotha-bartha/avatars"),

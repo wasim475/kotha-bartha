@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { api } from "../../../utility/api";
+import { deriveSharedKey, encryptMessage } from "../../../utility/crypto";
 
 const useEditMessage = ({
   conversationId,
   thread,
   conversations,
+  selected,
+  userId,
   preserveScrollPosition,
 }) => {
   const [editingMessage, setEditingMessage] = useState(null);
@@ -31,11 +34,20 @@ const useEditMessage = ({
     setEditLoading(true);
 
     try {
+      const original = (thread.data || []).find((message) => message.id === messageId);
+      const peerPublicKey = !selected?.isGroup ? selected?.user?.publicKey : null;
+      const sharedKey =
+        original?.encrypted && peerPublicKey
+          ? await deriveSharedKey(conversationId, peerPublicKey, userId)
+          : null;
+
+      const requestBody = sharedKey
+        ? { encrypted: true, ...(await encryptMessage(sharedKey, text)) }
+        : { body: text };
+
       const { data } = await api.patch(
         `/conversations/${conversationId}/messages/${messageId}`,
-        {
-          body: text,
-        },
+        requestBody,
       );
 
       const updated = data.data;
@@ -52,7 +64,9 @@ const useEditMessage = ({
                   updated.id ||
                   updated._id ||
                   message.id,
-                body: updated.body,
+                // We already have the plaintext locally.
+                body: text,
+                _decryptState: updated.encrypted ? "ok" : undefined,
                 editedAt:
                   updated.editedAt ||
                   new Date().toISOString(),

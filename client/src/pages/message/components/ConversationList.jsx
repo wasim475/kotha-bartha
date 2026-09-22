@@ -1,9 +1,11 @@
 import {
   Add,
+  Archive,
   Delete,
   ErrorOutlined,
   ForumOutlined,
   MoreHoriz,
+  Unarchive,
   VolumeOff,
   VolumeUp,
 } from "@mui/icons-material";
@@ -47,15 +49,19 @@ function ConversationListSkeleton() {
   );
 }
 
-function ConversationListEmpty() {
+function ConversationListEmpty({ archived }) {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
       <div className="flex size-12 items-center justify-center rounded-full bg-soft text-muted">
         <ForumOutlined fontSize="small" />
       </div>
-      <p className="font-display text-lg font-semibold text-ink">No conversations yet</p>
+      <p className="font-display text-lg font-semibold text-ink">
+        {archived ? "No archived conversations" : "No conversations yet"}
+      </p>
       <p className="max-w-xs text-sm text-muted">
-        Message a friend from their profile or the Friends tab to start chatting.
+        {archived
+          ? "Conversations you archive will show up here."
+          : "Message a friend from their profile or the Friends tab to start chatting."}
       </p>
     </div>
   );
@@ -92,21 +98,62 @@ const ConversationList = ({
   onOpenConversation,
   onRequestDelete,
   onNewConversation,
+  archiveView,
+  onToggleArchiveView,
+  onArchive,
+  onUnarchive,
 }) => {
   // Mute state lives in localStorage (see utility/conversationPreferences),
   // not React state; this counter just forces a re-read/re-render after a
   // toggle so the mute icon and menu label update immediately.
   const [, forceMuteRefresh] = useState(0);
+  const [archivingId, setArchivingId] = useState(null);
+
+  const toggleArchive = async (conversationId, currentlyArchived) => {
+    setArchivingId(conversationId);
+    try {
+      if (currentlyArchived) await onUnarchive(conversationId);
+      else await onArchive(conversationId);
+    } finally {
+      setArchivingId(null);
+    }
+  };
 
   const header = (
-    <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-line bg-panel px-3.5 py-2.5">
-      <p className="font-display text-sm font-semibold text-ink">Chats</p>
-      <IconButton
-        label="New conversation"
-        icon={<Add fontSize="small" />}
-        size="sm"
-        onClick={onNewConversation}
-      />
+    <div className="sticky top-0 z-10 flex shrink-0 flex-col gap-2 border-b border-line bg-panel px-3.5 py-2.5">
+      <div className="flex items-center justify-between">
+        <p className="font-display text-sm font-semibold text-ink">
+          {archiveView ? "Archived" : "Chats"}
+        </p>
+        <IconButton
+          label="New conversation"
+          icon={<Add fontSize="small" />}
+          size="sm"
+          onClick={onNewConversation}
+        />
+      </div>
+      <div className="flex gap-1 rounded-md bg-soft p-0.5 text-xs font-semibold">
+        <button
+          type="button"
+          onClick={() => archiveView && onToggleArchiveView()}
+          className={cx(
+            "flex-1 rounded px-2 py-1",
+            !archiveView ? "bg-panel text-ink shadow-sm" : "text-muted",
+          )}
+        >
+          Chats
+        </button>
+        <button
+          type="button"
+          onClick={() => !archiveView && onToggleArchiveView()}
+          className={cx(
+            "flex-1 rounded px-2 py-1",
+            archiveView ? "bg-panel text-ink shadow-sm" : "text-muted",
+          )}
+        >
+          Archived
+        </button>
+      </div>
     </div>
   );
 
@@ -130,7 +177,7 @@ const ConversationList = ({
     return (
       <>
         {header}
-        <ConversationListEmpty />
+        <ConversationListEmpty archived={archiveView} />
       </>
     );
   }
@@ -232,6 +279,13 @@ const ConversationList = ({
                     setConversationMuted(userId, conversation.id, !muted);
                     forceMuteRefresh((count) => count + 1);
                   },
+                },
+                {
+                  key: "archive",
+                  label: archiveView ? "Unarchive" : "Archive",
+                  icon: archiveView ? <Unarchive fontSize="small" /> : <Archive fontSize="small" />,
+                  disabled: archivingId === conversation.id,
+                  onClick: () => toggleArchive(conversation.id, archiveView),
                 },
                 {
                   key: "delete",

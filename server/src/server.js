@@ -66,13 +66,14 @@ io.on("connection", (socket) => {
 
   const forwardTyping =
     (event) =>
-    ({ to, conversationId }) => {
-      if (typeof to === "string" && typeof conversationId === "string") {
-        io.to(`user:${to}`).emit(event, {
-          conversationId,
-          senderId: socket.userId.toString(),
-        });
-      }
+    async ({ to, conversationId }) => {
+      if (typeof to !== "string" || typeof conversationId !== "string") return;
+      if (await isBlockedEitherWay(socket.userId, to)) return;
+
+      io.to(`user:${to}`).emit(event, {
+        conversationId,
+        senderId: socket.userId.toString(),
+      });
     };
 
   socket.on("typing:start", forwardTyping("typing:start"));
@@ -80,14 +81,15 @@ io.on("connection", (socket) => {
   socket.on("call:signal", async ({ to, signal }) => {
     if (typeof to !== "string" || !signal) return;
 
-    // Only the call-initiating "offer" needs the authorization check —
-    // answer/ice/end are just completing a call that already passed it.
+    // Blocked users can't exchange any call signal, in either direction —
+    // not just the call-initiating "offer".
+    if (await isBlockedEitherWay(socket.userId, to)) return;
+
+    // Only the call-initiating "offer" needs the conversation-eligibility
+    // check — answer/ice/end are just completing a call that already passed it.
     if (signal.type === "offer") {
-      const [authorized, blocked] = await Promise.all([
-        Conversation.exists({ pairKey: pairKey(socket.userId, to) }),
-        isBlockedEitherWay(socket.userId, to),
-      ]);
-      if (!authorized || blocked) return;
+      const authorized = await Conversation.exists({ pairKey: pairKey(socket.userId, to) });
+      if (!authorized) return;
     }
 
     io.to(`user:${to}`).emit("call:signal", { from: socket.userId, signal });

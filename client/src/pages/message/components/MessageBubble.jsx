@@ -5,7 +5,9 @@ import {
   Download,
   Edit,
   EmojiEmotions,
+  Forward,
   InsertDriveFile,
+  PushPin,
   Reply,
 } from "@mui/icons-material";
 import EmojiPicker from "emoji-picker-react";
@@ -72,6 +74,10 @@ const MessageBubble = ({
   onSaveEdit,
   onReply,
   onReact,
+  onForward,
+  onTogglePin,
+  isGroup,
+  isPinned,
   selected,
   emojiOpen,
   onSelectMessage,
@@ -190,6 +196,26 @@ const MessageBubble = ({
           {showSenderName && !isOwn && (
             <span className="mb-0.5 ml-1 text-xs font-semibold text-accent">
               {message.sender?.fullName}
+            </span>
+          )}
+
+          {(message.forwardedFrom || isPinned) && (
+            <span
+              className={cx(
+                "mb-0.5 flex items-center gap-1 text-[10px] font-medium text-muted",
+                isOwn ? "mr-1 justify-end" : "ml-1 justify-start",
+              )}
+            >
+              {isPinned && (
+                <span className="flex items-center gap-0.5">
+                  <PushPin fontSize="inherit" className="text-[11px]" /> Pinned
+                </span>
+              )}
+              {message.forwardedFrom && (
+                <span className="flex items-center gap-0.5 italic">
+                  <Forward fontSize="inherit" className="text-[11px]" /> Forwarded
+                </span>
+              )}
             </span>
           )}
 
@@ -498,16 +524,31 @@ const MessageBubble = ({
                   onClick={() => onEdit(message)}
                 />
               )}
-              {isOwn && (
+              {message.type !== "call" && (
                 <IconButton
-                  label={isDeleting ? "Deleting message" : "Delete message"}
-                  icon={<Delete fontSize="small" />}
+                  label="Forward message"
+                  icon={<Forward fontSize="small" />}
                   size="sm"
-                  variant="danger"
-                  disabled={isDeleting}
-                  onClick={() => onDelete(message.id)}
+                  onClick={() => onForward(message)}
                 />
               )}
+              {isGroup && (
+                <IconButton
+                  label={isPinned ? "Unpin message" : "Pin message"}
+                  icon={<PushPin fontSize="small" />}
+                  size="sm"
+                  active={isPinned}
+                  onClick={() => onTogglePin(message.id, isPinned)}
+                />
+              )}
+              <IconButton
+                label={isDeleting ? "Deleting message" : "Delete message"}
+                icon={<Delete fontSize="small" />}
+                size="sm"
+                variant="danger"
+                disabled={isDeleting}
+                onClick={() => onDelete(message.id)}
+              />
             </div>
           )}
         </div>

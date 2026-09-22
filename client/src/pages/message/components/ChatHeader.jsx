@@ -1,4 +1,4 @@
-import { ArrowBackRounded, Call, CallEnd, Info } from "@mui/icons-material";
+import { ArrowBackRounded, Call, CallEnd, Close, Info, Search } from "@mui/icons-material";
 import { Link } from "react-router-dom";
 
 import Avatar from "../../../components/ui/Avatar";
@@ -16,13 +16,18 @@ const ChatHeader = ({
   startCall,
   finishCall,
   isTyping,
+  search,
+  searchOpen,
+  onToggleSearch,
+  onSelectSearchResult,
 }) => {
   const onCall = callState === "idle" ? startCall : () => finishCall();
   const inCall = callState !== "idle";
   const group = groupDetail?.data;
 
   return (
-    <div className="flex shrink-0 items-center gap-3 border-b border-line px-3.5 py-3 sm:px-4">
+    <div className="relative shrink-0 border-b border-line">
+    <div className="flex items-center gap-3 px-3.5 py-3 sm:px-4">
       <IconButton
         label="Back to conversations"
         icon={<ArrowBackRounded fontSize="small" />}
@@ -97,6 +102,15 @@ const ChatHeader = ({
         </Link>
       )}
 
+      <IconButton
+        label={searchOpen ? "Close search" : "Search messages"}
+        icon={searchOpen ? <Close fontSize="small" /> : <Search fontSize="small" />}
+        size="sm"
+        active={searchOpen}
+        disabled={!selected}
+        onClick={onToggleSearch}
+      />
+
       {isGroup ? (
         <IconButton
           label="Group info"
@@ -114,6 +128,44 @@ const ChatHeader = ({
           onClick={onCall}
         />
       )}
+    </div>
+
+    {searchOpen && (
+      <div className="border-t border-line bg-panel px-3.5 py-2 sm:px-4">
+        <div className="flex items-center gap-2">
+          <input
+            autoFocus
+            value={search?.query || ""}
+            onChange={(event) => search?.setQuery(event.target.value)}
+            placeholder="Search this conversation…"
+            className="w-full min-w-0 rounded-md border border-line bg-paper px-2.5 py-1.5 text-sm text-ink outline-none placeholder:text-muted focus-visible:ring-2 focus-visible:ring-accent"
+          />
+        </div>
+
+        {search?.loading && <p className="mt-2 px-1 text-xs text-muted">Searching…</p>}
+        {search?.error && <p className="mt-2 px-1 text-xs font-medium text-danger">{search.error}</p>}
+        {!search?.loading &&
+          !search?.error &&
+          search?.query.trim() &&
+          !search?.results.length && (
+            <p className="mt-2 px-1 text-xs text-muted">No matches found.</p>
+          )}
+        {search?.results.length > 0 && (
+          <div className="mt-2 max-h-60 overflow-y-auto rounded-md border border-line">
+            {search.results.map((result) => (
+              <button
+                key={result.id}
+                type="button"
+                onClick={() => onSelectSearchResult(result.id)}
+                className="block w-full truncate px-2.5 py-2 text-left text-xs text-ink hover:bg-soft"
+              >
+                {result.body}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    )}
     </div>
   );
 };

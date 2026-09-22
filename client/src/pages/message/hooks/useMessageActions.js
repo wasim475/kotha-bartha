@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { api } from "../../../utility/api";
 import { sendTypingSignal } from "../../../utility/helpers";
+import { deriveSharedKey, encryptMessage, getOrCreateKeyPair } from "../../../utility/crypto";
 
 const useMessageActions = ({
   user,
@@ -8,6 +9,7 @@ const useMessageActions = ({
   selected,
   thread,
   conversations,
+  archived,
   state,
   scrollToBottom,
 }) => {
@@ -28,11 +30,31 @@ const useMessageActions = ({
     closeMessageInteractions,
   } = state;
 
+  // Publishes this device's E2E public key (once) so peers can start
+  // encrypting to us — safe to call unconditionally, it's a no-op after
+  // the first successful publish.
+  useEffect(() => {
+    if (user?.id) getOrCreateKeyPair(user.id);
+  }, [user?.id]);
+
   // Confirmation is handled by the page-level ConfirmDialog before this
   // runs; this just performs the delete + reload.
   const deleteConversation = async (conversationToDelete) => {
     await api.delete(`/conversations/${conversationToDelete}`);
     conversations.reload();
+    archived?.reload();
+  };
+
+  const archiveConversation = async (conversationToArchive) => {
+    await api.post(`/conversations/${conversationToArchive}/archive`);
+    conversations.reload();
+    archived?.reload();
+  };
+
+  const unarchiveConversation = async (conversationToUnarchive) => {
+    await api.post(`/conversations/${conversationToUnarchive}/unarchive`);
+    conversations.reload();
+    archived?.reload();
   };
 
   const sendMessage = async (event) => {
@@ -63,10 +85,23 @@ const useMessageActions = ({
     thread.setData((messages = []) => [...messages, optimisticMessage]);
 
     try {
-      const { data } = await api.post(
-        `/conversations/${conversationId}/messages`,
-        { body: text, replyTo: replyingTo?.id || null, mentions: mentionIds },
-      );
+      // Opportunistic E2E: only for 1-to-1 conversations where the peer
+      // has published a public key. Falls back to plaintext otherwise —
+      // nothing about sending breaks if encryption isn't available.
+      const peerPublicKey = !selected?.isGroup ? selected?.user?.publicKey : null;
+      const sharedKey = peerPublicKey
+        ? await deriveSharedKey(conversationId, peerPublicKey, user.id)
+        : null;
+
+      const requestBody = sharedKey
+        ? { encrypted: true, ...(await encryptMessage(sharedKey, text)) }
+        : { body: text };
+
+      const { data } = await api.post(`/conversations/${conversationId}/messages`, {
+        ...requestBody,
+        replyTo: replyingTo?.id || null,
+        mentions: mentionIds,
+      });
       const saved = data.data;
 
       thread.setData((messages = []) =>
@@ -76,6 +111,10 @@ const useMessageActions = ({
                 ...saved,
                 id: saved.id || saved._id,
                 senderId: String(saved.senderId),
+                // We already have the plaintext locally — no need to
+                // round-trip through decryption for our own sent message.
+                body: text,
+                _decryptState: saved.encrypted ? "ok" : undefined,
                 pending: false,
               }
             : message,
@@ -216,6 +255,49 @@ const useMessageActions = ({
     closeMessageInteractions();
   };
 
+  const togglePin = async (messageId, currentlyPinned) => {
+    try {
+      if (currentlyPinned) {
+        await api.delete(`/conversations/${conversationId}/messages/${messageId}/pin`);
+      } else {
+        await api.post(`/conversations/${conversationId}/messages/${messageId}/pin`);
+      }
+    } catch (error) {
+      setSendError(error.response?.data?.error?.message || "Couldn't update the pin.");
+    }
+  };
+
+  const forwardMessage = async (messageId, targetConversationIds) => {
+    const { data } = await api.post(
+      `/conversations/${conversationId}/messages/${messageId}/forward`,
+      { targetConversationIds },
+    );
+    conversations.reload();
+    archived?.reload();
+    return data.data;
+  };
+
+  // Encrypted messages can't be forwarded server-side (the server never
+  // sees their plaintext to copy) — the client already holds the decrypted
+  // text for rendering, so this re-encrypts it under each target
+  // conversation's own key (or sends plaintext into a group) via a normal
+  // send, one target at a time.
+  const forwardPlaintext = async (targetConversationId, text) => {
+    const target = conversations.data?.find((c) => c.id === targetConversationId);
+    const peerPublicKey = target && !target.isGroup ? target.user?.publicKey : null;
+    const sharedKey = peerPublicKey
+      ? await deriveSharedKey(targetConversationId, peerPublicKey, user.id)
+      : null;
+
+    const requestBody = sharedKey
+      ? { encrypted: true, ...(await encryptMessage(sharedKey, text)) }
+      : { body: text };
+
+    await api.post(`/conversations/${targetConversationId}/messages`, requestBody);
+    conversations.reload();
+    archived?.reload();
+  };
+
   useEffect(() => {
     const handleOutsideInteraction = (event) => {
       if (
@@ -233,12 +315,17 @@ const useMessageActions = ({
 
   return {
     deleteConversation,
+    archiveConversation,
+    unarchiveConversation,
     sendMessage,
     sendAttachment,
     reactToMessage,
     selectMessage,
     openEmojiPicker,
     replyToMessage,
+    togglePin,
+    forwardMessage,
+    forwardPlaintext,
   };
 };
 

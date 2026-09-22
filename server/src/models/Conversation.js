@@ -30,6 +30,24 @@ const conversationSchema = new mongoose.Schema(
     lastMessage: { type: String, default: "" },
     lastMessageAt: Date,
     unreadCounts: { type: Map, of: Number, default: {} },
+    // Per-user last-read timestamp, used to compute the "first unread"
+    // message for the jump-to-unread affordance. Parallel to unreadCounts.
+    lastReadAt: { type: Map, of: Date, default: {} },
+    // Per-user archive flag — archiving only ever affects the archiving
+    // user's own conversation list, never the other participant(s).
+    archivedFor: {
+      type: [mongoose.Schema.Types.ObjectId],
+      default: [],
+      index: true,
+    },
+    // Group chats only (enforced in chat.routes.js) — any member may pin.
+    pinnedMessages: [
+      {
+        messageId: { type: mongoose.Schema.Types.ObjectId, ref: "Message" },
+        pinnedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        pinnedAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   { timestamps: true },
 );
