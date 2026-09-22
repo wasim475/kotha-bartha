@@ -1,4 +1,5 @@
 import { useRealtime } from "../../../utility/helpers";
+import { playReactionSound } from "../../../utility/sound";
 
 const useMessageRealtime = ({
   conversationId,
@@ -57,6 +58,12 @@ const useMessageRealtime = ({
           : message,
       ),
     );
+    // The server never broadcasts this back to whoever triggered it (see
+    // chat.routes.js's reaction route), so any client receiving it here is
+    // always someone other than the actor — safe to play without risking a
+    // double-sound for the person who reacted (they already heard it
+    // immediately from useMessageActions' own reactToMessage call).
+    playReactionSound();
   });
 
   useRealtime("message:read", (event) => {

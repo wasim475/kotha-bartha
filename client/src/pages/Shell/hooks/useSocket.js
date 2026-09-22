@@ -28,7 +28,12 @@ export default function useSocket(userId) {
       if (messageId && forwardedMessageIds.has(messageId)) return;
       if (messageId) forwardedMessageIds.add(messageId);
 
-      if (!isConversationMuted(userId, payload?.conversationId)) {
+      // The server never broadcasts message:new back to its own sender, but
+      // this guard makes that contract explicit here too rather than
+      // relying purely on the absence of self-delivery elsewhere.
+      const isOwnMessage = payload?.senderId && String(payload.senderId) === String(userId);
+
+      if (!isOwnMessage && !isConversationMuted(userId, payload?.conversationId)) {
         // A conversation already open on screen gets a softer cue instead
         // of the full notification sound — read live each time (not from
         // a stale closure) since this handler is set up once per socket

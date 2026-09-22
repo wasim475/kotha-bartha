@@ -25,6 +25,11 @@ const ReactionPicker = forwardRef(function ReactionPicker(
     className = "",
     autoFocus = false,
     placement = "top",
+    // Optional extra control rendered inside the same pill after the type
+    // buttons (e.g. messages' "open the full emoji picker" Plus button) —
+    // keeps that affordance visually and structurally part of one shared
+    // component instead of a second, differently-styled container.
+    trailing = null,
   },
   forwardedRef,
 ) {
@@ -87,6 +92,7 @@ const ReactionPicker = forwardRef(function ReactionPicker(
           <ReactionIcon type={type} className="size-full" />
         </button>
       ))}
+      {trailing}
     </Motion.div>
   );
 });

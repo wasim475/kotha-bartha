@@ -687,7 +687,7 @@ router.get(
         deletedAt: null,
         deletedFor: { $ne: req.user._id },
       })
-        .populate("replyTo", "body senderId encrypted")
+        .populate("replyTo", "body senderId encrypted encryptedBody")
         .populate("senderId", "fullName avatar")
         .populate("mentions", "fullName")
         .sort({
@@ -729,8 +729,7 @@ router.get(
           replyTo: message.replyTo
             ? {
                 id: message.replyTo._id.toString(),
-                body: message.replyTo.encrypted ? "🔒 Encrypted message" : message.replyTo.body,
-                encrypted: Boolean(message.replyTo.encrypted),
+                ...contentFields(message.replyTo),
                 senderId: message.replyTo.senderId.toString(),
               }
             : null,
@@ -876,6 +875,16 @@ router.post(
         },
         unsendExpiresAt: unsendExpiresAt(message),
         forwardedFrom: null,
+        // Must be on the broadcast payload too, not just the HTTP response
+        // — the recipient only ever sees this message via the socket event,
+        // never the sender's own REST response.
+        replyTo: replyTo
+          ? {
+              id: replyTo._id.toString(),
+              ...contentFields(replyTo),
+              senderId: replyTo.senderId.toString(),
+            }
+          : null,
       };
       broadcastToOthers(req, others, "message:new", payload);
 
@@ -883,14 +892,6 @@ router.post(
         data: {
           ...payload,
           status: message.status,
-          replyTo: replyTo
-            ? {
-                id: replyTo._id.toString(),
-                body: replyTo.encrypted ? "🔒 Encrypted message" : replyTo.body,
-                encrypted: Boolean(replyTo.encrypted),
-                senderId: replyTo.senderId.toString(),
-              }
-            : null,
           reactions: [],
         },
       });

@@ -1,5 +1,8 @@
-import { ForumOutlined } from "@mui/icons-material";
+import { ForumOutlined, KeyboardArrowDown } from "@mui/icons-material";
+import { useEffect, useRef, useState } from "react";
 
+import { cx } from "../../../utility/cx";
+import useMountedTransition from "../../../utility/useMountedTransition";
 import CallRecordRow from "./CallRecordRow";
 import MessageBubble from "./MessageBubble";
 
@@ -100,6 +103,37 @@ const MessageThread = ({
   onCloseInteraction,
   isGroup,
 }) => {
+  const unreadMarkerRef = useRef(null);
+  const [trackedUnreadId, setTrackedUnreadId] = useState(firstUnreadMessageId);
+  const [unreadSeen, setUnreadSeen] = useState(false);
+
+  // The marker moved to a different message (a fresh unread batch) —
+  // reset during render (the standard React pattern for "adjust state
+  // when a prop changes") so the button can reappear for the new one.
+  if (firstUnreadMessageId !== trackedUnreadId) {
+    setTrackedUnreadId(firstUnreadMessageId);
+    setUnreadSeen(false);
+  }
+
+  // Tracks whether the unread divider has scrolled into view at least once
+  // — "seen", not "currently visible", so the button stays gone once the
+  // user has scrolled past it rather than flickering back in.
+  useEffect(() => {
+    if (!firstUnreadMessageId || !unreadMarkerRef.current || !threadRef?.current) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setUnreadSeen(true);
+      },
+      { root: threadRef.current, threshold: 0.4 },
+    );
+    observer.observe(unreadMarkerRef.current);
+    return () => observer.disconnect();
+  }, [firstUnreadMessageId, threadRef]);
+
+  const showJumpToUnread = Boolean(firstUnreadMessageId) && !unreadSeen;
+  const jumpTransition = useMountedTransition(showJumpToUnread, 150);
+
   if (loading) {
     return (
       <div className="flex flex-1 flex-col overflow-y-auto" ref={threadRef}>
@@ -153,7 +187,7 @@ const MessageThread = ({
                 </div>
               )}
               {firstUnreadMessageId === message.id && (
-                <div className="my-3 flex items-center gap-2">
+                <div ref={unreadMarkerRef} className="my-3 flex items-center gap-2">
                   <span className="h-px flex-1 bg-danger/40" />
                   <span className="rounded-full bg-danger-soft px-3 py-1 text-[11px] font-semibold text-danger">
                     Unread messages
@@ -174,6 +208,7 @@ const MessageThread = ({
                   <MessageBubble
                     message={message}
                     isOwn={isOwn}
+                    currentUserId={userId}
                     otherUser={isGroup ? message.sender : otherUser}
                     showSenderName={isGroup && !groupedWithPrevious}
                     groupStart={!groupedWithPrevious}
@@ -207,13 +242,19 @@ const MessageThread = ({
         </div>
       </div>
 
-      {firstUnreadMessageId && (
+      {jumpTransition.shouldRender && (
         <button
           type="button"
           onClick={onJumpToUnread}
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-line bg-panel px-3.5 py-1.5 text-xs font-semibold text-accent shadow-soft hover:bg-soft"
+          aria-label="Jump to first unread message"
+          title="Jump to first unread message"
+          className={cx(
+            "absolute right-4 bottom-4 flex size-10 items-center justify-center rounded-full",
+            "bg-accent text-white shadow-soft transition motion-safe:duration-150 ease-out hover:bg-accent-deep",
+            jumpTransition.visible ? "scale-100 opacity-100" : "scale-75 opacity-0",
+          )}
         >
-          Jump to first unread
+          <KeyboardArrowDown fontSize="small" />
         </button>
       )}
     </div>

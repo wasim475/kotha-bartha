@@ -1,46 +1,65 @@
 import { useEffect } from "react";
 import { decryptMessage, deriveSharedKey } from "../../../utility/crypto";
 
-// Decrypts any encrypted messages in the active thread as they arrive
-// (initial load, realtime message:new/message:updated) — server never sees
-// the plaintext, so this is the only place it exists on the receiving side.
+const needsDecryption = (content) => content?.encrypted && content._decryptState == null;
+
+// Decrypts any encrypted messages (and encrypted reply-quote previews) in
+// the active thread as they arrive — initial load, realtime message:new
+// (which reloads the thread), and reconnect. Server never sees the
+// plaintext, so this is the only place it exists on the receiving side.
 const useE2EDecryption = ({ conversationId, selected, userId, thread }) => {
   useEffect(() => {
     if (!conversationId || selected?.isGroup) return undefined;
     const peerPublicKey = selected?.user?.publicKey;
 
-    const pending = (thread.data || []).filter(
-      (message) => message.encrypted && message._decryptState == null,
+    const pendingMessages = (thread.data || []).filter(
+      (message) => needsDecryption(message) || needsDecryption(message.replyTo),
     );
-    if (!pending.length) return undefined;
+    if (!pendingMessages.length) return undefined;
+
+    // The peer's public key hasn't loaded yet (e.g. the conversation list
+    // fetch that carries it hasn't resolved) — this is transient, not a
+    // real failure, so leave these messages untouched rather than marking
+    // them permanently "failed". The effect re-runs and retries as soon as
+    // `selected.user.publicKey` actually has a value (see the dependency
+    // array below) instead of getting stuck forever on a one-time miss.
+    if (!peerPublicKey) return undefined;
 
     let cancelled = false;
 
     (async () => {
-      const sharedKey = peerPublicKey
-        ? await deriveSharedKey(conversationId, peerPublicKey, userId)
-        : null;
+      const sharedKey = await deriveSharedKey(conversationId, peerPublicKey, userId);
       if (cancelled) return;
 
-      const updates = new Map();
-      for (const message of pending) {
-        if (!sharedKey) {
-          updates.set(message.id, { body: "🔒 Unable to decrypt", _decryptState: "failed" });
-          continue;
-        }
+      const decryptOne = async (content) => {
+        if (!sharedKey) return { body: "🔒 Unable to decrypt", _decryptState: "failed" };
         try {
-          const plaintext = await decryptMessage(sharedKey, message.encryptedBody);
-          updates.set(message.id, { body: plaintext, _decryptState: "ok" });
+          const plaintext = await decryptMessage(sharedKey, content.encryptedBody);
+          return { body: plaintext, _decryptState: "ok" };
         } catch {
-          updates.set(message.id, { body: "🔒 Unable to decrypt", _decryptState: "failed" });
+          return { body: "🔒 Unable to decrypt", _decryptState: "failed" };
         }
+      };
+
+      const updates = new Map();
+      for (const message of pendingMessages) {
+        const entry = {};
+        if (needsDecryption(message)) entry.self = await decryptOne(message);
+        if (needsDecryption(message.replyTo)) entry.replyTo = await decryptOne(message.replyTo);
+        updates.set(message.id, entry);
       }
       if (cancelled || !updates.size) return;
 
       thread.setData((messages = []) =>
-        messages.map((message) =>
-          updates.has(message.id) ? { ...message, ...updates.get(message.id) } : message,
-        ),
+        messages.map((message) => {
+          const entry = updates.get(message.id);
+          if (!entry) return message;
+          return {
+            ...message,
+            ...(entry.self || {}),
+            replyTo: entry.replyTo ? { ...message.replyTo, ...entry.replyTo } : message.replyTo,
+          };
+        }),
       );
     })();
 

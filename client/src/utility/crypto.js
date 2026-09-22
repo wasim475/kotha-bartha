@@ -57,7 +57,12 @@ const base64ToBuf = (base64) =>
   Uint8Array.from(atob(base64), (char) => char.charCodeAt(0)).buffer;
 
 let keyPairPromise = null;
-const sharedKeyCache = new Map(); // conversationId -> CryptoKey
+// conversationId -> { peerPublicKeyJwkString, key } — keyed on the exact
+// peer public key the shared secret was derived from, not just the
+// conversation id, so a key rotation (peer re-generating a keypair on a
+// new/cleared device) invalidates the cache instead of silently reusing a
+// shared secret that no longer matches either side's current key.
+const sharedKeyCache = new Map();
 
 async function generateAndStoreKeyPair() {
   const keyPair = await crypto.subtle.generateKey(
@@ -104,7 +109,11 @@ export function getOrCreateKeyPair(userId) {
 // string, as stored on User.publicKey).
 export async function deriveSharedKey(conversationId, peerPublicKeyJwkString, userId) {
   if (!peerPublicKeyJwkString) return null;
-  if (sharedKeyCache.has(conversationId)) return sharedKeyCache.get(conversationId);
+
+  const cached = sharedKeyCache.get(conversationId);
+  if (cached && cached.peerPublicKeyJwkString === peerPublicKeyJwkString) {
+    return cached.key;
+  }
 
   const keyPair = await getOrCreateKeyPair(userId);
   if (!keyPair) return null;
@@ -125,7 +134,7 @@ export async function deriveSharedKey(conversationId, peerPublicKeyJwkString, us
       false,
       ["encrypt", "decrypt"],
     );
-    sharedKeyCache.set(conversationId, sharedKey);
+    sharedKeyCache.set(conversationId, { peerPublicKeyJwkString, key: sharedKey });
     return sharedKey;
   } catch {
     return null;

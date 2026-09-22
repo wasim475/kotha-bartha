@@ -1,4 +1,5 @@
 import {
+  Add,
   Delete,
   Done,
   DoneAll,
@@ -17,6 +18,10 @@ import { createPortal } from "react-dom";
 import Avatar from "../../../components/ui/Avatar";
 import Button from "../../../components/ui/Button";
 import IconButton from "../../../components/ui/IconButton";
+import ReactionIcon from "../../../components/ui/reactions/ReactionIcons";
+import ReactionPicker from "../../../components/ui/reactions/ReactionPicker";
+import { EMOJI_TO_REACTION_TYPE, REACTION_TYPE_TO_EMOJI } from "../../../components/ui/reactions/reactionEmoji";
+import { REACTION_TYPES } from "../../../components/ui/reactions/reactionTypes";
 import { cx } from "../../../utility/cx";
 import { toFileUrl } from "../../../utility/fileUrl";
 import useButtonColorFix from "../../../utility/useButtonColorFix";
@@ -37,6 +42,8 @@ const fileExtension = (fileName = "") => fileName.split(".").pop()?.slice(0, 5).
 
 const emojiPickerWidth = 280;
 const emojiPickerHeight = 360;
+const reactionBarWidth = 268;
+const reactionBarHeight = 56;
 const viewportGap = 8;
 const actionsGap = 8;
 const actionsHeightEstimate = 40;
@@ -63,6 +70,7 @@ const formatFullTime = (date) => {
 const MessageBubble = ({
   message,
   isOwn,
+  currentUserId,
   otherUser,
   groupStart,
   groupEnd,
@@ -96,6 +104,18 @@ const MessageBubble = ({
   const actionsRef = useRef(null);
   const [actionsPosition, setActionsPosition] = useState(null);
 
+  // "bar" (the compact 5-reaction + Plus row) is always the first thing
+  // that opens; Plus escalates to "full" (the full emoji-picker-react
+  // library picker). Reset to "bar" whenever the whole reaction UI closes,
+  // via the render-time "adjust state when a prop changes" pattern (not an
+  // effect) so it's ready fresh the next time it opens.
+  const [trackedEmojiOpen, setTrackedEmojiOpen] = useState(emojiOpen);
+  const [reactionMode, setReactionMode] = useState("bar");
+  if (emojiOpen !== trackedEmojiOpen) {
+    setTrackedEmojiOpen(emojiOpen);
+    if (!emojiOpen) setReactionMode("bar");
+  }
+
   const showActions = Boolean((selected || emojiOpen) && !isEditing);
 
   const primaryFix = useButtonColorFix("primary");
@@ -107,23 +127,24 @@ const MessageBubble = ({
   const bubbleFix = isOwn ? ownBubbleFix : otherBubbleFix;
 
   useLayoutEffect(() => {
-    if (!emojiOpen || !emojiButtonRef.current) {
-      setEmojiPickerPosition(null);
-      return undefined;
-    }
+    // Deliberately doesn't clear the position on close — the portal below
+    // stays mounted for a bit longer (reactionUITransition.shouldRender)
+    // to play its exit animation, and nulling this out immediately would
+    // make it disappear at that same instant instead, since the portal is
+    // gated on both. The stale position is harmless once actually
+    // unmounted, and gets recomputed fresh the next time this opens.
+    if (!emojiOpen || !emojiButtonRef.current) return undefined;
 
     const positionEmojiPicker = () => {
       const buttonRect = emojiButtonRef.current?.getBoundingClientRect();
       if (!buttonRect) return;
 
-      const pickerWidth = Math.min(
-        emojiPickerWidth,
-        window.innerWidth - viewportGap * 2,
-      );
-      const pickerHeight = Math.min(
-        emojiPickerHeight,
-        window.innerHeight - viewportGap * 2,
-      );
+      const isBar = reactionMode === "bar";
+      const targetWidth = isBar ? reactionBarWidth : emojiPickerWidth;
+      const targetHeight = isBar ? reactionBarHeight : emojiPickerHeight;
+
+      const pickerWidth = Math.min(targetWidth, window.innerWidth - viewportGap * 2);
+      const pickerHeight = Math.min(targetHeight, window.innerHeight - viewportGap * 2);
 
       const leftSpace = buttonRect.left - viewportGap;
       const rightSpace = window.innerWidth - buttonRect.right - viewportGap;
@@ -134,10 +155,10 @@ const MessageBubble = ({
         rightSpace >= pickerWidth || rightSpace >= leftSpace
           ? buttonRect.left
           : buttonRect.right - pickerWidth;
-      const top =
-        bottomSpace >= pickerHeight || bottomSpace >= topSpace
-          ? buttonRect.bottom + viewportGap
-          : buttonRect.top - pickerHeight - viewportGap;
+      const placeBelow = bottomSpace >= pickerHeight || bottomSpace >= topSpace;
+      const top = placeBelow
+        ? buttonRect.bottom + viewportGap
+        : buttonRect.top - pickerHeight - viewportGap;
 
       setEmojiPickerPosition({
         left: Math.max(
@@ -150,6 +171,7 @@ const MessageBubble = ({
         ),
         width: pickerWidth,
         height: pickerHeight,
+        placement: placeBelow ? "bottom" : "top",
       });
     };
 
@@ -161,7 +183,7 @@ const MessageBubble = ({
       window.removeEventListener("resize", positionEmojiPicker);
       window.removeEventListener("scroll", positionEmojiPicker, true);
     };
-  }, [emojiOpen]);
+  }, [emojiOpen, reactionMode]);
 
   useEffect(() => {
     if (!emojiOpen) return undefined;
@@ -187,10 +209,10 @@ const MessageBubble = ({
   // for own messages, left edge for others — the side already near the
   // viewport edge) keeps it on-screen without needing to measure its width.
   useLayoutEffect(() => {
-    if (!showActions || !messageColumnRef.current) {
-      setActionsPosition(null);
-      return undefined;
-    }
+    // Same reasoning as the reaction-UI position effect above — don't
+    // clear this on close, or the exit transition never gets a chance to
+    // play since the portal is also gated on this being non-null.
+    if (!showActions || !messageColumnRef.current) return undefined;
 
     const positionActions = () => {
       const rect = messageColumnRef.current?.getBoundingClientRect();
@@ -236,9 +258,33 @@ const MessageBubble = ({
   }, [showActions, onCloseInteraction]);
 
   const actionsTransition = useMountedTransition(showActions, 150);
+  const reactionUITransition = useMountedTransition(emojiOpen, 150);
 
   const isAttachment = message.type === "attachment";
   const attachment = message.attachment || {};
+
+  const myReactionEmoji = currentUserId
+    ? message.reactions?.find((reaction) => String(reaction.userId) === String(currentUserId))
+        ?.emoji
+    : null;
+  const currentReactionType = myReactionEmoji ? EMOJI_TO_REACTION_TYPE[myReactionEmoji] : null;
+
+  const handleQuickReact = (type) => {
+    onCloseInteraction();
+    onReact(message.id, REACTION_TYPE_TO_EMOJI[type]);
+  };
+
+  // Aggregates the raw per-user emoji reactions into distinct emoji + count
+  // pills (matching how ReactionSummary aggregates elsewhere), rendering
+  // the shared canonical-five SVGs where the emoji matches one of them so
+  // sizing/alignment stays identical to posts/comments/replies; anything
+  // else (from the full picker) falls back to the literal glyph.
+  const reactionGroups = (message.reactions || []).reduce((groups, reaction) => {
+    const existing = groups.find((group) => group.emoji === reaction.emoji);
+    if (existing) existing.count += 1;
+    else groups.push({ emoji: reaction.emoji, count: 1, type: EMOJI_TO_REACTION_TYPE[reaction.emoji] });
+    return groups;
+  }, []);
 
   return (
     <div
@@ -546,14 +592,26 @@ const MessageBubble = ({
             </button>
           )}
 
-          {message.reactions?.length > 0 && (
-            <div className={cx("mt-1 flex flex-wrap gap-1", isOwn ? "justify-end" : "justify-start")}>
-              {message.reactions.map((reaction) => (
+          {reactionGroups.length > 0 && (
+            <div
+              className={cx(
+                "mt-1 flex flex-wrap items-center gap-1",
+                isOwn ? "justify-end" : "justify-start",
+              )}
+            >
+              {reactionGroups.map((group) => (
                 <span
-                  key={`${reaction.userId}-${reaction.emoji}`}
-                  className="rounded-full border border-line bg-panel px-1.5 py-0.5 text-xs shadow-sm"
+                  key={group.emoji}
+                  className="flex items-center gap-1 rounded-full border border-line bg-panel px-1.5 py-0.5 shadow-sm"
                 >
-                  {reaction.emoji}
+                  {group.type ? (
+                    <ReactionIcon type={group.type} className="size-4" />
+                  ) : (
+                    <span className="text-xs leading-none">{group.emoji}</span>
+                  )}
+                  {group.count > 1 && (
+                    <span className="text-[10px] font-semibold text-muted">{group.count}</span>
+                  )}
                 </span>
               ))}
             </div>
@@ -629,27 +687,65 @@ const MessageBubble = ({
           document.body,
         )}
 
-      {emojiOpen &&
+      {reactionUITransition.shouldRender &&
         emojiPickerPosition &&
         createPortal(
           <div
             ref={emojiPickerRef}
             data-emoji-picker
-            className="fixed z-40 overflow-hidden rounded-xl border border-line bg-panel shadow-soft"
-            style={emojiPickerPosition}
+            className={cx(
+              "fixed z-40 transition motion-safe:duration-150 ease-out",
+              reactionMode === "full" &&
+                "overflow-hidden rounded-xl border border-line bg-panel shadow-soft",
+              reactionUITransition.visible ? "scale-100 opacity-100" : "scale-90 opacity-0",
+            )}
+            style={
+              reactionMode === "full"
+                ? {
+                    top: emojiPickerPosition.top,
+                    left: emojiPickerPosition.left,
+                    width: emojiPickerPosition.width,
+                    height: emojiPickerPosition.height,
+                  }
+                : { top: emojiPickerPosition.top, left: emojiPickerPosition.left }
+            }
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <EmojiPicker
-              onEmojiClick={(emojiData) => {
-                onCloseInteraction();
-                onReact(message.id, emojiData.emoji);
-              }}
-              width={emojiPickerPosition.width}
-              height={emojiPickerHeight}
-              searchDisabled
-              previewConfig={{ showPreview: false }}
-              lazyLoadEmojis
-            />
+            {reactionMode === "bar" ? (
+              <ReactionPicker
+                selected={currentReactionType}
+                onSelect={handleQuickReact}
+                types={REACTION_TYPES}
+                placement={emojiPickerPosition.placement}
+                trailing={
+                  <button
+                    type="button"
+                    aria-label="More reactions"
+                    title="More reactions"
+                    onClick={() => setReactionMode("full")}
+                    className={cx(
+                      "flex size-9 items-center justify-center rounded-full p-1.5 text-muted",
+                      "transition-transform motion-safe:duration-150 motion-safe:hover:-translate-y-1 motion-safe:hover:scale-125 hover:text-ink",
+                      "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+                    )}
+                  >
+                    <Add className="size-full" />
+                  </button>
+                }
+              />
+            ) : (
+              <EmojiPicker
+                onEmojiClick={(emojiData) => {
+                  onCloseInteraction();
+                  onReact(message.id, emojiData.emoji);
+                }}
+                width={emojiPickerPosition.width}
+                height={emojiPickerHeight}
+                searchDisabled
+                previewConfig={{ showPreview: false }}
+                lazyLoadEmojis
+              />
+            )}
           </div>,
           document.body,
         )}

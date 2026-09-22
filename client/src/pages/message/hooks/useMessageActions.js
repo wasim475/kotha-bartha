@@ -113,9 +113,18 @@ const useMessageActions = ({
                 id: saved.id || saved._id,
                 senderId: String(saved.senderId),
                 // We already have the plaintext locally — no need to
-                // round-trip through decryption for our own sent message.
+                // round-trip through decryption for our own sent message
+                // (or its reply quote, if it's a reply to an encrypted one).
                 body: text,
                 _decryptState: saved.encrypted ? "ok" : undefined,
+                replyTo:
+                  replyingTo && saved.replyTo
+                    ? {
+                        ...saved.replyTo,
+                        body: replyingTo.body,
+                        _decryptState: replyingTo._decryptState,
+                      }
+                    : saved.replyTo,
                 pending: false,
               }
             : message,
