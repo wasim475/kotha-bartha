@@ -686,11 +686,18 @@ router.post(
       // suggestion UI, and only if they're actually in this conversation —
       // never inferred from parsing the text server-side.
       const participantSet = new Set(conversation.participantIds.map((id) => id.toString()));
-      const mentions = Array.isArray(req.body.mentions)
+      const mentionIds = Array.isArray(req.body.mentions)
         ? [...new Set(req.body.mentions)].filter(
             (id) => mongoose.isValidObjectId(id) && participantSet.has(id),
           )
         : [];
+      const mentionUsers = mentionIds.length
+        ? await User.find({ _id: { $in: mentionIds } }).select("fullName")
+        : [];
+      const mentions = mentionUsers.map((mentionUser) => ({
+        id: mentionUser._id.toString(),
+        fullName: mentionUser.fullName,
+      }));
 
       clearHiddenFor(conversation, [req.user._id, ...others]);
 
@@ -699,7 +706,7 @@ router.post(
         senderId: req.user._id,
         recipientId: conversation.isGroup ? null : others[0],
         body,
-        mentions,
+        mentions: mentionIds,
         replyTo: replyTo?._id || null,
         status: "delivered",
       });

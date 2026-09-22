@@ -27,7 +27,7 @@ export function tokenizeMessageBody(body, mentionNames = []) {
     match = regex.exec(body);
   }
 
-  if (lastIndex < body.length) {
+  if (lastIndex < body?.length) {
     nodes.push({ type: "text", text: body.slice(lastIndex), key: key++ });
   }
 
