@@ -70,16 +70,6 @@ async function idbGet(key) {
   });
 }
 
-async function idbSet(key, value) {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).put(value, key);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
 async function idbDelete(key) {
   const db = await openDb();
   return new Promise((resolve, reject) => {
@@ -87,6 +77,32 @@ async function idbDelete(key) {
     tx.objectStore(STORE).delete(key);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
+  });
+}
+
+// Atomically "get if present, else insert `candidate`" — a single
+// readwrite transaction, not a separate get() followed by a separate set()
+// (which would leave a window between them for another tab's transaction to
+// land in). IndexedDB serializes readwrite transactions against the same
+// object store, so whichever tab's transaction commits first really does
+// win, and every later tab's transaction is guaranteed to see that already-
+// committed value in its own get() — the two-tab race this exists to close.
+async function idbGetOrInsert(key, candidate) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    const store = tx.objectStore(STORE);
+    const getReq = store.get(key);
+    getReq.onsuccess = () => {
+      if (getReq.result !== undefined) {
+        resolve(getReq.result);
+        return;
+      }
+      const putReq = store.put(candidate, key);
+      putReq.onsuccess = () => resolve(candidate);
+      putReq.onerror = () => reject(putReq.error);
+    };
+    getReq.onerror = () => reject(getReq.error);
   });
 }
 
@@ -164,23 +180,26 @@ async function loadOrCreateKeyPair(userId) {
 
   const legacy = await idbGet(LEGACY_KEY_ID).catch(() => null);
   if (legacy) {
-    await idbSet(recordId, legacy);
-    await idbDelete(LEGACY_KEY_ID).catch(() => {});
-    return legacy;
+    // Race-safe even if two tabs both find the legacy record at once: only
+    // whichever tab's atomic insert actually wins gets to delete it, so the
+    // loser never deletes a legacy record a third context might still be
+    // migrating from, and both tabs still converge on the same adopted key.
+    const adopted = await idbGetOrInsert(recordId, legacy);
+    if (adopted === legacy) await idbDelete(LEGACY_KEY_ID).catch(() => {});
+    return adopted;
   }
 
+  // Two-tab safety: another tab may be generating its own keypair for this
+  // exact user at the same time (both saw "nothing stored yet"). Key
+  // generation itself can't happen inside an IndexedDB transaction (it's
+  // not an IDB operation, and awaiting it would leave the transaction
+  // inactive), so it happens here, first — but the actual "claim this
+  // record" step is a single atomic get-or-insert transaction, so whichever
+  // tab's generated keypair gets there first really does win, and the
+  // other tab is guaranteed to see and adopt it instead of silently
+  // installing a second, different keypair under the same record.
   const keyPair = await generateKeyPair();
-
-  // Two-tab safety: another tab may have generated and stored its own
-  // keypair for this exact user while we were generating ours (both saw
-  // "nothing stored yet" at the same time). Re-check right before writing
-  // and defer to whichever one got there first, so both tabs converge on
-  // the same private key instead of silently diverging.
-  const raceWinner = await idbGet(recordId).catch(() => null);
-  if (raceWinner) return raceWinner;
-
-  await idbSet(recordId, keyPair);
-  return keyPair;
+  return idbGetOrInsert(recordId, keyPair);
 }
 
 // Publishes this device's public key under its own deviceId (upsert — see
