@@ -1,5 +1,4 @@
 const express = require("express");
-const fs = require("fs");
 const mongoose = require("mongoose");
 const User = require("../models/User");
 const Conversation = require("../models/Conversation");
@@ -10,8 +9,58 @@ const { emitToUser } = require("../utils/realtime");
 const { isBlockedEitherWay } = require("../utils/blocks");
 const { isOnline } = require("../utils/presence");
 const { upload, attachmentKindFor } = require("../middleware/upload");
+const { uploadBuffer, destroyAsset } = require("../utils/cloudinary");
 
 const router = express.Router();
+
+// ============================================================
+// Shared helpers — every route below used to assume exactly two
+// participants (a single `recipientId`). Groups can have many, so these
+// helpers work the same for both: a 1-to-1 conversation is just a group
+// of two without a name.
+// ============================================================
+
+const otherParticipants = (conversation, excludeUserId) =>
+  conversation.participantIds.filter(
+    (id) => id.toString() !== excludeUserId.toString(),
+  );
+
+const clearHiddenFor = (conversation, ids) => {
+  const idStrings = new Set([...ids].map((id) => id.toString()));
+  conversation.hiddenFor = (conversation.hiddenFor || []).filter(
+    (id) => !idStrings.has(id.toString()),
+  );
+};
+
+const bumpUnreadFor = (conversation, ids) => {
+  ids.forEach((id) => {
+    const key = id.toString();
+    conversation.unreadCounts?.set(key, (conversation.unreadCounts?.get(key) || 0) + 1);
+  });
+};
+
+const broadcastToOthers = (req, ids, event, payload) => {
+  ids.forEach((id) => emitToUser(req, id, event, payload));
+};
+
+// Block rules apply only to 1-to-1 conversations. A group can contain
+// members who have blocked each other elsewhere — that only ever affects
+// their own direct conversation, not their shared group membership.
+const isBlockedForSend = async (conversation, userId, others) => {
+  if (conversation.isGroup) return false;
+  return isBlockedEitherWay(userId, others[0]);
+};
+
+const groupSummary = (conversation) => ({
+  id: conversation._id.toString(),
+  name: conversation.groupName,
+  avatar: conversation.groupAvatar,
+  memberCount: conversation.participantIds.length,
+  adminIds: (conversation.adminIds || []).map((id) => id.toString()),
+});
+
+const isGroupAdmin = (conversation, userId) =>
+  (conversation.adminIds || []).some((id) => id.toString() === userId.toString());
 
 router.post("/conversations", async (req, res, next) => {
   try {
@@ -76,6 +125,293 @@ router.post("/conversations", async (req, res, next) => {
 });
 
 // ============================================================
+// GROUPS
+// ============================================================
+
+router.post("/conversations/group", async (req, res, next) => {
+  try {
+    const groupName = String(req.body.groupName || "").trim();
+    const memberIds = Array.isArray(req.body.memberIds) ? req.body.memberIds : [];
+    const validIds = [...new Set(memberIds)].filter(
+      (id) => mongoose.isValidObjectId(id) && id !== req.user._id.toString(),
+    );
+
+    if (!groupName) {
+      return res.status(400).json({
+        error: { code: "INVALID_GROUP", message: "Give the group a name." },
+      });
+    }
+    if (validIds.length < 1) {
+      return res.status(400).json({
+        error: { code: "INVALID_GROUP", message: "Add at least one other member." },
+      });
+    }
+
+    const members = await User.find({ _id: { $in: validIds } }).select("_id");
+    const memberObjectIds = members.map((user) => user._id);
+
+    const conversation = await Conversation.create({
+      participantIds: [req.user._id, ...memberObjectIds],
+      isGroup: true,
+      groupName,
+      adminIds: [req.user._id],
+      createdBy: req.user._id,
+    });
+
+    res.status(201).json({ data: { id: conversation._id.toString() } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/conversations/:conversationId", async (req, res, next) => {
+  try {
+    const conversation = await Conversation.findOne({
+      _id: req.params.conversationId,
+      participantIds: req.user._id,
+    });
+
+    if (!conversation) {
+      return res.status(404).json({
+        error: { code: "NOT_FOUND", message: "Conversation not found." },
+      });
+    }
+
+    if (!conversation.isGroup) {
+      const otherId = otherParticipants(conversation, req.user._id)[0];
+      const other = await User.findById(otherId);
+      return res.json({
+        data: {
+          id: conversation._id.toString(),
+          isGroup: false,
+          user: other ? { ...safeUser(other), isOnline: isOnline(other._id) } : null,
+        },
+      });
+    }
+
+    const members = await User.find({ _id: { $in: conversation.participantIds } });
+    res.json({
+      data: {
+        id: conversation._id.toString(),
+        isGroup: true,
+        ...groupSummary(conversation),
+        members: members.map((member) => ({
+          ...safeUser(member),
+          isOnline: isOnline(member._id),
+          isAdmin: isGroupAdmin(conversation, member._id),
+        })),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch("/conversations/:conversationId", async (req, res, next) => {
+  try {
+    const conversation = await Conversation.findOne({
+      _id: req.params.conversationId,
+      participantIds: req.user._id,
+      isGroup: true,
+    });
+
+    if (!conversation) {
+      return res.status(404).json({
+        error: { code: "NOT_FOUND", message: "Group not found." },
+      });
+    }
+    if (!isGroupAdmin(conversation, req.user._id)) {
+      return res.status(403).json({
+        error: { code: "FORBIDDEN", message: "Only a group admin can do that." },
+      });
+    }
+
+    if (typeof req.body.groupName === "string") {
+      const name = req.body.groupName.trim();
+      if (!name) {
+        return res.status(400).json({
+          error: { code: "INVALID_GROUP", message: "Group name can't be empty." },
+        });
+      }
+      conversation.groupName = name;
+    }
+
+    await conversation.save();
+
+    const others = otherParticipants(conversation, req.user._id);
+    broadcastToOthers(req, others, "conversation:updated", {
+      id: conversation._id.toString(),
+      ...groupSummary(conversation),
+    });
+
+    res.json({ data: { id: conversation._id.toString(), ...groupSummary(conversation) } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch(
+  "/conversations/:conversationId/avatar",
+  (req, res, next) => {
+    upload.single("file")(req, res, (error) => {
+      if (!error) return next();
+      if (error.message === "UNSUPPORTED_FILE_TYPE") {
+        return res.status(400).json({
+          error: { code: "UNSUPPORTED_FILE_TYPE", message: "Use an image for the group photo." },
+        });
+      }
+      next(error);
+    });
+  },
+  async (req, res, next) => {
+    try {
+      const conversation = await Conversation.findOne({
+        _id: req.params.conversationId,
+        participantIds: req.user._id,
+        isGroup: true,
+      });
+
+      if (!conversation) {
+        return res.status(404).json({
+          error: { code: "NOT_FOUND", message: "Group not found." },
+        });
+      }
+      if (!isGroupAdmin(conversation, req.user._id)) {
+        return res.status(403).json({
+          error: { code: "FORBIDDEN", message: "Only a group admin can do that." },
+        });
+      }
+      if (!req.file || !req.file.mimetype.startsWith("image/")) {
+        return res.status(400).json({
+          error: { code: "INVALID_FILE", message: "Choose an image for the group photo." },
+        });
+      }
+
+      const previousPublicId = conversation.groupAvatar?.publicId;
+      const result = await uploadBuffer(req.file.buffer, {
+        kind: "image",
+        folder: "kotha-bartha/group-avatars",
+      });
+      conversation.groupAvatar = { publicId: result.public_id, secureUrl: result.secure_url };
+      await conversation.save();
+      if (previousPublicId) destroyAsset(previousPublicId, "image");
+
+      const others = otherParticipants(conversation, req.user._id);
+      broadcastToOthers(req, others, "conversation:updated", {
+        id: conversation._id.toString(),
+        ...groupSummary(conversation),
+      });
+
+      res.json({ data: { id: conversation._id.toString(), ...groupSummary(conversation) } });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.post("/conversations/:conversationId/members", async (req, res, next) => {
+  try {
+    const conversation = await Conversation.findOne({
+      _id: req.params.conversationId,
+      participantIds: req.user._id,
+      isGroup: true,
+    });
+
+    if (!conversation) {
+      return res.status(404).json({
+        error: { code: "NOT_FOUND", message: "Group not found." },
+      });
+    }
+    if (!isGroupAdmin(conversation, req.user._id)) {
+      return res.status(403).json({
+        error: { code: "FORBIDDEN", message: "Only a group admin can add members." },
+      });
+    }
+
+    const memberIds = Array.isArray(req.body.memberIds) ? req.body.memberIds : [];
+    const existing = new Set(conversation.participantIds.map((id) => id.toString()));
+    const newIds = [...new Set(memberIds)].filter(
+      (id) => mongoose.isValidObjectId(id) && !existing.has(id),
+    );
+    if (!newIds.length) {
+      return res.status(400).json({
+        error: { code: "INVALID_GROUP", message: "No new members to add." },
+      });
+    }
+
+    const users = await User.find({ _id: { $in: newIds } }).select("_id");
+    conversation.participantIds.push(...users.map((user) => user._id));
+    await conversation.save();
+
+    const others = otherParticipants(conversation, req.user._id);
+    broadcastToOthers(req, others, "conversation:updated", {
+      id: conversation._id.toString(),
+      ...groupSummary(conversation),
+    });
+
+    res.json({ data: { id: conversation._id.toString(), ...groupSummary(conversation) } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete(
+  "/conversations/:conversationId/members/:userId",
+  async (req, res, next) => {
+    try {
+      const conversation = await Conversation.findOne({
+        _id: req.params.conversationId,
+        participantIds: req.user._id,
+        isGroup: true,
+      });
+
+      if (!conversation) {
+        return res.status(404).json({
+          error: { code: "NOT_FOUND", message: "Group not found." },
+        });
+      }
+
+      const isSelf = req.params.userId === req.user._id.toString();
+      if (!isSelf && !isGroupAdmin(conversation, req.user._id)) {
+        return res.status(403).json({
+          error: { code: "FORBIDDEN", message: "Only a group admin can remove members." },
+        });
+      }
+      if (!isSelf && isGroupAdmin(conversation, req.params.userId)) {
+        return res.status(403).json({
+          error: { code: "FORBIDDEN", message: "An admin can't remove another admin." },
+        });
+      }
+
+      conversation.participantIds = conversation.participantIds.filter(
+        (id) => id.toString() !== req.params.userId,
+      );
+      conversation.adminIds = (conversation.adminIds || []).filter(
+        (id) => id.toString() !== req.params.userId,
+      );
+
+      // A group can't be left with zero admins — promote whoever's been
+      // there longest (first in the remaining list) so it stays moderatable.
+      if (!conversation.adminIds.length && conversation.participantIds.length) {
+        conversation.adminIds = [conversation.participantIds[0]];
+      }
+
+      await conversation.save();
+
+      const others = otherParticipants(conversation, req.user._id);
+      broadcastToOthers(req, [...others, req.params.userId], "conversation:updated", {
+        id: conversation._id.toString(),
+        ...groupSummary(conversation),
+      });
+
+      res.json({ data: { id: conversation._id.toString(), ...groupSummary(conversation) } });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// ============================================================
 // CONVERSATIONS
 // ============================================================
 
@@ -99,11 +435,9 @@ router.get("/conversations", async (req, res, next) => {
       return deletedAt && conversation.lastMessageAt > deletedAt;
     });
 
-    const otherIds = visibleConversations.map((conversation) =>
-      conversation.participantIds.find(
-        (id) => id.toString() !== req.user._id.toString(),
-      ),
-    );
+    const otherIds = visibleConversations
+      .filter((conversation) => !conversation.isGroup)
+      .map((conversation) => otherParticipants(conversation, req.user._id)[0]);
 
     const users = await User.find({
       _id: {
@@ -115,19 +449,26 @@ router.get("/conversations", async (req, res, next) => {
 
     res.json({
       data: visibleConversations.map((conversation) => {
-        const other = byId.get(
-          conversation.participantIds
-            .find((id) => id.toString() !== req.user._id.toString())
-            .toString(),
-        );
+        if (conversation.isGroup) {
+          return {
+            id: conversation._id,
+            isGroup: true,
+            group: groupSummary(conversation),
+            lastMessage: conversation.lastMessage,
+            lastMessageAt: conversation.lastMessageAt,
+            unreadCount: conversation.unreadCounts?.get?.(userId) || 0,
+          };
+        }
+
+        const other = byId.get(otherParticipants(conversation, req.user._id)[0]?.toString());
 
         return {
           id: conversation._id,
-          user: { ...safeUser(other), isOnline: isOnline(other._id) },
+          isGroup: false,
+          user: other ? { ...safeUser(other), isOnline: isOnline(other._id) } : null,
           lastMessage: conversation.lastMessage,
           lastMessageAt: conversation.lastMessageAt,
-          unreadCount:
-            conversation.unreadCounts?.get?.(req.user._id.toString()) || 0,
+          unreadCount: conversation.unreadCounts?.get?.(userId) || 0,
         };
       }),
       meta: {
@@ -198,22 +539,9 @@ router.get(
       const userId = req.user._id.toString();
       const deletedAt = conversation?.deletedAtBy?.get?.(userId);
 
-      // if (
-      //   !conversation ||
-      //   (conversation.hiddenFor?.some((id) => id.toString() === userId) &&
-      //     (!deletedAt || conversation.lastMessageAt <= deletedAt))
-      // ) {
-      //   return res.status(404).json({
-      //     error: {
-      //       code: "NOT_FOUND",
-      //       message: "Conversation not found.",
-      //     },
-      //   });
-      // }
-
       const unreadMessages = await Message.find({
         conversationId: conversation._id,
-        recipientId: req.user._id,
+        senderId: { $ne: req.user._id },
         ...(deletedAt ? { createdAt: { $gt: deletedAt } } : {}),
         status: { $ne: "read" },
         deletedAt: null,
@@ -224,7 +552,7 @@ router.get(
       await Message.updateMany(
         {
           conversationId: conversation._id,
-          recipientId: req.user._id,
+          senderId: { $ne: req.user._id },
           ...(deletedAt ? { createdAt: { $gt: deletedAt } } : {}),
           status: { $ne: "read" },
           deletedAt: null,
@@ -251,6 +579,8 @@ router.get(
         deletedAt: null,
       })
         .populate("replyTo", "body senderId")
+        .populate("senderId", "fullName avatar")
+        .populate("mentions", "fullName")
         .sort({
           createdAt: 1,
         })
@@ -268,8 +598,17 @@ router.get(
               }
             : null,
           attachment: message.attachment || null,
+          mentions: (message.mentions || []).map((mention) => ({
+            id: mention._id.toString(),
+            fullName: mention.fullName,
+          })),
           createdAt: message.createdAt,
-          senderId: message.senderId.toString(),
+          senderId: message.senderId._id.toString(),
+          sender: {
+            id: message.senderId._id.toString(),
+            fullName: message.senderId.fullName,
+            avatar: message.senderId.avatar,
+          },
           status: message.status || "sent",
           replyTo: message.replyTo
             ? {
@@ -305,12 +644,6 @@ router.post(
         participantIds: req.user._id,
       });
 
-      const userId = req.user._id.toString();
-      const deletedAt = conversation?.deletedAtBy?.get?.(userId);
-      const isHidden = conversation?.hiddenFor?.some(
-        (id) => id.toString() === userId,
-      );
-
       if (!conversation || !body) {
         return res.status(400).json({
           error: {
@@ -320,26 +653,9 @@ router.post(
         });
       }
 
-      // if (
-      //   !conversation ||
-      //   !body ||
-      //   (isHidden && (!deletedAt || conversation.lastMessageAt <= deletedAt))
-      // ) {
-      //   return res.status(400).json({
-      //     error: {
-      //       code: "INVALID_MESSAGE",
-      //       message: "Message cannot be empty.",
-      //     },
-      //   });
-      // }
+      const others = otherParticipants(conversation, req.user._id);
 
-      // A conversation can predate a block (they were messaging, then one
-      // side blocked the other) — re-check on every send, not just when the
-      // conversation is first created.
-      const otherParticipantId = conversation.participantIds.find(
-        (id) => id.toString() !== req.user._id.toString(),
-      );
-      if (await isBlockedEitherWay(req.user._id, otherParticipantId)) {
+      if (await isBlockedForSend(conversation, req.user._id, others)) {
         return res.status(403).json({
           error: {
             code: "BLOCKED",
@@ -366,55 +682,51 @@ router.post(
         }
       }
 
-      const recipientId = conversation.participantIds.find(
-        (id) => id.toString() !== req.user._id.toString(),
-      );
+      // Mentions: only ids the client explicitly picked from the
+      // suggestion UI, and only if they're actually in this conversation —
+      // never inferred from parsing the text server-side.
+      const participantSet = new Set(conversation.participantIds.map((id) => id.toString()));
+      const mentions = Array.isArray(req.body.mentions)
+        ? [...new Set(req.body.mentions)].filter(
+            (id) => mongoose.isValidObjectId(id) && participantSet.has(id),
+          )
+        : [];
 
-      conversation.hiddenFor = (conversation.hiddenFor || []).filter(
-        (id) =>
-          id.toString() !== req.user._id.toString() &&
-          id.toString() !== recipientId.toString(),
-      );
+      clearHiddenFor(conversation, [req.user._id, ...others]);
 
       const message = await Message.create({
         conversationId: conversation._id,
         senderId: req.user._id,
-        recipientId,
+        recipientId: conversation.isGroup ? null : others[0],
         body,
+        mentions,
         replyTo: replyTo?._id || null,
         status: "delivered",
       });
 
       conversation.lastMessage = body;
-
       conversation.lastMessageAt = message.createdAt;
-
-      // Increase recipient unread count
-      conversation.unreadCounts?.set(
-        recipientId.toString(),
-        (conversation.unreadCounts?.get(recipientId.toString()) || 0) + 1,
-      );
-
+      bumpUnreadFor(conversation, others);
       await conversation.save();
 
-      // Realtime new message
-      emitToUser(req, recipientId, "message:new", {
+      const payload = {
         id: message._id.toString(),
         conversationId: conversation._id.toString(),
         body: message.body,
+        mentions,
         createdAt: message.createdAt,
         senderId: req.user._id.toString(),
         sender: {
+          id: req.user._id.toString(),
           fullName: req.user.fullName,
+          avatar: req.user.avatar,
         },
-      });
+      };
+      broadcastToOthers(req, others, "message:new", payload);
 
       res.status(201).json({
         data: {
-          id: message._id.toString(),
-          body: message.body,
-          createdAt: message.createdAt,
-          senderId: message.senderId.toString(),
+          ...payload,
           status: message.status,
           replyTo: replyTo
             ? {
@@ -439,6 +751,8 @@ router.post(
 // missed, or cancelled) — the only backend awareness of calls beyond the
 // existing raw call:signal WebRTC relay. Rendered as a distinct message
 // type on the client, same delivery path as a normal text message.
+// (Audio calls stay 1-to-1 — this route is unreachable for groups since
+// the client only ever offers the call button in a 1-to-1 thread.)
 // ============================================================
 
 const formatCallDuration = (totalSeconds) => {
@@ -461,6 +775,7 @@ router.post("/conversations/:conversationId/calls", async (req, res, next) => {
     const conversation = await Conversation.findOne({
       _id: req.params.conversationId,
       participantIds: req.user._id,
+      isGroup: { $ne: true },
     });
 
     if (!conversation) {
@@ -469,9 +784,7 @@ router.post("/conversations/:conversationId/calls", async (req, res, next) => {
       });
     }
 
-    const recipientId = conversation.participantIds.find(
-      (id) => id.toString() !== req.user._id.toString(),
-    );
+    const recipientId = otherParticipants(conversation, req.user._id)[0];
 
     if (await isBlockedEitherWay(req.user._id, recipientId)) {
       return res.status(403).json({
@@ -484,11 +797,7 @@ router.post("/conversations/:conversationId/calls", async (req, res, next) => {
         ? `Audio call · ${formatCallDuration(durationSec)}`
         : "Missed audio call";
 
-    conversation.hiddenFor = (conversation.hiddenFor || []).filter(
-      (id) =>
-        id.toString() !== req.user._id.toString() &&
-        id.toString() !== recipientId.toString(),
-    );
+    clearHiddenFor(conversation, [req.user._id, recipientId]);
 
     const message = await Message.create({
       conversationId: conversation._id,
@@ -502,10 +811,7 @@ router.post("/conversations/:conversationId/calls", async (req, res, next) => {
 
     conversation.lastMessage = body;
     conversation.lastMessageAt = message.createdAt;
-    conversation.unreadCounts?.set(
-      recipientId.toString(),
-      (conversation.unreadCounts?.get(recipientId.toString()) || 0) + 1,
-    );
+    bumpUnreadFor(conversation, [recipientId]);
     await conversation.save();
 
     const payload = {
@@ -516,7 +822,7 @@ router.post("/conversations/:conversationId/calls", async (req, res, next) => {
       call: { outcome, durationSec: message.call.durationSec || 0 },
       createdAt: message.createdAt,
       senderId: req.user._id.toString(),
-      sender: { fullName: req.user.fullName },
+      sender: { id: req.user._id.toString(), fullName: req.user.fullName, avatar: req.user.avatar },
     };
 
     emitToUser(req, recipientId, "message:new", payload);
@@ -535,9 +841,9 @@ router.post("/conversations/:conversationId/calls", async (req, res, next) => {
 });
 
 // ============================================================
-// ATTACHMENTS
+// ATTACHMENTS (images, files, voice messages)
 //
-// A single multipart request: uploads the file to local disk and creates
+// A single multipart request: uploads the file to Cloudinary and creates
 // the message in one step (unlike calls, there's no separate client-side
 // report — the sender's own POST is the one and only write).
 // ============================================================
@@ -567,10 +873,6 @@ router.post(
     });
   },
   async (req, res, next) => {
-    const cleanupUploadedFile = () => {
-      if (req.file) fs.unlink(req.file.path, () => {});
-    };
-
     try {
       if (!req.file) {
         return res.status(400).json({
@@ -584,18 +886,14 @@ router.post(
       });
 
       if (!conversation) {
-        cleanupUploadedFile();
         return res.status(404).json({
           error: { code: "NOT_FOUND", message: "Conversation not found." },
         });
       }
 
-      const recipientId = conversation.participantIds.find(
-        (id) => id.toString() !== req.user._id.toString(),
-      );
+      const others = otherParticipants(conversation, req.user._id);
 
-      if (await isBlockedEitherWay(req.user._id, recipientId)) {
-        cleanupUploadedFile();
+      if (await isBlockedForSend(conversation, req.user._id, others)) {
         return res.status(403).json({
           error: { code: "BLOCKED", message: "You can't message this user." },
         });
@@ -605,8 +903,22 @@ router.post(
       const durationSec =
         kind === "voice" ? Math.max(0, Math.round(Number(req.body.durationSec) || 0)) : undefined;
       const fileName = String(req.file.originalname || "file").slice(0, 200);
+
+      let uploadResult;
+      try {
+        uploadResult = await uploadBuffer(req.file.buffer, {
+          kind,
+          folder: "kotha-bartha/messages",
+        });
+      } catch {
+        return res.status(502).json({
+          error: { code: "UPLOAD_FAILED", message: "Upload failed. Please try again." },
+        });
+      }
+
       const attachment = {
-        url: `/uploads/${req.file.filename}`,
+        url: uploadResult.secure_url,
+        publicId: uploadResult.public_id,
         fileName,
         mimeType: req.file.mimetype,
         size: req.file.size,
@@ -615,16 +927,12 @@ router.post(
       };
       const body = attachmentLabel(kind, fileName);
 
-      conversation.hiddenFor = (conversation.hiddenFor || []).filter(
-        (id) =>
-          id.toString() !== req.user._id.toString() &&
-          id.toString() !== recipientId.toString(),
-      );
+      clearHiddenFor(conversation, [req.user._id, ...others]);
 
       const message = await Message.create({
         conversationId: conversation._id,
         senderId: req.user._id,
-        recipientId,
+        recipientId: conversation.isGroup ? null : others[0],
         body,
         type: "attachment",
         attachment,
@@ -633,10 +941,7 @@ router.post(
 
       conversation.lastMessage = body;
       conversation.lastMessageAt = message.createdAt;
-      conversation.unreadCounts?.set(
-        recipientId.toString(),
-        (conversation.unreadCounts?.get(recipientId.toString()) || 0) + 1,
-      );
+      bumpUnreadFor(conversation, others);
       await conversation.save();
 
       const payload = {
@@ -647,10 +952,10 @@ router.post(
         attachment,
         createdAt: message.createdAt,
         senderId: req.user._id.toString(),
-        sender: { fullName: req.user.fullName },
+        sender: { id: req.user._id.toString(), fullName: req.user.fullName, avatar: req.user.avatar },
       };
 
-      emitToUser(req, recipientId, "message:new", payload);
+      broadcastToOthers(req, others, "message:new", payload);
 
       res.status(201).json({
         data: {
@@ -661,7 +966,6 @@ router.post(
         },
       });
     } catch (error) {
-      cleanupUploadedFile();
       next(error);
     }
   },
@@ -725,10 +1029,7 @@ router.put(
         conversationId: conversation._id.toString(),
         reactions,
       };
-      const recipientId = conversation.participantIds.find(
-        (id) => id.toString() !== userId,
-      );
-      emitToUser(req, recipientId, "message:reaction", payload);
+      broadcastToOthers(req, otherParticipants(conversation, req.user._id), "message:reaction", payload);
 
       res.json({ data: payload });
     } catch (error) {
@@ -802,12 +1103,8 @@ router.patch(
 
       await message.save();
 
-      const recipientId = conversation.participantIds.find(
-        (id) => id.toString() !== req.user._id.toString(),
-      );
-
       // Realtime update
-      emitToUser(req, recipientId, "message:updated", {
+      broadcastToOthers(req, otherParticipants(conversation, req.user._id), "message:updated", {
         id: message._id.toString(),
         conversationId: conversation._id.toString(),
         body: message.body,
@@ -884,13 +1181,14 @@ router.delete(
       message.deletedAt = new Date();
 
       await message.save();
+      if (message.attachment?.publicId) {
+        destroyAsset(message.attachment.publicId, message.attachment.kind);
+      }
 
-      const recipientId = conversation.participantIds.find(
-        (id) => id.toString() !== req.user._id.toString(),
-      );
+      const others = otherParticipants(conversation, req.user._id);
 
       // Realtime delete
-      emitToUser(req, recipientId, "message:deleted", {
+      broadcastToOthers(req, others, "message:deleted", {
         id: message._id.toString(),
         conversationId: conversation._id.toString(),
         senderId: message.senderId.toString(),
@@ -927,23 +1225,5 @@ router.delete(
     }
   },
 );
-
-// ============================================================
-// ============================================================
-// UNREAD COUNTS
-// ============================================================
-// ============================================================
-//
-// Returns:
-//
-// {
-//   feed: 0,
-//   friends: 0,
-//   messages: 0,
-//   notifications: 0
-// }
-//
-// Navbar এই endpoint থেকে badge count পাবে.
-// ============================================================
 
 module.exports = router;

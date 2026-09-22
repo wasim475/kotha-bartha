@@ -15,8 +15,10 @@ import useVoiceCall from "./hooks/useVoiceCall";
 
 import ChatHeader from "./components/ChatHeader";
 import ConversationList from "./components/ConversationList";
+import GroupInfoPanel from "./components/GroupInfoPanel";
 import MessageComposer from "./components/MessageComposer";
 import MessageThread from "./components/MessageThread";
+import NewConversationDialog from "./components/NewConversationDialog";
 import VoiceCall from "./components/VoicCall";
 
 const confirmCopy = {
@@ -37,12 +39,15 @@ const confirmCopy = {
 const Message = ({ user }) => {
   const { conversationId } = useParams();
   const navigate = useNavigate();
-  const { conversations, thread, selected } =
+  const { conversations, thread, selected, groupDetail } =
     useMessageResources(conversationId);
+  const isGroup = Boolean(selected?.isGroup);
   const state = useMessageState({ conversationId, selected });
   const {
     body,
     setBody,
+    mentionIds,
+    setMentionIds,
     replyingTo,
     setReplyingTo,
     isTyping,
@@ -85,6 +90,7 @@ const Message = ({ user }) => {
     selected,
     conversations,
     thread,
+    groupDetail,
     setIsTyping,
     remoteTypingTimeoutRef: state.remoteTypingTimeoutRef,
     prepareForIncomingMessage: scroll.prepareForIncomingMessage,
@@ -92,6 +98,8 @@ const Message = ({ user }) => {
 
   const [pendingConfirm, setPendingConfirm] = useState(null); // { type: "conversation"|"message", id }
   const [confirmLoading, setConfirmLoading] = useState(false);
+  const [newConversationOpen, setNewConversationOpen] = useState(false);
+  const [groupInfoOpen, setGroupInfoOpen] = useState(false);
 
   const openConversation = (id) => navigate(`/app/messages/${id}`);
   const closeConfirm = () => {
@@ -146,6 +154,7 @@ const Message = ({ user }) => {
             activeId={conversationId}
             onOpenConversation={openConversation}
             onRequestDelete={(id) => setPendingConfirm({ type: "conversation", id })}
+            onNewConversation={() => setNewConversationOpen(true)}
           />
         </div>
 
@@ -159,6 +168,9 @@ const Message = ({ user }) => {
             <>
               <ChatHeader
                 selected={selected}
+                isGroup={isGroup}
+                groupDetail={groupDetail}
+                onOpenGroupInfo={() => setGroupInfoOpen(true)}
                 loading={conversations.loading}
                 onBack={() => navigate("/app/messages")}
                 callState={call.callState}
@@ -166,19 +178,22 @@ const Message = ({ user }) => {
                 finishCall={call.finishCall}
                 isTyping={isTyping}
               />
-              <VoiceCall
-                selected={selected}
-                callState={call.callState}
-                incomingCall={call.incomingCall}
-                callDuration={call.callDuration}
-                remoteAudio={call.remoteAudio}
-                acceptCall={call.acceptCall}
-                finishCall={call.finishCall}
-              />
+              {!isGroup && (
+                <VoiceCall
+                  selected={selected}
+                  callState={call.callState}
+                  incomingCall={call.incomingCall}
+                  callDuration={call.callDuration}
+                  remoteAudio={call.remoteAudio}
+                  acceptCall={call.acceptCall}
+                  finishCall={call.finishCall}
+                />
+              )}
               <MessageThread
                 messages={thread.data}
                 loading={thread.loading}
                 otherUser={selected?.user}
+                isGroup={isGroup}
                 threadRef={scroll.messageThreadRef}
                 userId={user.id}
                 editingMessage={edit.editingMessage}
@@ -207,6 +222,13 @@ const Message = ({ user }) => {
                 onTyping={notifyTyping}
                 replyingTo={replyingTo}
                 onCancelReply={() => setReplyingTo(null)}
+                groupMembers={
+                  isGroup
+                    ? (groupDetail.data?.members || []).filter((member) => member.id !== user.id)
+                    : []
+                }
+                mentionIds={mentionIds}
+                setMentionIds={setMentionIds}
               />
             </>
           ) : (
@@ -241,6 +263,31 @@ const Message = ({ user }) => {
         onConfirm={runPendingConfirm}
         onCancel={closeConfirm}
       />
+
+      <NewConversationDialog
+        open={newConversationOpen}
+        onClose={() => setNewConversationOpen(false)}
+        onCreated={(id) => {
+          setNewConversationOpen(false);
+          conversations.reload();
+          navigate(`/app/messages/${id}`);
+        }}
+      />
+
+      {isGroup && (
+        <GroupInfoPanel
+          open={groupInfoOpen}
+          onClose={() => setGroupInfoOpen(false)}
+          conversationId={conversationId}
+          groupDetail={groupDetail}
+          currentUserId={user.id}
+          onLeft={() => {
+            setGroupInfoOpen(false);
+            conversations.reload();
+            navigate("/app/messages");
+          }}
+        />
+      )}
     </div>
   );
 };

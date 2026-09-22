@@ -3,6 +3,7 @@ import { sendTypingSignal } from "../../../utility/helpers";
 
 const useMessageState = ({ conversationId, selected }) => {
   const [body, setBody] = useState("");
+  const [mentionIds, setMentionIds] = useState([]);
   const [replyingTo, setReplyingTo] = useState(null);
   const [isTyping, setIsTyping] = useState(false);
   const [sendError, setSendError] = useState("");
@@ -48,6 +49,8 @@ const useMessageState = ({ conversationId, selected }) => {
   return {
     body,
     setBody,
+    mentionIds,
+    setMentionIds,
     replyingTo,
     setReplyingTo,
     isTyping,

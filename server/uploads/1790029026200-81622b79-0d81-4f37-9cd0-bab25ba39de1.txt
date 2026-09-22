@@ -1,0 +1,1 @@
+Hello from the QA suite — a plain text attachment.

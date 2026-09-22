@@ -12,7 +12,14 @@ const useMessageResources = (conversationId) => {
     (conversation) => conversation.id === conversationId,
   );
 
-  return { conversations, thread, selected };
+  // Full member list (needed for group info / @mentions) isn't in the
+  // lightweight conversation-list summary, so it's fetched separately —
+  // only once we know this conversation is actually a group.
+  const groupDetail = useResource(
+    conversationId && selected?.isGroup ? `/conversations/${conversationId}` : null,
+  );
+
+  return { conversations, thread, selected, groupDetail };
 };
 
 export default useMessageResources;

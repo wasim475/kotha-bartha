@@ -9,9 +9,12 @@ import {
 import EmojiPicker from "emoji-picker-react";
 import { useEffect, useRef, useState } from "react";
 
+import Avatar from "../../../components/ui/Avatar";
 import IconButton from "../../../components/ui/IconButton";
 import useButtonColorFix from "../../../utility/useButtonColorFix";
 import useVoiceRecorder from "../hooks/useVoiceRecorder";
+
+const MENTION_TOKEN = /(?:^|\s)@(\w*)$/;
 
 const formatRecordingTime = (totalSeconds) => {
   const minutes = Math.floor(totalSeconds / 60);
@@ -28,12 +31,36 @@ const MessageComposer = ({
   replyingTo,
   onCancelReply,
   onSendAttachment,
+  groupMembers = [],
+  mentionIds = [],
+  setMentionIds,
 }) => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState(null);
   const emojiWrapperRef = useRef(null);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const sendFix = useButtonColorFix("primary");
+
+  const mentionMatches =
+    mentionQuery === null
+      ? []
+      : groupMembers.filter((member) =>
+          member.fullName.toLowerCase().includes(mentionQuery.toLowerCase()),
+        );
+
+  const pickMention = (member) => {
+    const textarea = textareaRef.current;
+    const cursor = textarea ? textarea.selectionStart : body.length;
+    const before = body.slice(0, cursor).replace(MENTION_TOKEN, (full) =>
+      full.startsWith(" ") ? ` @${member.fullName} ` : `@${member.fullName} `,
+    );
+    const after = body.slice(cursor);
+    setBody(before + after);
+    setMentionIds?.((current) => (current.includes(member.id) ? current : [...current, member.id]));
+    setMentionQuery(null);
+    textarea?.focus();
+  };
 
   const recorder = useVoiceRecorder({
     onRecorded: (blob, durationSec) => {
@@ -161,25 +188,56 @@ const MessageComposer = ({
             }}
           />
 
-          <textarea
-            ref={textareaRef}
-            value={body}
-            rows={1}
-            onChange={(event) => {
-              const value = event.target.value;
-              setBody(value);
-              onTyping(value);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                submit();
-              }
-            }}
-            placeholder="Write a message…"
-            autoFocus
-            className="min-h-9 max-h-30 flex-1 resize-none rounded-2xl border border-line bg-paper px-3.5 py-2 text-sm text-ink outline-none placeholder:text-muted focus-visible:ring-2 focus-visible:ring-accent"
-          />
+          <div className="relative min-w-0 flex-1">
+            {mentionQuery !== null && mentionMatches.length > 0 && (
+              <div className="absolute bottom-full left-0 z-40 mb-2 max-h-48 w-56 overflow-y-auto rounded-xl border border-line bg-panel shadow-soft">
+                {mentionMatches.map((member) => (
+                  <button
+                    key={member.id}
+                    type="button"
+                    onClick={() => pickMention(member)}
+                    className="flex w-full items-center gap-2 px-2.5 py-2 text-left hover:bg-soft"
+                  >
+                    <Avatar person={member} size="sm" />
+                    <span className="truncate text-sm text-ink">{member.fullName}</span>
+                    {mentionIds.includes(member.id) && (
+                      <span className="ml-auto text-[10px] font-semibold text-accent">mentioned</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+            <textarea
+              ref={textareaRef}
+              value={body}
+              rows={1}
+              onChange={(event) => {
+                const value = event.target.value;
+                setBody(value);
+                onTyping(value);
+                if (groupMembers.length) {
+                  const before = value.slice(0, event.target.selectionStart);
+                  const match = before.match(MENTION_TOKEN);
+                  setMentionQuery(match ? match[1] : null);
+                } else {
+                  setMentionQuery(null);
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && mentionQuery !== null) {
+                  setMentionQuery(null);
+                  return;
+                }
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  submit();
+                }
+              }}
+              placeholder="Write a message…"
+              autoFocus
+              className="min-h-9 max-h-30 w-full resize-none rounded-2xl border border-line bg-paper px-3.5 py-2 text-sm text-ink outline-none placeholder:text-muted focus-visible:ring-2 focus-visible:ring-accent"
+            />
+          </div>
 
           {body.trim() ? (
             <button

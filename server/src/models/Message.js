@@ -13,10 +13,12 @@ const messageSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    // Null for group messages — a group has many recipients, delivered by
+    // iterating the conversation's participantIds instead of one field.
     recipientId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      default: null,
     },
     body: {
       type: String,
@@ -35,12 +37,19 @@ const messageSchema = new mongoose.Schema(
     },
     attachment: {
       url: String,
+      publicId: String,
       fileName: String,
       mimeType: String,
       size: Number,
       kind: { type: String, enum: ["image", "voice", "file"] },
       durationSec: Number,
     },
+    mentions: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
     replyTo: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Message",

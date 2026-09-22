@@ -1,4 +1,5 @@
 import {
+  Add,
   Delete,
   ErrorOutlined,
   ForumOutlined,
@@ -90,24 +91,66 @@ const ConversationList = ({
   activeId,
   onOpenConversation,
   onRequestDelete,
+  onNewConversation,
 }) => {
   // Mute state lives in localStorage (see utility/conversationPreferences),
   // not React state; this counter just forces a re-read/re-render after a
   // toggle so the mute icon and menu label update immediately.
   const [, forceMuteRefresh] = useState(0);
 
-  if (conversations.loading) return <ConversationListSkeleton />;
-  if (conversations.error) {
-    return <ConversationListError message={conversations.error} onRetry={conversations.reload} />;
+  const header = (
+    <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-line bg-panel px-3.5 py-2.5">
+      <p className="font-display text-sm font-semibold text-ink">Chats</p>
+      <IconButton
+        label="New conversation"
+        icon={<Add fontSize="small" />}
+        size="sm"
+        onClick={onNewConversation}
+      />
+    </div>
+  );
+
+  if (conversations.loading) {
+    return (
+      <>
+        {header}
+        <ConversationListSkeleton />
+      </>
+    );
   }
-  if (!conversations.data?.length) return <ConversationListEmpty />;
+  if (conversations.error) {
+    return (
+      <>
+        {header}
+        <ConversationListError message={conversations.error} onRetry={conversations.reload} />
+      </>
+    );
+  }
+  if (!conversations.data?.length) {
+    return (
+      <>
+        {header}
+        <ConversationListEmpty />
+      </>
+    );
+  }
 
   return (
-    <div className="divide-y divide-line">
+    <>
+      {header}
+      <div className="divide-y divide-line">
       {conversations.data.map((conversation) => {
         const active = conversation.id === activeId;
         const unread = conversation.unreadCount > 0;
         const muted = isConversationMuted(userId, conversation.id);
+        const display = conversation.isGroup
+          ? {
+              fullName: conversation.group.name,
+              avatar: conversation.group.avatar,
+              initials: conversation.group.name?.slice(0, 2),
+              isOnline: false,
+            }
+          : conversation.user;
 
         return (
           <div
@@ -127,8 +170,8 @@ const ConversationList = ({
               className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               <div className="relative shrink-0">
-                <Avatar person={conversation.user} size="md" />
-                {conversation.user.isOnline && (
+                <Avatar person={display} size="md" />
+                {display.isOnline && (
                   <span
                     className="absolute right-0 bottom-0 size-2.5 rounded-full border-2 border-panel bg-emerald-500"
                     aria-hidden="true"
@@ -144,7 +187,7 @@ const ConversationList = ({
                       unread ? "font-bold" : "font-semibold",
                     )}
                   >
-                    {conversation.user.fullName}
+                    {display.fullName}
                   </p>
                   {muted && <VolumeOff fontSize="inherit" className="shrink-0 text-[13px] text-muted" />}
                 </div>
@@ -174,7 +217,7 @@ const ConversationList = ({
               align="end"
               trigger={
                 <IconButton
-                  label={`Conversation options for ${conversation.user.fullName}`}
+                  label={`Conversation options for ${display.fullName}`}
                   icon={<MoreHoriz fontSize="small" />}
                   size="sm"
                   className="md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
@@ -202,7 +245,8 @@ const ConversationList = ({
           </div>
         );
       })}
-    </div>
+      </div>
+    </>
   );
 };
 

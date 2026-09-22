@@ -5,6 +5,7 @@ const useMessageRealtime = ({
   selected,
   conversations,
   thread,
+  groupDetail,
   setIsTyping,
   remoteTypingTimeoutRef,
   prepareForIncomingMessage,
@@ -91,7 +92,7 @@ const useMessageRealtime = ({
     const { userId, isOnline, lastSeenAt } = event.detail;
     conversations.setData((rows = []) =>
       rows.map((row) =>
-        row.user.id === userId
+        row.user?.id === userId
           ? {
               ...row,
               user: {
@@ -103,6 +104,15 @@ const useMessageRealtime = ({
           : row,
       ),
     );
+  });
+
+  // Group renamed/avatar changed/members added or removed.
+  useRealtime("conversation:updated", (event) => {
+    const { id, ...group } = event.detail;
+    conversations.setData((rows = []) =>
+      rows.map((row) => (row.id === id ? { ...row, group: { ...row.group, ...group } } : row)),
+    );
+    if (id === conversationId) groupDetail?.reload();
   });
 
   useRealtime("realtime:connected", () => {

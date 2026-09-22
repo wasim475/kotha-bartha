@@ -92,6 +92,7 @@ const MessageThread = ({
   onSelectMessage,
   onOpenEmoji,
   onCloseInteraction,
+  isGroup,
 }) => {
   if (loading) {
     return (
@@ -147,7 +148,8 @@ const MessageThread = ({
                 <MessageBubble
                   message={message}
                   isOwn={isOwn}
-                  otherUser={otherUser}
+                  otherUser={isGroup ? message.sender : otherUser}
+                  showSenderName={isGroup && !groupedWithPrevious}
                   groupStart={!groupedWithPrevious}
                   groupEnd={!groupedWithNext}
                   isEditing={editingMessage === message.id}

@@ -78,7 +78,6 @@ io.on("connection", (socket) => {
   socket.on("typing:start", forwardTyping("typing:start"));
   socket.on("typing:stop", forwardTyping("typing:stop"));
   socket.on("call:signal", async ({ to, signal }) => {
-    console.log("DEBUG call:signal received", { from: socket.userId, to, type: signal?.type });
     if (typeof to !== "string" || !signal) return;
 
     // Only the call-initiating "offer" needs the authorization check —
@@ -88,14 +87,10 @@ io.on("connection", (socket) => {
         Conversation.exists({ pairKey: pairKey(socket.userId, to) }),
         isBlockedEitherWay(socket.userId, to),
       ]);
-      console.log("DEBUG offer auth check", { authorized, blocked });
       if (!authorized || blocked) return;
     }
 
-    const room = io.sockets.adapter.rooms.get(`user:${to}`);
-    console.log("DEBUG room size before forward", `user:${to}`, room ? room.size : 0, room ? [...room] : []);
     io.to(`user:${to}`).emit("call:signal", { from: socket.userId, signal });
-    console.log("DEBUG call:signal forwarded to", `user:${to}`);
   });
   socket.on("disconnect", async () => {
     if (!removeConnection(socket.userId)) return;

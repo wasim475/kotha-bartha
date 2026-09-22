@@ -1,10 +1,4 @@
-const crypto = require("crypto");
-const fs = require("fs");
-const path = require("path");
 const multer = require("multer");
-
-const uploadsDir = path.join(__dirname, "../../uploads");
-fs.mkdirSync(uploadsDir, { recursive: true });
 
 const ALLOWED_MIME_TYPES = new Set([
   // images
@@ -34,16 +28,10 @@ const ALLOWED_MIME_TYPES = new Set([
   "application/json",
 ]);
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadsDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).slice(0, 10);
-    cb(null, `${Date.now()}-${crypto.randomUUID()}${ext}`);
-  },
-});
-
+// Files are held in memory only long enough to stream straight to
+// Cloudinary (see utils/cloudinary.js) — never written to local disk.
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 15 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
@@ -59,4 +47,4 @@ const attachmentKindFor = (mimetype) => {
   return "file";
 };
 
-module.exports = { upload, uploadsDir, attachmentKindFor };
+module.exports = { upload, attachmentKindFor };

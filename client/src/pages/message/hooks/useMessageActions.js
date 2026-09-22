@@ -14,6 +14,8 @@ const useMessageActions = ({
   const {
     body,
     setBody,
+    mentionIds,
+    setMentionIds,
     replyingTo,
     setReplyingTo,
     setIsTyping,
@@ -63,7 +65,7 @@ const useMessageActions = ({
     try {
       const { data } = await api.post(
         `/conversations/${conversationId}/messages`,
-        { body: text, replyTo: replyingTo?.id || null },
+        { body: text, replyTo: replyingTo?.id || null, mentions: mentionIds },
       );
       const saved = data.data;
 
@@ -81,6 +83,7 @@ const useMessageActions = ({
       );
 
       setReplyingTo(null);
+      setMentionIds([]);
       closeMessageInteractions();
       conversations.reload();
     } catch (error) {
@@ -140,6 +143,17 @@ const useMessageActions = ({
       const { data } = await api.post(
         `/conversations/${conversationId}/attachments`,
         formData,
+        {
+          onUploadProgress: (progressEvent) => {
+            if (!progressEvent.total) return;
+            const percent = Math.round((progressEvent.loaded / progressEvent.total) * 100);
+            thread.setData((messages = []) =>
+              messages.map((message) =>
+                message.id === optimisticId ? { ...message, uploadProgress: percent } : message,
+              ),
+            );
+          },
+        },
       );
       const saved = data.data;
 

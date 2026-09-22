@@ -1,4 +1,4 @@
-import { ArrowBackRounded, Call, CallEnd } from "@mui/icons-material";
+import { ArrowBackRounded, Call, CallEnd, Info } from "@mui/icons-material";
 
 import Avatar from "../../../components/ui/Avatar";
 import IconButton from "../../../components/ui/IconButton";
@@ -6,6 +6,9 @@ import { formatTime } from "../../../utility/helpers";
 
 const ChatHeader = ({
   selected,
+  isGroup,
+  groupDetail,
+  onOpenGroupInfo,
   loading,
   onBack,
   callState,
@@ -15,6 +18,7 @@ const ChatHeader = ({
 }) => {
   const onCall = callState === "idle" ? startCall : () => finishCall();
   const inCall = callState !== "idle";
+  const group = groupDetail?.data;
 
   return (
     <div className="flex shrink-0 items-center gap-3 border-b border-line px-3.5 py-3 sm:px-4">
@@ -33,6 +37,25 @@ const ChatHeader = ({
         </div>
       ) : !selected ? (
         <p className="min-w-0 flex-1 text-sm text-muted">Conversation not found</p>
+      ) : isGroup ? (
+        <button
+          type="button"
+          onClick={onOpenGroupInfo}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+        >
+          <Avatar
+            person={{
+              fullName: group?.name,
+              avatar: group?.avatar,
+              initials: group?.name?.slice(0, 2),
+            }}
+            size="md"
+          />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-ink">{group?.name}</p>
+            <p className="text-xs text-muted">{group?.memberCount || "…"} members</p>
+          </div>
+        </button>
       ) : (
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <div className="relative shrink-0">
@@ -70,14 +93,23 @@ const ChatHeader = ({
         </div>
       )}
 
-      <IconButton
-        label={inCall ? "End voice call" : "Start voice call"}
-        icon={inCall ? <CallEnd fontSize="small" /> : <Call fontSize="small" />}
-        variant={inCall ? "danger" : "default"}
-        size="sm"
-        disabled={!selected}
-        onClick={onCall}
-      />
+      {isGroup ? (
+        <IconButton
+          label="Group info"
+          icon={<Info fontSize="small" />}
+          size="sm"
+          onClick={onOpenGroupInfo}
+        />
+      ) : (
+        <IconButton
+          label={inCall ? "End voice call" : "Start voice call"}
+          icon={inCall ? <CallEnd fontSize="small" /> : <Call fontSize="small" />}
+          variant={inCall ? "danger" : "default"}
+          size="sm"
+          disabled={!selected}
+          onClick={onCall}
+        />
+      )}
     </div>
   );
 };

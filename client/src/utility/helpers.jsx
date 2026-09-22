@@ -6,10 +6,8 @@ export let activeSocket;
 export const setActiveSocket = (socket) => {
   activeSocket = socket;
 };
-export const sendSignal = (to, signal) => {
-  console.log("DEBUG sendSignal", { to, type: signal?.type, hasSocket: !!activeSocket, connected: activeSocket?.connected });
-  return activeSocket?.emit("call:signal", { to, signal });
-};
+export const sendSignal = (to, signal) =>
+  activeSocket?.emit("call:signal", { to, signal });
 export const sendTypingSignal = (to, conversationId, typing) =>
   activeSocket?.emit(typing ? "typing:start" : "typing:stop", {
     to,
@@ -128,6 +126,7 @@ export function useResource(url) {
   });
 
   const reload = async () => {
+    if (!url) return null;
     try {
       const { data } = await api.get(url);
 
@@ -150,6 +149,11 @@ export function useResource(url) {
   };
 
   useEffect(() => {
+    if (!url) {
+      setState({ data: null, loading: false, error: "" });
+      return undefined;
+    }
+
     let active = true;
     const controller = new AbortController();
     api

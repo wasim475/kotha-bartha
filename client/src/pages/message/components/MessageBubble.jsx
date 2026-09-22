@@ -18,6 +18,10 @@ import IconButton from "../../../components/ui/IconButton";
 import { cx } from "../../../utility/cx";
 import { toFileUrl } from "../../../utility/fileUrl";
 import useButtonColorFix from "../../../utility/useButtonColorFix";
+import ImageLightbox from "./ImageLightbox";
+import LinkPreviewCard from "./LinkPreviewCard";
+import VoiceMessagePlayer from "./VoiceMessagePlayer";
+import { firstUrlIn, normalizeUrl, tokenizeMessageBody } from "../utility/richBody";
 
 const formatFileSize = (bytes) => {
   if (!bytes) return "";
@@ -25,6 +29,8 @@ const formatFileSize = (bytes) => {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
+
+const fileExtension = (fileName = "") => fileName.split(".").pop()?.slice(0, 5).toUpperCase() || "";
 
 const emojiPickerWidth = 280;
 const emojiPickerHeight = 360;
@@ -71,10 +77,12 @@ const MessageBubble = ({
   onSelectMessage,
   onOpenEmoji,
   onCloseInteraction,
+  showSenderName,
 }) => {
   const emojiButtonRef = useRef(null);
   const emojiPickerRef = useRef(null);
   const [emojiPickerPosition, setEmojiPickerPosition] = useState(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const primaryFix = useButtonColorFix("primary");
   // The bubble itself is a <button> (clickable to reveal actions), so it's
@@ -179,6 +187,12 @@ const MessageBubble = ({
         )}
 
         <div className="relative flex min-w-0 flex-col">
+          {showSenderName && !isOwn && (
+            <span className="mb-0.5 ml-1 text-xs font-semibold text-accent">
+              {message.sender?.fullName}
+            </span>
+          )}
+
           {isEditing ? (
             <div className="w-64 max-w-[70vw] rounded-2xl border border-line bg-panel p-2.5 shadow-soft">
               <input
@@ -246,24 +260,36 @@ const MessageBubble = ({
               )}
 
               {attachment.kind === "image" && (
-                <a href={toFileUrl(attachment.url)} target="_blank" rel="noreferrer">
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setLightboxOpen(true);
+                  }}
+                  className="block"
+                >
                   <img
                     src={toFileUrl(attachment.url)}
                     alt={attachment.fileName || "Photo"}
                     loading="lazy"
                     className="max-h-72 max-w-72 rounded-xl object-cover"
                   />
-                </a>
+                </button>
               )}
 
               {attachment.kind === "voice" && (
-                <audio controls src={toFileUrl(attachment.url)} className="h-10 w-56 max-w-full" />
+                <VoiceMessagePlayer
+                  src={toFileUrl(attachment.url)}
+                  durationSec={attachment.durationSec}
+                  isOwn={isOwn}
+                />
               )}
 
               {attachment.kind === "file" && (
                 <a
                   href={toFileUrl(attachment.url)}
                   download={attachment.fileName}
+                  onClick={(event) => event.stopPropagation()}
                   className={cx(
                     "flex min-w-0 items-center gap-2 rounded-lg",
                     isOwn ? "hover:bg-white/10" : "hover:bg-black/5",
@@ -273,6 +299,16 @@ const MessageBubble = ({
                   <span className="min-w-0 flex-1 truncate font-medium">
                     {attachment.fileName || "File"}
                   </span>
+                  {fileExtension(attachment.fileName) && (
+                    <span
+                      className={cx(
+                        "shrink-0 rounded px-1 text-[9px] font-bold",
+                        isOwn ? "bg-white/15 text-white/85" : "bg-line text-muted",
+                      )}
+                    >
+                      {fileExtension(attachment.fileName)}
+                    </span>
+                  )}
                   <span
                     className={cx(
                       "shrink-0 text-[10px]",
@@ -285,6 +321,14 @@ const MessageBubble = ({
                 </a>
               )}
 
+              {attachment.kind === "image" && lightboxOpen && (
+                <ImageLightbox
+                  src={toFileUrl(attachment.url)}
+                  alt={attachment.fileName}
+                  onClose={() => setLightboxOpen(false)}
+                />
+              )}
+
               <span
                 className={cx(
                   "mt-1 flex items-center justify-end gap-1 text-[10px]",
@@ -293,7 +337,11 @@ const MessageBubble = ({
                 )}
               >
                 {message.pending ? (
-                  <span>Sending…</span>
+                  <span>
+                    {Number.isFinite(message.uploadProgress)
+                      ? `Uploading… ${message.uploadProgress}%`
+                      : "Sending…"}
+                  </span>
                 ) : (
                   <span>{formatMessageTime(message.createdAt)}</span>
                 )}
@@ -338,7 +386,47 @@ const MessageBubble = ({
                 </div>
               )}
 
-              <span className="whitespace-pre-wrap">{message.body}</span>
+              <span className="whitespace-pre-wrap">
+                {tokenizeMessageBody(
+                  message.body,
+                  (message.mentions || []).map((mention) => mention.fullName),
+                ).map((node) => {
+                  if (node.type === "mention") {
+                    return (
+                      <span
+                        key={node.key}
+                        className={cx(
+                          "rounded px-0.5 font-semibold",
+                          isOwn ? "bg-white/20" : "bg-accent/15 text-accent",
+                        )}
+                      >
+                        {node.text}
+                      </span>
+                    );
+                  }
+                  if (node.type === "url") {
+                    return (
+                      <a
+                        key={node.key}
+                        href={normalizeUrl(node.text)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(event) => event.stopPropagation()}
+                        className="underline underline-offset-2"
+                      >
+                        {node.text}
+                      </a>
+                    );
+                  }
+                  return <span key={node.key}>{node.text}</span>;
+                })}
+              </span>
+
+              {!message.pending &&
+                firstUrlIn(message.body) &&
+                !message.replyTo && (
+                  <LinkPreviewCard url={firstUrlIn(message.body)} isOwn={isOwn} />
+                )}
 
               <span
                 className={cx(
