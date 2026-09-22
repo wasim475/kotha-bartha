@@ -10,8 +10,10 @@ const chapterSchema = new mongoose.Schema(
       index: true,
     },
     // Denormalized from the subject at creation time — lets quiz routes
-    // filter/display by class without an extra populate on every read.
-    classLevel: { type: String, required: true },
+    // filter/display without an extra populate on every read.
+    category: { type: String, required: true },
+    classLevel: { type: String },
+    division: { type: String },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   },
   { timestamps: true },

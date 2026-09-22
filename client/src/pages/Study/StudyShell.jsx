@@ -26,13 +26,7 @@ export default function StudyShell({ user }) {
 
   return (
     <div className="app-shell study-shell">
-      <StudyTopbar
-        theme={theme}
-        setTheme={setTheme}
-        onBack={() => navigate("/app/feed")}
-        showAddQuiz={canManageQuiz}
-        onAddQuiz={() => navigate("/study/quiz-admin")}
-      />
+      <StudyTopbar theme={theme} setTheme={setTheme} onBack={() => navigate("/app/feed")} />
 
       <div className="app-body">
         <StudyNavbar />
@@ -41,7 +35,7 @@ export default function StudyShell({ user }) {
           <Routes>
             {studyNavItems.map((item) =>
               item.key === "quiz" ? (
-                <Route key={item.path} path={item.key} element={<QuizFlow />} />
+                <Route key={item.path} path={item.key} element={<QuizFlow canManageQuiz={canManageQuiz} />} />
               ) : (
                 <Route
                   key={item.path}

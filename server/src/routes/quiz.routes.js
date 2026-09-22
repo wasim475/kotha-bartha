@@ -8,8 +8,14 @@ const { requireRole } = require("../middleware/requireRole");
 
 const router = express.Router();
 
-const { CLASS_LEVELS } = Subject;
+const { CLASS_LEVELS, SSC_DIVISIONS, QUIZ_CATEGORIES } = Subject;
 const { QUESTIONS_PER_SET } = QuizQuestion;
+
+const QUIZ_CATEGORY_LABELS = {
+  class: "Class-based Quiz",
+  general_knowledge: "সাধারণ জ্ঞান",
+  sports: "Sports",
+};
 
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -92,12 +98,51 @@ async function serializeAttemptForClient(attempt) {
 }
 
 // ============================================================
-// CLASS LEVELS (static list)
+// QUIZ CATEGORIES / CLASS LEVELS / SSC DIVISIONS (static lists)
 // ============================================================
+
+router.get("/quiz/categories", (req, res) => {
+  res.json({
+    data: QUIZ_CATEGORIES.map((key) => ({ key, label: QUIZ_CATEGORY_LABELS[key] })),
+  });
+});
 
 router.get("/quiz/class-levels", (req, res) => {
   res.json({ data: CLASS_LEVELS });
 });
+
+router.get("/quiz/ssc-divisions", (req, res) => {
+  res.json({ data: SSC_DIVISIONS });
+});
+
+// Shared by GET/POST /quiz/subjects — validates category (+classLevel
+// +division, only when applicable) and returns the exact filter to query
+// or persist with. Throws a { status, code, message } on invalid input.
+function resolveSubjectScope(query) {
+  const category = String(query.category || "");
+  if (!QUIZ_CATEGORIES.includes(category)) {
+    throw { status: 400, code: "INVALID_CATEGORY", message: "Choose a valid quiz category." };
+  }
+
+  if (category !== "class") {
+    return { category };
+  }
+
+  const classLevel = String(query.classLevel || "");
+  if (!CLASS_LEVELS.includes(classLevel)) {
+    throw { status: 400, code: "INVALID_CLASS", message: "Choose a valid class." };
+  }
+
+  if (classLevel !== "SSC") {
+    return { category, classLevel, division: null };
+  }
+
+  const division = String(query.division || "");
+  if (!SSC_DIVISIONS.includes(division)) {
+    throw { status: 400, code: "INVALID_DIVISION", message: "Choose a valid division." };
+  }
+  return { category, classLevel, division };
+}
 
 // ============================================================
 // SUBJECTS
@@ -105,22 +150,19 @@ router.get("/quiz/class-levels", (req, res) => {
 
 router.get("/quiz/subjects", async (req, res, next) => {
   try {
-    const classLevel = String(req.query.classLevel || "");
-    if (!CLASS_LEVELS.includes(classLevel)) {
-      return res.status(400).json({
-        error: { code: "INVALID_CLASS", message: "Choose a valid class." },
-      });
-    }
-
-    const subjects = await Subject.find({ classLevel }).sort({ name: 1 }).lean();
+    const scope = resolveSubjectScope(req.query);
+    const subjects = await Subject.find(scope).sort({ name: 1 }).lean();
     res.json({
       data: subjects.map((subject) => ({
         id: subject._id.toString(),
         name: subject.name,
-        classLevel: subject.classLevel,
+        category: subject.category,
+        classLevel: subject.classLevel || null,
+        division: subject.division || null,
       })),
     });
   } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: { code: error.code, message: error.message } });
     next(error);
   }
 });
@@ -128,37 +170,43 @@ router.get("/quiz/subjects", async (req, res, next) => {
 router.post("/quiz/subjects", requireRole("admin", "moderator"), async (req, res, next) => {
   try {
     const name = String(req.body.name || "").trim();
-    const classLevel = String(req.body.classLevel || "");
-
-    if (!CLASS_LEVELS.includes(classLevel)) {
-      return res.status(400).json({
-        error: { code: "INVALID_CLASS", message: "Choose a valid class." },
-      });
-    }
     if (!name) {
       return res.status(400).json({
         error: { code: "VALIDATION_ERROR", message: "Subject name is required." },
       });
     }
 
+    const scope = resolveSubjectScope(req.body);
+
     const duplicate = await Subject.findOne({
-      classLevel,
+      ...scope,
       name: new RegExp(`^${escapeRegExp(name)}$`, "i"),
     });
     if (duplicate) {
       return res.status(409).json({
-        error: { code: "DUPLICATE", message: "That subject already exists for this class." },
+        error: { code: "DUPLICATE", message: "That subject already exists here." },
       });
     }
 
-    const subject = await Subject.create({ name, classLevel, createdBy: req.user._id });
+    // Omit null-valued scope fields (e.g. division on a non-SSC class
+    // subject) rather than storing them explicitly — keeps the enum
+    // validator happy and leaves the field genuinely unset.
+    const createFields = Object.fromEntries(Object.entries(scope).filter(([, value]) => value !== null));
+    const subject = await Subject.create({ name, ...createFields, createdBy: req.user._id });
     res.status(201).json({
-      data: { id: subject._id.toString(), name: subject.name, classLevel: subject.classLevel },
+      data: {
+        id: subject._id.toString(),
+        name: subject.name,
+        category: subject.category,
+        classLevel: subject.classLevel || null,
+        division: subject.division || null,
+      },
     });
   } catch (error) {
+    if (error.status) return res.status(error.status).json({ error: { code: error.code, message: error.message } });
     if (error.code === 11000) {
       return res.status(409).json({
-        error: { code: "DUPLICATE", message: "That subject already exists for this class." },
+        error: { code: "DUPLICATE", message: "That subject already exists here." },
       });
     }
     next(error);
@@ -224,7 +272,9 @@ router.post("/quiz/chapters", requireRole("admin", "moderator"), async (req, res
     const chapter = await Chapter.create({
       name,
       subjectId: subject._id,
-      classLevel: subject.classLevel,
+      category: subject.category,
+      classLevel: subject.classLevel || undefined,
+      division: subject.division || undefined,
       createdBy: req.user._id,
     });
 

@@ -12,15 +12,19 @@ const OPTION_LABELS = ["A", "B", "C", "D"];
 const EMPTY_OPTIONS = ["", "", "", ""];
 
 /**
- * Admin/moderator quiz management: Class -> Subject (+ Add Subject) ->
- * Chapter (+ Add Chapter) -> question authoring form, with a live
- * "X / 30 — N more needed for Set N" progress readout. Every create call
- * hits routes gated server-side by requireRole("admin","moderator") (see
- * server/src/routes/quiz.routes.js) — the `user.role` check below is only
- * a UI convenience, not the real enforcement.
+ * Admin/moderator quiz management, reached from inside the Quiz section
+ * (not the topbar): Category -> [Class -> বিভাগ if SSC] -> Subject
+ * (+ Add Subject) -> Chapter (+ Add Chapter) -> question authoring form,
+ * with a live "X / 30 — N more needed for Set N" progress readout. Every
+ * create call hits routes gated server-side by
+ * requireRole("admin","moderator") (see server/src/routes/quiz.routes.js)
+ * — the `user.role` check below is only a UI convenience, not the real
+ * enforcement.
  */
 export default function QuizAdmin({ user }) {
+  const [category, setCategory] = useState(null);
   const [classLevel, setClassLevel] = useState(null);
+  const [division, setDivision] = useState(null);
   const [subject, setSubject] = useState(null);
   const [chapter, setChapter] = useState(null);
   const [addSubjectOpen, setAddSubjectOpen] = useState(false);
@@ -33,8 +37,21 @@ export default function QuizAdmin({ user }) {
   const [formError, setFormError] = useState("");
   const [justPublishedSet, setJustPublishedSet] = useState(null);
 
-  const classLevels = useResource("/quiz/class-levels");
-  const subjects = useResource(classLevel ? `/quiz/subjects?classLevel=${classLevel}` : null);
+  const categories = useResource("/quiz/categories");
+  const classLevels = useResource(category === "class" ? "/quiz/class-levels" : null);
+  const divisions = useResource(category === "class" && classLevel === "SSC" ? "/quiz/ssc-divisions" : null);
+
+  // Subjects only become fetchable once every prior required step is
+  // resolved: for "class" that's classLevel (+division when SSC); for the
+  // other two categories, the category alone is enough.
+  const subjectsReady =
+    category && (category !== "class" || (classLevel && (classLevel !== "SSC" || division)));
+  const subjectsQuery = subjectsReady
+    ? category === "class"
+      ? `category=class&classLevel=${classLevel}${classLevel === "SSC" ? `&division=${encodeURIComponent(division)}` : ""}`
+      : `category=${category}`
+    : null;
+  const subjects = useResource(subjectsQuery ? `/quiz/subjects?${subjectsQuery}` : null);
   const chapters = useResource(subject ? `/quiz/chapters?subjectId=${subject.id}` : null);
   const summary = useResource(chapter ? `/quiz/chapters/${chapter.id}/admin-summary` : null);
 
@@ -54,7 +71,7 @@ export default function QuizAdmin({ user }) {
   }
 
   const createSubject = async (name) => {
-    const { data } = await api.post("/quiz/subjects", { name, classLevel });
+    const { data } = await api.post("/quiz/subjects", { name, category, classLevel, division });
     subjects.setData((current = []) => [...current, data.data].sort((a, b) => a.name.localeCompare(b.name)));
   };
 
@@ -106,31 +123,84 @@ export default function QuizAdmin({ user }) {
         <p className="text-sm text-muted">Create subjects, chapters and questions.</p>
       </div>
 
-      {/* Class */}
+      {/* Category */}
       <Card className="flex flex-col gap-2">
-        <label className="text-xs font-semibold tracking-wide text-muted uppercase">Class</label>
-        <ResourceState loading={classLevels.loading} error={classLevels.error}>
+        <label className="text-xs font-semibold tracking-wide text-muted uppercase">Quiz Category</label>
+        <ResourceState loading={categories.loading} error={categories.error}>
           <select
-            value={classLevel || ""}
+            value={category || ""}
             onChange={(event) => {
-              setClassLevel(event.target.value || null);
+              setCategory(event.target.value || null);
+              setClassLevel(null);
+              setDivision(null);
               setSubject(null);
               setChapter(null);
             }}
             className="w-full rounded-md border border-line bg-paper px-3 py-2.5 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
-            <option value="">Select a class…</option>
-            {(classLevels.data || []).map((level) => (
-              <option key={level} value={level}>
-                Class {level}
+            <option value="">Select a category…</option>
+            {(categories.data || []).map((item) => (
+              <option key={item.key} value={item.key}>
+                {item.label}
               </option>
             ))}
           </select>
         </ResourceState>
       </Card>
 
+      {/* Class */}
+      {category === "class" && (
+        <Card className="flex flex-col gap-2">
+          <label className="text-xs font-semibold tracking-wide text-muted uppercase">Class</label>
+          <ResourceState loading={classLevels.loading} error={classLevels.error}>
+            <select
+              value={classLevel || ""}
+              onChange={(event) => {
+                setClassLevel(event.target.value || null);
+                setDivision(null);
+                setSubject(null);
+                setChapter(null);
+              }}
+              className="w-full rounded-md border border-line bg-paper px-3 py-2.5 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <option value="">Select a class…</option>
+              {(classLevels.data || []).map((level) => (
+                <option key={level} value={level}>
+                  {level === "SSC" ? "SSC" : `Class ${level}`}
+                </option>
+              ))}
+            </select>
+          </ResourceState>
+        </Card>
+      )}
+
+      {/* Division — SSC only */}
+      {category === "class" && classLevel === "SSC" && (
+        <Card className="flex flex-col gap-2">
+          <label className="text-xs font-semibold tracking-wide text-muted uppercase">বিভাগ</label>
+          <ResourceState loading={divisions.loading} error={divisions.error}>
+            <select
+              value={division || ""}
+              onChange={(event) => {
+                setDivision(event.target.value || null);
+                setSubject(null);
+                setChapter(null);
+              }}
+              className="w-full rounded-md border border-line bg-paper px-3 py-2.5 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <option value="">বিভাগ নির্বাচন করুন…</option>
+              {(divisions.data || []).map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </ResourceState>
+        </Card>
+      )}
+
       {/* Subject */}
-      {classLevel && (
+      {subjectsReady && (
         <Card className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <label className="text-xs font-semibold tracking-wide text-muted uppercase">Subject</label>

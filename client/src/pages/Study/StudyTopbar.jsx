@@ -1,6 +1,6 @@
-import { AddCircle, ArrowBack, DarkMode, WbSunny } from "@mui/icons-material";
+import { ArrowBack, DarkMode, WbSunny } from "@mui/icons-material";
 
-export default function StudyTopbar({ theme, setTheme, onBack, showAddQuiz, onAddQuiz }) {
+export default function StudyTopbar({ theme, setTheme, onBack }) {
   return (
     <header className="study-topbar">
       <div className="study-brand">
@@ -11,20 +11,6 @@ export default function StudyTopbar({ theme, setTheme, onBack, showAddQuiz, onAd
       </div>
 
       <div className="study-topbar-actions">
-        {/* Only admins/moderators ever see this — server-side quiz.routes.js
-            enforces the actual restriction, this is just UI convenience. */}
-        {showAddQuiz && (
-          <button
-            type="button"
-            className="study-add-quiz-button"
-            onClick={onAddQuiz}
-            aria-label="Add quiz"
-          >
-            <AddCircle fontSize="small" />
-            <span>Add Quiz</span>
-          </button>
-        )}
-
         <button
           type="button"
           className="icon-button"

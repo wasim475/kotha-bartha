@@ -17,7 +17,9 @@ const quizQuestionSchema = new mongoose.Schema(
     // Denormalized from the chapter, for filtering/display without a
     // populate on hot read paths (listing sets, starting an attempt).
     subjectId: { type: mongoose.Schema.Types.ObjectId, ref: "Subject", required: true },
-    classLevel: { type: String, required: true },
+    // Unset for general_knowledge/sports questions — only "class" category
+    // chapters carry a classLevel.
+    classLevel: { type: String },
     question: { type: String, required: true, trim: true, maxlength: 1000 },
     options: {
       type: [{ type: String, trim: true, maxlength: 300 }],
