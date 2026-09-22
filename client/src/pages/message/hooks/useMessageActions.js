@@ -58,6 +58,44 @@ const useMessageActions = ({
     archived?.reload();
   };
 
+  // Private to the caller — only ever affects how *this* user sees the
+  // other participant, never their actual profile name.
+  const setNickname = async (targetConversationId, nickname) => {
+    const { data } = await api.patch(`/conversations/${targetConversationId}/nickname`, {
+      nickname,
+    });
+    conversations.setData((rows = []) =>
+      rows.map((row) =>
+        row.id === targetConversationId
+          ? { ...row, user: { ...row.user, nickname: data.data.nickname } }
+          : row,
+      ),
+    );
+    return data.data.nickname;
+  };
+
+  // Shared for every participant — the server broadcasts conversation:theme
+  // to the others (see useMessageRealtime), this just applies it locally
+  // for the caller's own optimistic update.
+  const setConversationTheme = async (targetConversationId, theme) => {
+    const { data } = await api.patch(`/conversations/${targetConversationId}/theme`, { theme });
+    conversations.setData((rows = []) =>
+      rows.map((row) => (row.id === targetConversationId ? { ...row, theme: data.data.theme } : row)),
+    );
+    return data.data.theme;
+  };
+
+  // Reuses the app's single global block system (POST/DELETE /blocks/:userId
+  // — the same endpoints Profile's Block button calls) rather than a
+  // separate conversation-scoped block, so blocking here has the exact same
+  // effect (and is visible/reversible) everywhere else blocking matters.
+  const toggleBlockUser = async (otherUserId, currentlyBlocked) => {
+    if (currentlyBlocked) await api.delete(`/blocks/${otherUserId}`);
+    else await api.post(`/blocks/${otherUserId}`);
+    conversations.reload();
+    archived?.reload();
+  };
+
   const sendMessage = async (event) => {
     event.preventDefault();
     const text = body.trim();
@@ -338,6 +376,9 @@ const useMessageActions = ({
     deleteConversation,
     archiveConversation,
     unarchiveConversation,
+    setNickname,
+    setConversationTheme,
+    toggleBlockUser,
     sendMessage,
     sendAttachment,
     reactToMessage,

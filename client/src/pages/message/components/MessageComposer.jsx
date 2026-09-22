@@ -1,5 +1,6 @@
 import {
   AttachFile,
+  Block,
   Close,
   Delete,
   EmojiEmotions,
@@ -34,6 +35,7 @@ const MessageComposer = ({
   groupMembers = [],
   mentionIds = [],
   setMentionIds,
+  blockedNotice,
 }) => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [mentionQuery, setMentionQuery] = useState(null);
@@ -110,6 +112,13 @@ const MessageComposer = ({
 
   return (
     <div className="shrink-0 border-t border-line bg-panel">
+      {blockedNotice ? (
+        <div className="mx-auto flex w-full max-w-4xl items-center gap-2 p-3.5 text-xs font-medium text-muted sm:px-6 lg:px-10">
+          <Block fontSize="small" className="shrink-0 text-danger" />
+          {blockedNotice}
+        </div>
+      ) : (
+        <>
       {replyingTo && (
         <div className="mx-auto flex w-full max-w-4xl items-center gap-2 border-b border-line bg-soft px-3.5 py-2 text-xs text-muted sm:px-6 lg:px-10">
           <div className="min-w-0 flex-1 border-l-2 border-accent pl-2">
@@ -267,6 +276,8 @@ const MessageComposer = ({
             />
           )}
         </form>
+      )}
+        </>
       )}
     </div>
   );

@@ -197,7 +197,7 @@ const ConversationList = ({
               initials: conversation.group.name?.slice(0, 2),
               isOnline: false,
             }
-          : conversation.user;
+          : { ...conversation.user, fullName: conversation.user?.nickname || conversation.user?.fullName };
 
         return (
           <div

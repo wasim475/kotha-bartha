@@ -83,6 +83,7 @@ export default function useSocket(userId) {
     socket.on("call:signal", forward("call:signal"));
     socket.on("presence:update", forward("presence:update"));
     socket.on("conversation:updated", forward("conversation:updated"));
+    socket.on("conversation:theme", forward("conversation:theme"));
 
     return () => {
       setActiveSocket(undefined);

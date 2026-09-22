@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const User = require("../models/User");
 const Conversation = require("../models/Conversation");
 const Message = require("../models/Message");
+const Block = require("../models/Block");
 const { pairKey } = require("../utils/ids");
 const { safeUser } = require("../utils/serializers");
 const { emitToUser } = require("../utils/realtime");
@@ -11,6 +12,7 @@ const { isOnline } = require("../utils/presence");
 const { upload, attachmentKindFor } = require("../middleware/upload");
 const { uploadBuffer, destroyAsset } = require("../utils/cloudinary");
 const { UNSEND_WINDOW_MS } = require("../utils/config");
+const { THEME_IDS } = require("../utils/conversationThemes");
 
 const router = express.Router();
 
@@ -51,6 +53,34 @@ const isBlockedForSend = async (conversation, userId, others) => {
   if (conversation.isGroup) return false;
   return isBlockedEitherWay(userId, others[0]);
 };
+
+// Directional block lookups for `userId`, batched into two queries instead
+// of one per conversation — used to annotate a 1-to-1 conversation's other
+// participant with `isBlocked`/`hasBlockedMe` for the client (chat header
+// menu, composer disabled state). Reuses the same Block model the existing
+// global block system (blocks.routes.js) already writes to.
+const blockSets = async (userId) => {
+  const [blockedByMe, blockedMe] = await Promise.all([
+    Block.find({ blockerId: userId }).select("blockedId").lean(),
+    Block.find({ blockedId: userId }).select("blockerId").lean(),
+  ]);
+  return {
+    blockedByMe: new Set(blockedByMe.map((block) => block.blockedId.toString())),
+    blockedMe: new Set(blockedMe.map((block) => block.blockerId.toString())),
+  };
+};
+
+// Shared shape for the "other participant" of a 1-to-1 conversation, as
+// seen by `userId` — their nickname for that person (private, only ever set
+// by `userId` themself) plus the block status in both directions.
+const otherParticipantView = (conversation, other, userId, blocks) => ({
+  ...safeUser(other),
+  isOnline: isOnline(other._id),
+  publicKey: other.publicKey || null,
+  nickname: conversation.nicknames?.get?.(userId) || null,
+  isBlocked: blocks.blockedByMe.has(other._id.toString()),
+  hasBlockedMe: blocks.blockedMe.has(other._id.toString()),
+});
 
 const groupSummary = (conversation) => ({
   id: conversation._id.toString(),
@@ -205,12 +235,14 @@ router.get("/conversations/:conversationId", async (req, res, next) => {
     if (!conversation.isGroup) {
       const otherId = otherParticipants(conversation, req.user._id)[0];
       const other = await User.findById(otherId);
+      const blocks = await blockSets(req.user._id);
       return res.json({
         data: {
           id: conversation._id.toString(),
           isGroup: false,
+          theme: conversation.theme || "default",
           user: other
-            ? { ...safeUser(other), isOnline: isOnline(other._id), publicKey: other.publicKey || null }
+            ? otherParticipantView(conversation, other, req.user._id.toString(), blocks)
             : null,
         },
       });
@@ -245,6 +277,7 @@ router.get("/conversations/:conversationId", async (req, res, next) => {
       data: {
         id: conversation._id.toString(),
         isGroup: true,
+        theme: conversation.theme || "default",
         ...groupSummary(conversation),
         pinnedMessagesDetail,
         members: members.map((member) => ({
@@ -502,6 +535,7 @@ router.get("/conversations", async (req, res, next) => {
     });
 
     const byId = new Map(users.map((user) => [user._id.toString(), user]));
+    const blocks = await blockSets(req.user._id);
 
     res.json({
       data: visibleConversations.map((conversation) => {
@@ -509,6 +543,7 @@ router.get("/conversations", async (req, res, next) => {
           return {
             id: conversation._id,
             isGroup: true,
+            theme: conversation.theme || "default",
             group: groupSummary(conversation),
             lastMessage: conversation.lastMessage,
             lastMessageAt: conversation.lastMessageAt,
@@ -521,9 +556,8 @@ router.get("/conversations", async (req, res, next) => {
         return {
           id: conversation._id,
           isGroup: false,
-          user: other
-            ? { ...safeUser(other), isOnline: isOnline(other._id), publicKey: other.publicKey || null }
-            : null,
+          theme: conversation.theme || "default",
+          user: other ? otherParticipantView(conversation, other, userId, blocks) : null,
           lastMessage: conversation.lastMessage,
           lastMessageAt: conversation.lastMessageAt,
           unreadCount: conversation.unreadCounts?.get?.(userId) || 0,
@@ -612,6 +646,83 @@ router.post("/conversations/:conversationId/unarchive", async (req, res, next) =
     }
 
     res.json({ data: { id: conversation._id.toString(), archived: false } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
+// NICKNAME — 1-to-1 only. Private per-setter label for the other
+// participant, stored on the conversation itself (not the User doc), so it
+// never touches the other person's real profile name and is never visible
+// to anyone but the person who set it.
+// ============================================================
+
+router.patch("/conversations/:conversationId/nickname", async (req, res, next) => {
+  try {
+    const conversation = await Conversation.findOne({
+      _id: req.params.conversationId,
+      participantIds: req.user._id,
+      isGroup: { $ne: true },
+    });
+
+    if (!conversation) {
+      return res.status(404).json({
+        error: { code: "NOT_FOUND", message: "Conversation not found." },
+      });
+    }
+
+    const nickname = String(req.body.nickname || "").trim().slice(0, 40);
+    const userId = req.user._id.toString();
+
+    conversation.nicknames = conversation.nicknames || new Map();
+    if (nickname) conversation.nicknames.set(userId, nickname);
+    else conversation.nicknames.delete(userId);
+
+    await conversation.save();
+
+    res.json({ data: { id: conversation._id.toString(), nickname: nickname || null } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
+// CONVERSATION THEME — a single shared value per conversation (unlike
+// nicknames), synced to every other participant over the same socket
+// channel used for message delivery.
+// ============================================================
+
+router.patch("/conversations/:conversationId/theme", async (req, res, next) => {
+  try {
+    const theme = String(req.body.theme || "");
+    if (!THEME_IDS.includes(theme)) {
+      return res.status(400).json({
+        error: { code: "INVALID_THEME", message: "Invalid conversation theme." },
+      });
+    }
+
+    const conversation = await Conversation.findOne({
+      _id: req.params.conversationId,
+      participantIds: req.user._id,
+    });
+
+    if (!conversation) {
+      return res.status(404).json({
+        error: { code: "NOT_FOUND", message: "Conversation not found." },
+      });
+    }
+
+    conversation.theme = theme;
+    await conversation.save();
+
+    const others = otherParticipants(conversation, req.user._id);
+    broadcastToOthers(req, others, "conversation:theme", {
+      id: conversation._id.toString(),
+      theme,
+    });
+
+    res.json({ data: { id: conversation._id.toString(), theme } });
   } catch (error) {
     next(error);
   }

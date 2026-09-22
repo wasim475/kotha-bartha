@@ -1,8 +1,20 @@
-import { ArrowBackRounded, Call, CallEnd, Close, Info, Search } from "@mui/icons-material";
+import {
+  ArrowBackRounded,
+  Block,
+  Call,
+  CallEnd,
+  Close,
+  EditNote,
+  Info,
+  MoreHoriz,
+  Palette,
+  Search,
+} from "@mui/icons-material";
 import { Link } from "react-router-dom";
 
 import Avatar from "../../../components/ui/Avatar";
 import IconButton from "../../../components/ui/IconButton";
+import Menu from "../../../components/ui/Menu";
 import { formatTime } from "../../../utility/helpers";
 
 const ChatHeader = ({
@@ -20,10 +32,18 @@ const ChatHeader = ({
   searchOpen,
   onToggleSearch,
   onSelectSearchResult,
+  onOpenNickname,
+  onOpenTheme,
+  onRequestBlock,
 }) => {
   const onCall = callState === "idle" ? startCall : () => finishCall();
   const inCall = callState !== "idle";
   const group = groupDetail?.data;
+  const otherUser = !isGroup ? selected?.user : null;
+  const displayName = otherUser?.nickname || otherUser?.fullName;
+  const isBlocked = Boolean(otherUser?.isBlocked);
+  const hasBlockedMe = Boolean(otherUser?.hasBlockedMe);
+  const blocked = isBlocked || hasBlockedMe;
 
   return (
     <div className="relative shrink-0 border-b border-line">
@@ -78,7 +98,7 @@ const ChatHeader = ({
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-ink hover:underline">
-              {selected.user.fullName}
+              {displayName}
             </p>
             {isTyping ? (
               <p className="flex items-center gap-1 text-xs font-medium text-accent">
@@ -119,14 +139,45 @@ const ChatHeader = ({
           onClick={onOpenGroupInfo}
         />
       ) : (
-        <IconButton
-          label={inCall ? "End voice call" : "Start voice call"}
-          icon={inCall ? <CallEnd fontSize="small" /> : <Call fontSize="small" />}
-          variant={inCall ? "danger" : "default"}
-          size="sm"
-          disabled={!selected}
-          onClick={onCall}
-        />
+        <>
+          <IconButton
+            label={inCall ? "End voice call" : "Start voice call"}
+            icon={inCall ? <CallEnd fontSize="small" /> : <Call fontSize="small" />}
+            variant={inCall ? "danger" : "default"}
+            size="sm"
+            disabled={!selected || blocked}
+            onClick={onCall}
+          />
+          {selected && (
+            <Menu
+              align="end"
+              trigger={
+                <IconButton label="Conversation options" icon={<MoreHoriz fontSize="small" />} size="sm" />
+              }
+              items={[
+                {
+                  key: "nickname",
+                  label: "Set nickname",
+                  icon: <EditNote fontSize="small" />,
+                  onClick: onOpenNickname,
+                },
+                {
+                  key: "theme",
+                  label: "Change theme",
+                  icon: <Palette fontSize="small" />,
+                  onClick: onOpenTheme,
+                },
+                {
+                  key: "block",
+                  label: isBlocked ? "Unblock messages" : "Block messages",
+                  icon: <Block fontSize="small" />,
+                  danger: !isBlocked,
+                  onClick: onRequestBlock,
+                },
+              ]}
+            />
+          )}
+        </>
       )}
     </div>
 

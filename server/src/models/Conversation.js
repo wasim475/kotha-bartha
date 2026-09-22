@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { THEME_IDS } = require("../utils/conversationThemes");
 
 const conversationSchema = new mongoose.Schema(
   {
@@ -48,6 +49,17 @@ const conversationSchema = new mongoose.Schema(
         pinnedAt: { type: Date, default: Date.now },
       },
     ],
+    // 1-to-1 conversations only (enforced in chat.routes.js) — a private,
+    // per-setter label for the *other* participant. Keyed by the user who
+    // set it, so each side can keep their own nickname for the other person
+    // without either seeing the other's choice or touching their real
+    // profile name.
+    nicknames: { type: Map, of: String, default: {} },
+    // A shared "chat theme" accent, synced for every participant (unlike
+    // nicknames, this is one value for the whole conversation, not per-user)
+    // — see client/src/pages/message/utility/conversationThemes.js for the
+    // actual color values.
+    theme: { type: String, enum: THEME_IDS, default: "default" },
   },
   { timestamps: true },
 );

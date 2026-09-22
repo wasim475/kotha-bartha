@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import { cx } from "../../utility/cx";
+import { themeCssVars } from "./utility/conversationThemes";
 import useDeleteMessage from "./hooks/useDeleteMessage";
 import useE2EDecryption from "./hooks/useE2EDecryption";
 import useEditMessage from "./hooks/useEditMessage";
@@ -23,6 +24,8 @@ import GroupInfoPanel from "./components/GroupInfoPanel";
 import MessageComposer from "./components/MessageComposer";
 import MessageThread from "./components/MessageThread";
 import NewConversationDialog from "./components/NewConversationDialog";
+import NicknameDialog from "./components/NicknameDialog";
+import ThemeDialog from "./components/ThemeDialog";
 import VoiceCall from "./components/VoicCall";
 
 const confirmCopy = {
@@ -117,12 +120,14 @@ const Message = ({ user }) => {
     prepareForIncomingMessage: scroll.prepareForIncomingMessage,
   });
 
-  const [pendingConfirm, setPendingConfirm] = useState(null); // { type: "conversation", id }
+  const [pendingConfirm, setPendingConfirm] = useState(null); // { type: "conversation" | "blockUser", id, ... }
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const [groupInfoOpen, setGroupInfoOpen] = useState(false);
   const [deleteDialogMessageId, setDeleteDialogMessageId] = useState(null);
   const [forwardingMessage, setForwardingMessage] = useState(null);
+  const [nicknameDialogOpen, setNicknameDialogOpen] = useState(false);
+  const [themeDialogOpen, setThemeDialogOpen] = useState(false);
 
   const openConversation = (id) => navigate(`/app/messages/${id}`);
   const closeConfirm = () => {
@@ -133,8 +138,12 @@ const Message = ({ user }) => {
     if (!pendingConfirm) return;
     setConfirmLoading(true);
     try {
-      await actions.deleteConversation(pendingConfirm.id);
-      if (pendingConfirm.id === conversationId) navigate("/app/messages");
+      if (pendingConfirm.type === "blockUser") {
+        await actions.toggleBlockUser(pendingConfirm.userId, pendingConfirm.currentlyBlocked);
+      } else {
+        await actions.deleteConversation(pendingConfirm.id);
+        if (pendingConfirm.id === conversationId) navigate("/app/messages");
+      }
     } catch (error) {
       setSendError(
         error.response?.data?.error?.message || "Something went wrong.",
@@ -184,8 +193,31 @@ const Message = ({ user }) => {
     (groupDetail?.data?.pinnedMessages || []).map((pin) => pin.messageId),
   );
 
-  const dialogCopy = pendingConfirm ? confirmCopy[pendingConfirm.type] : null;
+  const dialogCopy =
+    pendingConfirm?.type === "blockUser"
+      ? {
+          title: pendingConfirm.currentlyBlocked
+            ? `Unblock ${pendingConfirm.name}?`
+            : `Block ${pendingConfirm.name}?`,
+          description: pendingConfirm.currentlyBlocked
+            ? "They'll be able to message you again."
+            : "They won't be able to send you messages, and you won't be able to message them until you unblock.",
+          confirmLabel: pendingConfirm.currentlyBlocked ? "Unblock" : "Block",
+          variant: pendingConfirm.currentlyBlocked ? "primary" : "danger",
+        }
+      : pendingConfirm
+        ? confirmCopy[pendingConfirm.type]
+        : null;
   const showingThread = Boolean(conversationId);
+
+  const otherUser = !isGroup ? selected?.user : null;
+  const otherDisplayName = otherUser?.nickname || otherUser?.fullName;
+  const blocked = Boolean(otherUser?.isBlocked || otherUser?.hasBlockedMe);
+  const blockedNotice = !blocked
+    ? null
+    : otherUser.isBlocked
+      ? `You blocked ${otherDisplayName}. Unblock to send messages.`
+      : `You can't send messages to ${otherDisplayName}.`;
 
   return (
     <div className="flex h-[calc(100dvh-var(--topbar-h)-var(--bottom-nav-h)-16px)] min-h-105 w-full flex-col md:h-[calc(100dvh-200px)]">
@@ -224,6 +256,7 @@ const Message = ({ user }) => {
             "min-w-0 flex-1 flex-col",
             showingThread ? "flex" : "hidden md:flex",
           )}
+          style={!isGroup ? themeCssVars(selected?.theme) : undefined}
         >
           {showingThread ? (
             <>
@@ -248,6 +281,16 @@ const Message = ({ user }) => {
                   setSearchOpen(false);
                   jumpToMessage(messageId);
                 }}
+                onOpenNickname={() => setNicknameDialogOpen(true)}
+                onOpenTheme={() => setThemeDialogOpen(true)}
+                onRequestBlock={() =>
+                  setPendingConfirm({
+                    type: "blockUser",
+                    userId: otherUser?.id,
+                    name: otherDisplayName,
+                    currentlyBlocked: Boolean(otherUser?.isBlocked),
+                  })
+                }
               />
               {!isGroup && (
                 <VoiceCall
@@ -306,6 +349,7 @@ const Message = ({ user }) => {
                 }
                 mentionIds={mentionIds}
                 setMentionIds={setMentionIds}
+                blockedNotice={blockedNotice}
               />
             </>
           ) : (
@@ -367,6 +411,25 @@ const Message = ({ user }) => {
         onClose={() => setForwardingMessage(null)}
         onForward={submitForward}
       />
+
+      {!isGroup && (
+        <NicknameDialog
+          open={nicknameDialogOpen}
+          currentNickname={otherUser?.nickname || ""}
+          personName={otherUser?.fullName}
+          onClose={() => setNicknameDialogOpen(false)}
+          onSave={(nickname) => actions.setNickname(conversationId, nickname)}
+        />
+      )}
+
+      {!isGroup && (
+        <ThemeDialog
+          open={themeDialogOpen}
+          currentTheme={selected?.theme || "default"}
+          onClose={() => setThemeDialogOpen(false)}
+          onSelect={(theme) => actions.setConversationTheme(conversationId, theme)}
+        />
+      )}
 
       {isGroup && (
         <GroupInfoPanel

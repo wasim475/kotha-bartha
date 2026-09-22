@@ -126,6 +126,16 @@ const useMessageRealtime = ({
     if (id === conversationId) groupDetail?.reload();
   });
 
+  // The other participant changed this conversation's shared theme — keep
+  // it in sync without a full reload (nicknames are private per-setter and
+  // never broadcast, unlike this).
+  useRealtime("conversation:theme", (event) => {
+    const { id, theme } = event.detail;
+    conversations.setData((rows = []) =>
+      rows.map((row) => (row.id === id ? { ...row, theme } : row)),
+    );
+  });
+
   useRealtime("realtime:connected", () => {
     conversations.reload();
     if (conversationId) {
