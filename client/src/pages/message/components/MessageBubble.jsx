@@ -274,17 +274,19 @@ const MessageBubble = ({
     onReact(message.id, REACTION_TYPE_TO_EMOJI[type]);
   };
 
-  // Aggregates the raw per-user emoji reactions into distinct emoji + count
-  // pills (matching how ReactionSummary aggregates elsewhere), rendering
-  // the shared canonical-five SVGs where the emoji matches one of them so
-  // sizing/alignment stays identical to posts/comments/replies; anything
-  // else (from the full picker) falls back to the literal glyph.
+  // Aggregates the raw per-user emoji reactions into distinct emoji groups,
+  // then mirrors ReactionSummary's own display contract exactly (up to
+  // three overlapping icons + one total count) so the badge reads
+  // identically wherever reactions show up in the app, and so it stays a
+  // small, bounded pill that can never overflow horizontally.
   const reactionGroups = (message.reactions || []).reduce((groups, reaction) => {
     const existing = groups.find((group) => group.emoji === reaction.emoji);
     if (existing) existing.count += 1;
     else groups.push({ emoji: reaction.emoji, count: 1, type: EMOJI_TO_REACTION_TYPE[reaction.emoji] });
     return groups;
   }, []);
+  const visibleReactionGroups = reactionGroups.slice(0, 3);
+  const totalReactionCount = reactionGroups.reduce((sum, group) => sum + group.count, 0);
 
   return (
     <div
@@ -329,6 +331,12 @@ const MessageBubble = ({
             </span>
           )}
 
+          {/* Wraps just the bubble/edit box (not the sender name, pinned
+              label, etc.) so the reaction badge below can be positioned
+              absolutely against this exact box — it overlaps the bubble's
+              own bottom edge regardless of how tall the bubble is, instead
+              of taking up flow space and pushing the avatar/next row down. */}
+          <div className="relative">
           {isEditing ? (
             <div className="w-64 max-w-[70vw] rounded-2xl border border-line bg-panel p-2.5 shadow-soft">
               <input
@@ -336,7 +344,7 @@ const MessageBubble = ({
                 onChange={(event) => setEditBody(event.target.value)}
                 autoFocus
                 aria-label="Edit message"
-                className="w-full rounded-md border border-line bg-paper px-2.5 py-2 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="font-message w-full rounded-md border border-line bg-paper px-2.5 py-2 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();
@@ -372,7 +380,7 @@ const MessageBubble = ({
             <div
               onClick={() => onSelectMessage(message.id)}
               className={cx(
-                "min-w-0 rounded-2xl text-sm leading-relaxed shadow-sm transition-opacity",
+                "font-message min-w-0 rounded-2xl text-sm leading-relaxed shadow-sm transition-opacity",
                 attachment.kind === "image" ? "p-1" : "px-3.5 py-2",
                 isOwn ? "text-white" : "text-ink",
                 message.pending && "opacity-70",
@@ -501,7 +509,7 @@ const MessageBubble = ({
               title={formatFullTime(message.createdAt)}
               onClick={() => onSelectMessage(message.id)}
               className={cx(
-                "min-w-0 rounded-2xl px-3.5 py-2 text-left text-sm leading-relaxed wrap-break-word shadow-sm transition-opacity",
+                "font-message min-w-0 rounded-2xl px-3.5 py-2 text-left text-sm leading-relaxed wrap-break-word shadow-sm transition-opacity",
                 isOwn ? "text-white" : "text-ink",
                 message.pending && "opacity-70",
               )}
@@ -593,30 +601,39 @@ const MessageBubble = ({
           )}
 
           {reactionGroups.length > 0 && (
+            // Absolutely positioned, overlapping the bubble's bottom edge
+            // (~half in, half out — the Facebook-style treatment): never
+            // part of document flow, so it can never move the avatar or
+            // push the row height, and it doesn't reserve space that would
+            // shove the next message down. Bounded to 3 icons + a count,
+            // exactly like ReactionSummary, so it can't overflow
+            // horizontally either.
             <div
               className={cx(
-                "mt-1 flex flex-wrap items-center gap-1",
-                isOwn ? "justify-end" : "justify-start",
+                "absolute -bottom-2.5 z-10 flex items-center gap-1 rounded-full",
+                "border border-line bg-panel px-1.5 py-0.5 shadow-soft",
+                isOwn ? "right-2" : "left-2",
               )}
+              aria-label={`${totalReactionCount} reaction${totalReactionCount === 1 ? "" : "s"}`}
             >
-              {reactionGroups.map((group) => (
-                <span
-                  key={group.emoji}
-                  className="flex items-center gap-1 rounded-full border border-line bg-panel px-1.5 py-0.5 shadow-sm"
-                >
-                  {group.type ? (
-                    <ReactionIcon type={group.type} className="size-4" />
-                  ) : (
-                    <span className="text-xs leading-none">{group.emoji}</span>
-                  )}
-                  {group.count > 1 && (
-                    <span className="text-[10px] font-semibold text-muted">{group.count}</span>
-                  )}
-                </span>
-              ))}
+              <span className="flex items-center -space-x-1">
+                {visibleReactionGroups.map((group) => (
+                  <span
+                    key={group.emoji}
+                    className="flex size-4 items-center justify-center rounded-full ring-2 ring-panel"
+                  >
+                    {group.type ? (
+                      <ReactionIcon type={group.type} className="size-4" />
+                    ) : (
+                      <span className="text-[10px] leading-none">{group.emoji}</span>
+                    )}
+                  </span>
+                ))}
+              </span>
+              <span className="text-[10px] font-semibold text-muted">{totalReactionCount}</span>
             </div>
           )}
-
+          </div>
         </div>
       </div>
 

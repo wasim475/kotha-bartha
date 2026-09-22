@@ -96,6 +96,13 @@ const MessageComposer = ({
     textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
   }, [body]);
 
+  // Reusing the composer's own textarea ref — no separate input is
+  // created. The textarea is always on-screen (fixed at the bottom of the
+  // thread panel), so focusing it doesn't trigger any extra page scroll.
+  useEffect(() => {
+    if (replyingTo) textareaRef.current?.focus();
+  }, [replyingTo]);
+
   const submit = (event) => {
     event?.preventDefault?.();
     onSend(event || { preventDefault: () => {} });
@@ -106,7 +113,7 @@ const MessageComposer = ({
       {replyingTo && (
         <div className="mx-auto flex w-full max-w-4xl items-center gap-2 border-b border-line bg-soft px-3.5 py-2 text-xs text-muted sm:px-6 lg:px-10">
           <div className="min-w-0 flex-1 border-l-2 border-accent pl-2">
-            <span className="block truncate">Replying to: {replyingTo.body}</span>
+            <span className="font-message block truncate">Replying to: {replyingTo.body}</span>
           </div>
           <IconButton
             label="Cancel reply"

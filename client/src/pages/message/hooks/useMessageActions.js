@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { api } from "../../../utility/api";
 import { sendTypingSignal } from "../../../utility/helpers";
 import { deriveSharedKey, encryptMessage, getOrCreateKeyPair } from "../../../utility/crypto";
@@ -227,9 +227,16 @@ const useMessageActions = ({
     }
   };
 
+  // Guards against a second reaction request firing for the same message
+  // while one is already in flight (e.g. a fast double click/tap) —
+  // callers (the quick reaction bar and the full emoji picker) already
+  // close the popup themselves before calling this, so it doesn't need to
+  // touch selection/emoji-picker state at all here.
+  const reactingMessageIds = useRef(new Set());
+
   const reactToMessage = async (messageId, emoji) => {
-    setSelectedMessageId(messageId);
-    setEmojiMessageId(null);
+    if (reactingMessageIds.current.has(messageId)) return;
+    reactingMessageIds.current.add(messageId);
 
     try {
       const { data } = await api.put(
@@ -248,6 +255,8 @@ const useMessageActions = ({
       setSendError(
         error.response?.data?.error?.message || "Reaction could not be saved.",
       );
+    } finally {
+      reactingMessageIds.current.delete(messageId);
     }
   };
 

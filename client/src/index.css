@@ -24,6 +24,11 @@
 
   --font-sans: "DM Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-display: "Fraunces", ui-serif, Georgia, serif;
+  /* Message bubble text — "Hind Siliguri" only ever renders for the
+     Bengali characters DM Sans has no glyphs for (the browser picks a
+     font per-character based on glyph coverage), so Latin text keeps
+     using DM Sans exactly as before. */
+  --font-message: "DM Sans", "Hind Siliguri", ui-sans-serif, system-ui, sans-serif;
 
   --radius-sm: 6px;
   --radius-md: 9px;
