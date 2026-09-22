@@ -18,7 +18,7 @@ export default function MainRouter() {
     <Route path="/login" element={user ? <Navigate to="/app/feed" replace /> : <AuthPage mode="login" onAuth={setUser} />} />
     <Route path="/signup" element={user ? <Navigate to="/app/feed" replace /> : <AuthPage mode="signup" onAuth={setUser} />} />
     <Route path="/app/*" element={user ? <Shell user={user} onLogout={logout} /> : <Navigate to="/login" replace />} />
-    <Route path="/study/*" element={user ? <StudyShell /> : <Navigate to="/login" replace />} />
+    <Route path="/study/*" element={user ? <StudyShell user={user} /> : <Navigate to="/login" replace />} />
     <Route path="*" element={<Navigate to={user ? "/app/feed" : "/login"} replace />} />
   </Routes></BrowserRouter>;
 }

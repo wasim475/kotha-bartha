@@ -82,6 +82,31 @@
   background: var(--study-accent-soft);
 }
 
+/* Only rendered for admin/moderator (see StudyShell.jsx) — server-side
+   quiz.routes.js is the actual enforcement, this is just the entry point. */
+.study-add-quiz-button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 15px;
+  border: none;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--study-accent);
+  font-size: 11px;
+  font-weight: 700;
+  transition:
+    background 0.2s ease,
+    transform 0.15s ease;
+}
+.study-add-quiz-button:hover,
+.study-add-quiz-button:focus-visible {
+  background: var(--study-accent-deep);
+}
+.study-add-quiz-button:active {
+  transform: scale(0.97);
+}
+
 .study-nav .nav-item:hover,
 .study-nav .nav-item.active {
   color: var(--study-accent);
@@ -151,6 +176,16 @@
     display: none;
   }
   .study-back-button {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
+  }
+  .study-add-quiz-button span {
+    display: none;
+  }
+  .study-add-quiz-button {
     width: 36px;
     height: 36px;
     padding: 0;

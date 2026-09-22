@@ -31,6 +31,12 @@ const userSchema = new mongoose.Schema(
       sparse: true, // যাদের googleId নেই, তাদের জন্য unique constraint স্কিপ হবে
       index: true,
     },
+    // Quiz management (server/src/routes/quiz.routes.js) is the only
+    // feature gated by this today — "admin"/"moderator" can create
+    // subjects/chapters/questions, everyone else can only play quizzes.
+    // There's no UI to change this yet (out of scope for the quiz
+    // system itself); set it directly in the database for now.
+    role: { type: String, enum: ["user", "moderator", "admin"], default: "user" },
     bio: { type: String, trim: true, maxlength: 240, default: "" },
     dateOfBirth: { type: Date, default: null },
     hometown: { type: String, trim: true, maxlength: 80, default: "" },
@@ -97,6 +103,7 @@ userSchema.methods.toSafeJSON = function toSafeJSON() {
     id: this._id.toString(),
     fullName: this.fullName,
     email: this.email,
+    role: this.role,
     bio: this.bio,
     dateOfBirth: this.dateOfBirth,
     hometown: this.hometown,

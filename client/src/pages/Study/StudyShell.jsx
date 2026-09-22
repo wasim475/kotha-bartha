@@ -7,6 +7,8 @@ import StudyNavbar from "./StudyNavbar";
 import StudyPlaceholder from "./StudyPlaceholder";
 import StudyTopbar from "./StudyTopbar";
 import { studyNavItems } from "./studyNavItems";
+import QuizAdmin from "./quiz/QuizAdmin";
+import QuizFlow from "./quiz/QuizFlow";
 
 const descriptions = {
   blogs: "Study notes, guides and articles from the কথা-বার্তা community.",
@@ -17,9 +19,10 @@ const descriptions = {
   leaderboard: "See how you rank among fellow learners.",
 };
 
-export default function StudyShell() {
+export default function StudyShell({ user }) {
   const navigate = useNavigate();
   const { theme, setTheme } = useContext(Utility);
+  const canManageQuiz = user?.role === "admin" || user?.role === "moderator";
 
   return (
     <div className="app-shell study-shell">
@@ -27,6 +30,8 @@ export default function StudyShell() {
         theme={theme}
         setTheme={setTheme}
         onBack={() => navigate("/app/feed")}
+        showAddQuiz={canManageQuiz}
+        onAddQuiz={() => navigate("/study/quiz-admin")}
       />
 
       <div className="app-body">
@@ -34,19 +39,27 @@ export default function StudyShell() {
 
         <main className="page-content">
           <Routes>
-            {studyNavItems.map((item) => (
-              <Route
-                key={item.path}
-                path={item.key}
-                element={
-                  <StudyPlaceholder
-                    icon={item.icon}
-                    label={item.label}
-                    description={descriptions[item.key]}
-                  />
-                }
-              />
-            ))}
+            {studyNavItems.map((item) =>
+              item.key === "quiz" ? (
+                <Route key={item.path} path={item.key} element={<QuizFlow />} />
+              ) : (
+                <Route
+                  key={item.path}
+                  path={item.key}
+                  element={
+                    <StudyPlaceholder
+                      icon={item.icon}
+                      label={item.label}
+                      description={descriptions[item.key]}
+                    />
+                  }
+                />
+              ),
+            )}
+            <Route
+              path="quiz-admin"
+              element={canManageQuiz ? <QuizAdmin user={user} /> : <Navigate to="quiz" replace />}
+            />
             <Route path="*" element={<Navigate to="blogs" replace />} />
           </Routes>
         </main>

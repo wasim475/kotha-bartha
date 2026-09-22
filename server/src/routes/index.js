@@ -10,6 +10,7 @@ const blocksRoutes = require("./blocks.routes");
 const linkPreviewRoutes = require("./link-preview.routes");
 const storiesRoutes = require("./stories.routes");
 const notesRoutes = require("./notes.routes");
+const quizRoutes = require("./quiz.routes");
 
 const router = express.Router();
 
@@ -24,5 +25,6 @@ router.use(blocksRoutes);
 router.use(linkPreviewRoutes);
 router.use(storiesRoutes);
 router.use(notesRoutes);
+router.use(quizRoutes);
 
 module.exports = router;
