@@ -108,8 +108,12 @@ const CommentSection = ({
 
   const deleteComment = async (commentId) => {
     if (!window.confirm("Delete this comment?")) return;
-    await api.delete(`/comments/${commentId}`);
-    setComments((current) => current.filter((entry) => entry.id !== commentId));
+    const { data } = await api.delete(`/comments/${commentId}`);
+    // The server cascades the delete to every reply beneath this comment
+    // (any depth) and returns all the ids it actually removed — falls back
+    // to just commentId for safety if an older response shape ever shows up.
+    const removedIds = new Set(data.data.deletedIds || [commentId]);
+    setComments((current) => current.filter((entry) => !removedIds.has(entry.id)));
     onChanged?.();
   };
 

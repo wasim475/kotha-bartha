@@ -217,30 +217,39 @@ router.delete("/comments/:commentId", async (req, res, next) => {
       });
     }
 
-    // Descendant reply ids must be gathered before the delete — cascade
-    // cleanup needs to know which notifications belonged to this comment's
-    // reply tree, and those child comments are still in the database at
-    // this point (only the target comment itself is removed below).
+    // Descendant reply ids (any depth) must be gathered before the delete
+    // so the cascade below — comments, reactions, and notifications — can
+    // target the whole reply tree, not just the one comment. Deleting only
+    // the target comment and leaving its replies behind would orphan them
+    // in the database (they'd just silently stop rendering client-side,
+    // since nothing recurses to them anymore, without ever actually being
+    // removed) — this is the source of truth, not the React tree.
     const isReply = Boolean(existing.parentId);
     const descendantIds = await collectDescendantIds(existing._id);
+    const allIds = [existing._id, ...descendantIds];
 
-    const comment = await Comment.findOneAndDelete({ _id: existing._id });
-
-    await Reaction.deleteMany({ targetType: "comment", targetId: comment._id });
+    await Comment.deleteMany({ _id: { $in: allIds } });
+    await Reaction.deleteMany({ targetType: "comment", targetId: { $in: allIds } });
 
     if (isReply) {
       // A reply and everything replying to it — leave sibling replies in
       // the same thread untouched.
       await Notification.deleteMany({
-        replyId: { $in: [comment._id, ...descendantIds] },
+        replyId: { $in: allIds },
       });
     } else {
       // The whole thread: notifications about the comment itself all share
       // commentId === comment._id, and so does every reply beneath it.
-      await Notification.deleteMany({ commentId: comment._id });
+      await Notification.deleteMany({ commentId: existing._id });
     }
 
-    res.json({ data: { id: comment._id.toString(), deleted: true } });
+    res.json({
+      data: {
+        id: existing._id.toString(),
+        deleted: true,
+        deletedIds: allIds.map((id) => id.toString()),
+      },
+    });
   } catch (error) {
     next(error);
   }

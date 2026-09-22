@@ -76,6 +76,8 @@ export default function useSocket(userId) {
     socket.on("message:read", forward("message:read"));
     socket.on("notification:new", forward("notification:new"));
     socket.on("post:new", forward("post:new"));
+    socket.on("story:new", forward("story:new"));
+    socket.on("story:deleted", forward("story:deleted"));
     socket.on("friend:new", forward("friend:new"));
     socket.on("friend:accepted", forward("friend:accepted"));
     socket.on("typing:start", forward("typing:start"));
@@ -84,6 +86,7 @@ export default function useSocket(userId) {
     socket.on("presence:update", forward("presence:update"));
     socket.on("conversation:updated", forward("conversation:updated"));
     socket.on("conversation:theme", forward("conversation:theme"));
+    socket.on("conversation:likeEmoji", forward("conversation:likeEmoji"));
 
     return () => {
       setActiveSocket(undefined);

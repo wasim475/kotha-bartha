@@ -56,10 +56,14 @@ const conversationSchema = new mongoose.Schema(
     // profile name.
     nicknames: { type: Map, of: String, default: {} },
     // A shared "chat theme" accent, synced for every participant (unlike
-    // nicknames, this is one value for the whole conversation, not per-user)
-    // — see client/src/pages/message/utility/conversationThemes.js for the
-    // actual color values.
+    // nicknames, this is one value for the whole conversation, not user-
+    // specific) — see client/src/pages/message/utility/conversationThemes.js
+    // for the actual color values.
     theme: { type: String, enum: THEME_IDS, default: "default" },
+    // The emoji the composer's quick "Like" button sends in this
+    // conversation (see MessageComposer.jsx) — shared for every
+    // participant, same sync model as `theme`.
+    likeEmoji: { type: String, trim: true, default: "👍", maxlength: 8 },
   },
   { timestamps: true },
 );

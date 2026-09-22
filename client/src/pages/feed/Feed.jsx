@@ -5,6 +5,7 @@ import FeedHeader from "./components/FeedHeader";
 import NewPostsIndicator from "./components/NewPostsIndicator";
 import PostComposer from "./components/PostComposer";
 import PostList from "./components/PostList";
+import StoryRail from "./components/StoryRail";
 import useFeed from "./hooks/useFeed";
 
 const prefersReducedMotion =
@@ -17,6 +18,8 @@ export default function Feed({ user }) {
     posts,
     body,
     setBody,
+    imageFile,
+    setImageFile,
     busy,
     createPost,
     patchPost,
@@ -41,11 +44,14 @@ export default function Feed({ user }) {
   return (
     <>
       <FeedHeader onNewPost={() => composerRef.current?.focus()} />
+      <StoryRail user={user} />
       <PostComposer
         ref={composerRef}
         user={user}
         body={body}
         setBody={setBody}
+        imageFile={imageFile}
+        onImageChange={setImageFile}
         busy={busy}
         onSubmit={createPost}
       />

@@ -114,6 +114,22 @@ export default function PostCard({
         )}
       </div>
 
+      {/* Image */}
+      {post.media?.secureUrl && (
+        <button
+          type="button"
+          onClick={() => onOpenPost(post.id)}
+          className="block w-full bg-soft"
+        >
+          <img
+            src={post.media.secureUrl}
+            alt=""
+            loading="lazy"
+            className="max-h-130 w-full object-cover"
+          />
+        </button>
+      )}
+
       {/* Content */}
       {editing ? (
         <form className="grid gap-2 px-4 pb-4" onSubmit={savePost}>

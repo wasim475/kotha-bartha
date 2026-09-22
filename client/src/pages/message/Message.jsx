@@ -23,6 +23,7 @@ import ForwardMessageDialog from "./components/ForwardMessageDialog";
 import GroupInfoPanel from "./components/GroupInfoPanel";
 import MessageComposer from "./components/MessageComposer";
 import MessageThread from "./components/MessageThread";
+import EmojiPackDialog from "./components/EmojiPackDialog";
 import NewConversationDialog from "./components/NewConversationDialog";
 import NicknameDialog from "./components/NicknameDialog";
 import ThemeDialog from "./components/ThemeDialog";
@@ -129,6 +130,7 @@ const Message = ({ user }) => {
   const [forwardingMessage, setForwardingMessage] = useState(null);
   const [nicknameDialogOpen, setNicknameDialogOpen] = useState(false);
   const [themeDialogOpen, setThemeDialogOpen] = useState(false);
+  const [emojiPackDialogOpen, setEmojiPackDialogOpen] = useState(false);
 
   const openConversation = (id) => navigate(`/app/messages/${id}`);
   const closeConfirm = () => {
@@ -284,6 +286,7 @@ const Message = ({ user }) => {
                 }}
                 onOpenNickname={() => setNicknameDialogOpen(true)}
                 onOpenTheme={() => setThemeDialogOpen(true)}
+                onOpenEmojiPack={() => setEmojiPackDialogOpen(true)}
                 onRequestBlock={() =>
                   setPendingConfirm({
                     type: "blockUser",
@@ -351,6 +354,8 @@ const Message = ({ user }) => {
                 mentionIds={mentionIds}
                 setMentionIds={setMentionIds}
                 blockedNotice={blockedNotice}
+                likeEmoji={selected?.likeEmoji || "👍"}
+                onSendLike={() => actions.sendLike(selected?.likeEmoji || "👍")}
               />
             </>
           ) : (
@@ -429,6 +434,15 @@ const Message = ({ user }) => {
           currentTheme={selected?.theme || "default"}
           onClose={() => setThemeDialogOpen(false)}
           onSelect={(theme) => actions.setConversationTheme(conversationId, theme)}
+        />
+      )}
+
+      {!isGroup && (
+        <EmojiPackDialog
+          open={emojiPackDialogOpen}
+          currentEmoji={selected?.likeEmoji || "👍"}
+          onClose={() => setEmojiPackDialogOpen(false)}
+          onSelect={(emoji) => actions.setLikeEmoji(conversationId, emoji)}
         />
       )}
 

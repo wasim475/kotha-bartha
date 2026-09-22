@@ -85,6 +85,21 @@ const useMessageActions = ({
     return data.data.theme;
   };
 
+  // Shared for every participant — the server broadcasts
+  // conversation:likeEmoji to the others (see useMessageRealtime), this
+  // just applies it locally for the caller's own optimistic update.
+  const setLikeEmoji = async (targetConversationId, likeEmoji) => {
+    const { data } = await api.patch(`/conversations/${targetConversationId}/like-emoji`, {
+      likeEmoji,
+    });
+    conversations.setData((rows = []) =>
+      rows.map((row) =>
+        row.id === targetConversationId ? { ...row, likeEmoji: data.data.likeEmoji } : row,
+      ),
+    );
+    return data.data.likeEmoji;
+  };
+
   // Reuses the app's single global block system (POST/DELETE /blocks/:userId
   // — the same endpoints Profile's Block button calls) rather than a
   // separate conversation-scoped block, so blocking here has the exact same
@@ -96,10 +111,12 @@ const useMessageActions = ({
     archived?.reload();
   };
 
-  const sendMessage = async (event) => {
-    event.preventDefault();
-    const text = body.trim();
-    if (!text || !conversationId || sending) return;
+  // Shared by sendMessage (the composer's typed text) and sendLike (the
+  // conversation's quick Like emoji, sent as an ordinary message body) —
+  // everything past "what text to send" (optimistic UI, E2E encryption,
+  // the actual request, reconciling the response) is identical either way.
+  const sendTextMessage = async (text) => {
+    if (!text || !conversationId || sending) return false;
 
     clearTimeout(localTypingTimeoutRef.current);
     sendTypingSignal(selected?.user?.id, conversationId, false);
@@ -117,7 +134,6 @@ const useMessageActions = ({
       pending: true,
     };
 
-    setBody("");
     setSendError("");
     setSending(true);
     scrollToBottom();
@@ -183,18 +199,35 @@ const useMessageActions = ({
       setMentionIds([]);
       closeMessageInteractions();
       conversations.reload();
+      return true;
     } catch (error) {
       thread.setData((messages = []) =>
         messages.filter((message) => message.id !== optimisticId),
       );
-      setBody(text);
       setSendError(
         error.response?.data?.error?.message || "Message could not be sent.",
       );
+      return false;
     } finally {
       setSending(false);
     }
   };
+
+  const sendMessage = async (event) => {
+    event.preventDefault();
+    const text = body.trim();
+    if (!text || sending) return;
+    setBody("");
+    const ok = await sendTextMessage(text);
+    if (!ok) setBody(text);
+  };
+
+  // The composer's quick "Like" action (Messenger-style: tap it with an
+  // empty input to instantly send the conversation's Like emoji as a
+  // normal message) — reuses the exact same send/encrypt path as a typed
+  // message, just with fixed text and nothing to restore into the
+  // composer on failure.
+  const sendLike = (emoji) => sendTextMessage(emoji);
 
   const sendAttachment = async (file, { durationSec } = {}) => {
     if (!conversationId || !file || sending) return;
@@ -395,8 +428,10 @@ const useMessageActions = ({
     unarchiveConversation,
     setNickname,
     setConversationTheme,
+    setLikeEmoji,
     toggleBlockUser,
     sendMessage,
+    sendLike,
     sendAttachment,
     reactToMessage,
     selectMessage,

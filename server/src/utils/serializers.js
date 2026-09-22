@@ -93,4 +93,19 @@ async function serializeComment(comment, viewerId) {
   };
 }
 
-module.exports = { initials, safeUser, serializePost, serializeComment };
+function serializeStory(story) {
+  const authorId = story.authorId?._id || story.authorId;
+  return {
+    id: story._id.toString(),
+    authorId: authorId.toString(),
+    type: story.type,
+    text: story.text || "",
+    textColor: story.textColor,
+    backgroundColor: story.type === "text" ? story.backgroundColor : null,
+    media: story.type === "image" ? story.media : null,
+    createdAt: story.createdAt,
+    expiresAt: story.expiresAt,
+  };
+}
+
+module.exports = { initials, safeUser, serializePost, serializeComment, serializeStory };

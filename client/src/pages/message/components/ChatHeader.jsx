@@ -5,6 +5,7 @@ import {
   CallEnd,
   Close,
   EditNote,
+  EmojiEmotions,
   Info,
   MoreHoriz,
   Palette,
@@ -34,6 +35,7 @@ const ChatHeader = ({
   onSelectSearchResult,
   onOpenNickname,
   onOpenTheme,
+  onOpenEmojiPack,
   onRequestBlock,
 }) => {
   const onCall = callState === "idle" ? startCall : () => finishCall();
@@ -166,6 +168,12 @@ const ChatHeader = ({
                   label: "Change theme",
                   icon: <Palette fontSize="small" />,
                   onClick: onOpenTheme,
+                },
+                {
+                  key: "emoji-pack",
+                  label: "Emoji pack",
+                  icon: <EmojiEmotions fontSize="small" />,
+                  onClick: onOpenEmojiPack,
                 },
                 {
                   key: "block",

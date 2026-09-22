@@ -8,6 +8,7 @@ const chatRoutes = require("./chat.routes");
 const notificationsRoutes = require("./notifications.routes");
 const blocksRoutes = require("./blocks.routes");
 const linkPreviewRoutes = require("./link-preview.routes");
+const storiesRoutes = require("./stories.routes");
 
 const router = express.Router();
 
@@ -20,5 +21,6 @@ router.use(chatRoutes);
 router.use(notificationsRoutes);
 router.use(blocksRoutes);
 router.use(linkPreviewRoutes);
+router.use(storiesRoutes);
 
 module.exports = router;

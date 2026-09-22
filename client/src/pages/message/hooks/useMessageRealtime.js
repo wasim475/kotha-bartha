@@ -138,6 +138,14 @@ const useMessageRealtime = ({
     );
   });
 
+  // The other participant changed this conversation's Like emoji.
+  useRealtime("conversation:likeEmoji", (event) => {
+    const { id, likeEmoji } = event.detail;
+    conversations.setData((rows = []) =>
+      rows.map((row) => (row.id === id ? { ...row, likeEmoji } : row)),
+    );
+  });
+
   useRealtime("realtime:connected", () => {
     conversations.reload();
     if (conversationId) {

@@ -36,6 +36,8 @@ const MessageComposer = ({
   mentionIds = [],
   setMentionIds,
   blockedNotice,
+  likeEmoji = "👍",
+  onSendLike,
 }) => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [mentionQuery, setMentionQuery] = useState(null);
@@ -251,8 +253,18 @@ const MessageComposer = ({
               }}
               placeholder="Write a message…"
               autoFocus
-              className="no-scrollbar min-h-9 max-h-30 w-full resize-none rounded-2xl border border-line bg-paper px-3.5 py-2 text-sm text-ink outline-none placeholder:text-muted focus-visible:ring-2 focus-visible:ring-accent"
+              className="no-scrollbar min-h-9 max-h-30 w-full resize-none rounded-2xl border border-line bg-paper py-2 pr-11 pl-3.5 text-sm text-ink outline-none placeholder:text-muted focus-visible:ring-2 focus-visible:ring-accent"
             />
+            {!body.trim() && (
+              <IconButton
+                label="Record a voice message"
+                icon={<Mic fontSize="small" />}
+                size="sm"
+                disabled={sending}
+                onClick={recorder.start}
+                className="absolute right-1 bottom-1"
+              />
+            )}
           </div>
 
           {body.trim() ? (
@@ -269,10 +281,10 @@ const MessageComposer = ({
             </button>
           ) : (
             <IconButton
-              label="Record a voice message"
-              icon={<Mic fontSize="small" />}
+              label={`Send ${likeEmoji}`}
+              icon={<span className="text-lg leading-none">{likeEmoji}</span>}
               disabled={sending}
-              onClick={recorder.start}
+              onClick={onSendLike}
             />
           )}
         </form>

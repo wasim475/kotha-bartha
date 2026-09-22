@@ -8,6 +8,8 @@ const { serializePost } = require("../utils/serializers");
 const { emitToUser } = require("../utils/realtime");
 const { createNotification } = require("../services/notification.service");
 const { REACTION_TYPES } = require("../utils/reactionTypes");
+const { upload } = require("../middleware/upload");
+const { uploadBuffer, destroyAsset } = require("../utils/cloudinary");
 
 const router = express.Router();
 
@@ -104,56 +106,93 @@ router.post("/posts/feed/read", async (req, res, next) => {
 // NOTIFICATIONS
 // ============================================================
 
-router.post("/posts", async (req, res, next) => {
-  try {
-    const body = String(req.body.body || "").trim();
-
-    if (!body) {
-      return res.status(400).json({
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "Post text is required.",
-        },
-      });
-    }
-
-    const post = await Post.create({
-      authorId: req.user._id,
-      body,
+router.post(
+  "/posts",
+  // A plain JSON (text-only) request never has a multipart Content-Type,
+  // so multer passes it straight through unchanged — this only actually
+  // parses requests that include an image file.
+  (req, res, next) => {
+    upload.single("file")(req, res, (error) => {
+      if (!error) return next();
+      if (error.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({
+          error: { code: "FILE_TOO_LARGE", message: "Image is larger than 15MB." },
+        });
+      }
+      if (error.message === "UNSUPPORTED_FILE_TYPE") {
+        return res.status(400).json({
+          error: { code: "UNSUPPORTED_FILE_TYPE", message: "Choose an image for your post." },
+        });
+      }
+      next(error);
     });
+  },
+  async (req, res, next) => {
+    try {
+      const body = String(req.body.body || "").trim();
 
-    // --------------------------------------------------------
-    // NEW:
-    // Notify all friends that a new feed post exists
-    // --------------------------------------------------------
+      if (!body && !req.file) {
+        return res.status(400).json({
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Add some text or an image to post.",
+          },
+        });
+      }
+      if (req.file && !req.file.mimetype.startsWith("image/")) {
+        return res.status(400).json({
+          error: { code: "INVALID_FILE", message: "Choose an image for your post." },
+        });
+      }
 
-    const friendships = await Friendship.find({
-      userIds: req.user._id,
-    })
-      .select("userIds")
-      .lean();
+      let media;
+      if (req.file) {
+        const result = await uploadBuffer(req.file.buffer, {
+          kind: "image",
+          folder: "kotha-bartha/posts",
+        });
+        media = { publicId: result.public_id, secureUrl: result.secure_url, kind: "image" };
+      }
 
-    const friendIds = friendships
-      .flatMap((friendship) => friendship.userIds)
-      .filter((id) => id.toString() !== req.user._id.toString());
-
-    for (const friendId of friendIds) {
-      emitToUser(req, friendId, "post:new", {
-        postId: post._id.toString(),
-        authorId: req.user._id.toString(),
-        createdAt: post.createdAt,
+      const post = await Post.create({
+        authorId: req.user._id,
+        body,
+        media,
       });
+
+      // --------------------------------------------------------
+      // NEW:
+      // Notify all friends that a new feed post exists
+      // --------------------------------------------------------
+
+      const friendships = await Friendship.find({
+        userIds: req.user._id,
+      })
+        .select("userIds")
+        .lean();
+
+      const friendIds = friendships
+        .flatMap((friendship) => friendship.userIds)
+        .filter((id) => id.toString() !== req.user._id.toString());
+
+      for (const friendId of friendIds) {
+        emitToUser(req, friendId, "post:new", {
+          postId: post._id.toString(),
+          authorId: req.user._id.toString(),
+          createdAt: post.createdAt,
+        });
+      }
+
+      await post.populate("authorId");
+
+      res.status(201).json({
+        data: await serializePost(post, req.user._id),
+      });
+    } catch (error) {
+      next(error);
     }
-
-    await post.populate("authorId");
-
-    res.status(201).json({
-      data: await serializePost(post, req.user._id),
-    });
-  } catch (error) {
-    next(error);
-  }
-});
+  },
+);
 
 // ============================================================
 // LIKE POST
@@ -363,6 +402,8 @@ router.delete("/posts/:postId", async (req, res, next) => {
         error: { code: "NOT_FOUND", message: "Post not found." },
       });
     }
+
+    if (post.media?.publicId) destroyAsset(post.media.publicId, "image");
 
     // Every notification about this post (post reactions, comments and
     // replies alike) points at content that no longer exists — clean them

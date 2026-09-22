@@ -316,6 +316,7 @@ router.get("/conversations/:conversationId", async (req, res, next) => {
           id: conversation._id.toString(),
           isGroup: false,
           theme: conversation.theme || "default",
+        likeEmoji: conversation.likeEmoji || "👍",
           user: other
             ? otherParticipantView(conversation, other, req.user._id.toString(), blocks)
             : null,
@@ -353,6 +354,7 @@ router.get("/conversations/:conversationId", async (req, res, next) => {
         id: conversation._id.toString(),
         isGroup: true,
         theme: conversation.theme || "default",
+        likeEmoji: conversation.likeEmoji || "👍",
         ...groupSummary(conversation),
         pinnedMessagesDetail,
         members: members.map((member) => ({
@@ -619,6 +621,7 @@ router.get("/conversations", async (req, res, next) => {
             id: conversation._id,
             isGroup: true,
             theme: conversation.theme || "default",
+        likeEmoji: conversation.likeEmoji || "👍",
             group: groupSummary(conversation),
             lastMessage: conversation.lastMessage,
             lastMessageAt: conversation.lastMessageAt,
@@ -632,6 +635,7 @@ router.get("/conversations", async (req, res, next) => {
           id: conversation._id,
           isGroup: false,
           theme: conversation.theme || "default",
+        likeEmoji: conversation.likeEmoji || "👍",
           user: other ? otherParticipantView(conversation, other, userId, blocks) : null,
           lastMessage: conversation.lastMessage,
           lastMessageAt: conversation.lastMessageAt,
@@ -798,6 +802,47 @@ router.patch("/conversations/:conversationId/theme", async (req, res, next) => {
     });
 
     res.json({ data: { id: conversation._id.toString(), theme } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
+// CONVERSATION LIKE EMOJI — the emoji the composer's quick "Like" button
+// sends in this conversation (see client MessageComposer.jsx). Shared for
+// every participant, same sync model as CONVERSATION THEME above.
+// ============================================================
+
+router.patch("/conversations/:conversationId/like-emoji", async (req, res, next) => {
+  try {
+    const likeEmoji = String(req.body.likeEmoji || "").trim();
+    if (!likeEmoji || likeEmoji.length > 8) {
+      return res.status(400).json({
+        error: { code: "INVALID_EMOJI", message: "Choose a single emoji." },
+      });
+    }
+
+    const conversation = await Conversation.findOne({
+      _id: req.params.conversationId,
+      participantIds: req.user._id,
+    });
+
+    if (!conversation) {
+      return res.status(404).json({
+        error: { code: "NOT_FOUND", message: "Conversation not found." },
+      });
+    }
+
+    conversation.likeEmoji = likeEmoji;
+    await conversation.save();
+
+    const others = otherParticipants(conversation, req.user._id);
+    broadcastToOthers(req, others, "conversation:likeEmoji", {
+      id: conversation._id.toString(),
+      likeEmoji,
+    });
+
+    res.json({ data: { id: conversation._id.toString(), likeEmoji } });
   } catch (error) {
     next(error);
   }

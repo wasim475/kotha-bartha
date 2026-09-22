@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { EmojiEmotions } from "@mui/icons-material";
-import EmojiPicker from "emoji-picker-react";
+import SimpleEmojiPicker from "../../../../components/ui/SimpleEmojiPicker";
 
 const PICKER_WIDTH = 320;
 const PICKER_HEIGHT = 400;
@@ -63,23 +63,10 @@ const EmojiPickerButton = ({ open, onToggle, onEmoji }) => {
             className="emoji-picker"
             style={{ position: "fixed", top: coords.top, left: coords.left, bottom: "auto" }}
           >
-            <EmojiPicker
+            <SimpleEmojiPicker
               onEmojiClick={(emojiData) => onEmoji(emojiData.emoji)}
               width={PICKER_WIDTH}
               height={PICKER_HEIGHT}
-              previewConfig={{ showPreview: false }}
-              lazyLoadEmojis
-              searchDisabled
-              categories={[
-                "smileys_people",
-                "animals_nature",
-                "food_drink",
-                "travel_places",
-                "activities",
-                "objects",
-                "symbols",
-                "flags",
-              ]}
             />
           </div>,
           document.body,
