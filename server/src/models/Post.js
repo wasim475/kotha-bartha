@@ -13,7 +13,10 @@ const postSchema = new mongoose.Schema(
     // discarding publicId/secureUrl entirely instead of being a
     // {publicId, secureUrl, kind} sub-document — see Message.attachment.kind
     // for the same convention already used to avoid this elsewhere.
-    media: { publicId: String, secureUrl: String, kind: String },
+    media: {
+      type: [{ publicId: String, secureUrl: String, kind: String }],
+      default: [],
+    },
     deletedAt: Date,
   }, 
   { timestamps: true },

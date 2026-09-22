@@ -1,7 +1,9 @@
 import { ArrowBack } from "@mui/icons-material";
+import { useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { ResourceState, useResource } from "../../utility/helpers";
+import ImageLightbox from "../message/components/ImageLightbox";
 import PostCard from "./components/PostCard";
 
 export default function SinglePost({ user }) {
@@ -11,6 +13,10 @@ export default function SinglePost({ user }) {
   const targetCommentId = searchParams.get("commentId");
   const targetReplyId = searchParams.get("replyId");
   const post = useResource(`/posts/${postId}`);
+  // Already on the post's own page, so clicking a photo opens the inline
+  // multi-image viewer here instead of navigating (which is what PostCard's
+  // default onOpenPost-based image click does in Feed/Profile contexts).
+  const [lightboxIndex, setLightboxIndex] = useState(null);
 
   return (
     <>
@@ -40,9 +46,18 @@ export default function SinglePost({ user }) {
             highlightPost={!targetCommentId && !targetReplyId}
             targetCommentId={targetCommentId}
             targetReplyId={targetReplyId}
+            onOpenImage={(index) => setLightboxIndex(index)}
           />
         ) : null}
       </ResourceState>
+
+      {lightboxIndex !== null && post.data?.media?.length > 0 && (
+        <ImageLightbox
+          images={post.data.media}
+          startIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
     </>
   );
 }

@@ -1,7 +1,5 @@
 import { Lock, PhotoLibraryOutlined } from "@mui/icons-material";
-import { useState } from "react";
-
-import ImageLightbox from "../../message/components/ImageLightbox";
+import { useNavigate } from "react-router-dom";
 
 function PhotosSkeleton() {
   return (
@@ -17,7 +15,7 @@ function PhotosSkeleton() {
 }
 
 export default function PhotosGrid({ photos, own }) {
-  const [openSrc, setOpenSrc] = useState(null);
+  const navigate = useNavigate();
 
   if (photos.loading) return <PhotosSkeleton />;
 
@@ -46,26 +44,22 @@ export default function PhotosGrid({ photos, own }) {
   }
 
   return (
-    <>
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-        {photos.data.map((photo) => (
-          <button
-            key={photo.postId}
-            type="button"
-            onClick={() => setOpenSrc(photo.url)}
-            className="aspect-square overflow-hidden rounded-md"
-          >
-            <img
-              src={photo.url}
-              alt=""
-              loading="lazy"
-              className="size-full object-cover transition-transform motion-safe:duration-150 hover:scale-105"
-            />
-          </button>
-        ))}
-      </div>
-
-      {openSrc && <ImageLightbox src={openSrc} onClose={() => setOpenSrc(null)} />}
-    </>
+    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+      {photos.data.map((photo, index) => (
+        <button
+          key={`${photo.postId}-${index}`}
+          type="button"
+          onClick={() => navigate(`/app/post/${photo.postId}`)}
+          className="aspect-square overflow-hidden rounded-md"
+        >
+          <img
+            src={photo.url}
+            alt=""
+            loading="lazy"
+            className="size-full object-cover transition-transform motion-safe:duration-150 hover:scale-105"
+          />
+        </button>
+      ))}
+    </div>
   );
 }

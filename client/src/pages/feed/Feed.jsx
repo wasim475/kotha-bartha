@@ -18,8 +18,8 @@ export default function Feed({ user }) {
     posts,
     body,
     setBody,
-    imageFile,
-    setImageFile,
+    imageFiles,
+    setImageFiles,
     busy,
     createPost,
     patchPost,
@@ -50,8 +50,8 @@ export default function Feed({ user }) {
         user={user}
         body={body}
         setBody={setBody}
-        imageFile={imageFile}
-        onImageChange={setImageFile}
+        imageFiles={imageFiles}
+        setImageFiles={setImageFiles}
         busy={busy}
         onSubmit={createPost}
       />

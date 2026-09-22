@@ -509,7 +509,7 @@ const MessageBubble = ({
               title={formatFullTime(message.createdAt)}
               onClick={() => onSelectMessage(message.id)}
               className={cx(
-                "font-message min-w-0 rounded-2xl px-3.5 py-2 text-left text-sm leading-relaxed wrap-break-word shadow-sm transition-opacity",
+                "font-message min-w-0 rounded-2xl px-3.5 py-2 text-left text-sm leading-relaxed wrap-anywhere shadow-sm transition-opacity",
                 isOwn ? "text-white" : "text-ink",
                 message.pending && "opacity-70",
               )}

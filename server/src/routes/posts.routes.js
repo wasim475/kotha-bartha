@@ -106,22 +106,29 @@ router.post("/posts/feed/read", async (req, res, next) => {
 // NOTIFICATIONS
 // ============================================================
 
+const MAX_POST_IMAGES = 6;
+
 router.post(
   "/posts",
   // A plain JSON (text-only) request never has a multipart Content-Type,
   // so multer passes it straight through unchanged — this only actually
-  // parses requests that include an image file.
+  // parses requests that include image files.
   (req, res, next) => {
-    upload.single("file")(req, res, (error) => {
+    upload.array("files", MAX_POST_IMAGES)(req, res, (error) => {
       if (!error) return next();
       if (error.code === "LIMIT_FILE_SIZE") {
         return res.status(400).json({
-          error: { code: "FILE_TOO_LARGE", message: "Image is larger than 15MB." },
+          error: { code: "FILE_TOO_LARGE", message: "One of your photos is larger than 15MB." },
+        });
+      }
+      if (error.code === "LIMIT_FILE_COUNT" || error.code === "LIMIT_UNEXPECTED_FILE") {
+        return res.status(400).json({
+          error: { code: "TOO_MANY_FILES", message: `You can add up to ${MAX_POST_IMAGES} photos per post.` },
         });
       }
       if (error.message === "UNSUPPORTED_FILE_TYPE") {
         return res.status(400).json({
-          error: { code: "UNSUPPORTED_FILE_TYPE", message: "Choose an image for your post." },
+          error: { code: "UNSUPPORTED_FILE_TYPE", message: "Choose images for your post." },
         });
       }
       next(error);
@@ -130,29 +137,31 @@ router.post(
   async (req, res, next) => {
     try {
       const body = String(req.body.body || "").trim();
+      const files = req.files || [];
 
-      if (!body && !req.file) {
+      if (!body && !files.length) {
         return res.status(400).json({
           error: {
             code: "VALIDATION_ERROR",
-            message: "Add some text or an image to post.",
+            message: "Add some text or a photo to post.",
           },
         });
       }
-      if (req.file && !req.file.mimetype.startsWith("image/")) {
+      if (files.some((file) => !file.mimetype.startsWith("image/"))) {
         return res.status(400).json({
-          error: { code: "INVALID_FILE", message: "Choose an image for your post." },
+          error: { code: "INVALID_FILE", message: "Choose images for your post." },
         });
       }
 
-      let media;
-      if (req.file) {
-        const result = await uploadBuffer(req.file.buffer, {
-          kind: "image",
-          folder: "kotha-bartha/posts",
-        });
-        media = { publicId: result.public_id, secureUrl: result.secure_url, kind: "image" };
-      }
+      const media = await Promise.all(
+        files.map(async (file) => {
+          const result = await uploadBuffer(file.buffer, {
+            kind: "image",
+            folder: "kotha-bartha/posts",
+          });
+          return { publicId: result.public_id, secureUrl: result.secure_url, kind: "image" };
+        }),
+      );
 
       const post = await Post.create({
         authorId: req.user._id,
@@ -403,7 +412,9 @@ router.delete("/posts/:postId", async (req, res, next) => {
       });
     }
 
-    if (post.media?.publicId) destroyAsset(post.media.publicId, "image");
+    if (post.media?.length) {
+      await Promise.all(post.media.map((item) => destroyAsset(item.publicId, "image")));
+    }
 
     // Every notification about this post (post reactions, comments and
     // replies alike) points at content that no longer exists — clean them

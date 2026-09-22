@@ -17,6 +17,7 @@ import { formatTime } from "../../../utility/helpers";
 import usePostActions from "../hooks/usePostActions";
 
 import CommentSection from "./CommentSection/CommentSection";
+import PostMediaGrid from "./PostMediaGrid";
 
 // Character-count based, not a fixed pixel/line height — a long post gets
 // clamped by line count (which scales with font size and column width, so
@@ -33,6 +34,7 @@ export default function PostCard({
   onChanged,
   onPostUpdated,
   onOpenPost = () => {},
+  onOpenImage = null,
   initialShowComments = false,
   truncate = true,
   highlightPost = false,
@@ -114,20 +116,12 @@ export default function PostCard({
         )}
       </div>
 
-      {/* Image */}
-      {post.media?.secureUrl && (
-        <button
-          type="button"
-          onClick={() => onOpenPost(post.id)}
-          className="block w-full bg-soft"
-        >
-          <img
-            src={post.media.secureUrl}
-            alt=""
-            loading="lazy"
-            className="max-h-130 w-full object-cover"
-          />
-        </button>
+      {/* Images */}
+      {post.media?.length > 0 && (
+        <PostMediaGrid
+          media={post.media}
+          onOpen={(index) => (onOpenImage ? onOpenImage(index) : onOpenPost(post.id))}
+        />
       )}
 
       {/* Content */}

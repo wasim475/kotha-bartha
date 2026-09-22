@@ -386,18 +386,22 @@ router.get("/users/:userId/photos", async (req, res, next) => {
     const posts = await Post.find({
       authorId: req.params.userId,
       deletedAt: null,
-      "media.secureUrl": { $exists: true, $ne: null },
+      "media.0": { $exists: true },
     })
       .select("media createdAt")
       .sort({ createdAt: -1 });
 
+    // A post can now carry several images — flatten into one photo entry
+    // per image, each still pointing back at its own post so clicking it
+    // can open that post's full reactions/comments context.
     res.json({
-      data: posts.map((post) => ({
-        postId: post._id.toString(),
-        url: post.media.secureUrl,
-        type: post.media.type,
-        createdAt: post.createdAt,
-      })),
+      data: posts.flatMap((post) =>
+        (post.media || []).map((item) => ({
+          postId: post._id.toString(),
+          url: item.secureUrl,
+          createdAt: post.createdAt,
+        })),
+      ),
       meta: { restricted: false },
     });
   } catch (error) {

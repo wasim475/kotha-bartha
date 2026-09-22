@@ -7,6 +7,8 @@ import Card from "../../../components/ui/Card";
 import IconButton from "../../../components/ui/IconButton";
 import EmojiPickerButton from "./CommentSection/EmojiPickerButton";
 
+const MAX_IMAGES = 6;
+
 const autoGrow = (event) => {
   const el = event.target;
   el.style.height = "auto";
@@ -14,28 +16,35 @@ const autoGrow = (event) => {
 };
 
 const PostComposer = forwardRef(function PostComposer(
-  { user, body, setBody, imageFile, onImageChange, busy, onSubmit },
+  { user, body, setBody, imageFiles = [], setImageFiles, busy, onSubmit },
   ref,
 ) {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
+  const [previewUrls, setPreviewUrls] = useState([]);
   const fileInputRef = useRef(null);
 
-  // The preview is a local object URL for whatever file is currently
-  // selected — created/revoked here so it never outlives the file it
-  // points at (a stale URL from a previous selection, or one held past
-  // unmount, would leak memory).
+  // One object URL per selected file, rebuilt whenever the selection
+  // changes and revoked on cleanup so removed/replaced files never leak.
   useEffect(() => {
-    if (!imageFile) {
-      setImagePreviewUrl(null);
+    if (!imageFiles.length) {
+      setPreviewUrls([]);
       return undefined;
     }
-    const url = URL.createObjectURL(imageFile);
-    setImagePreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [imageFile]);
+    const urls = imageFiles.map((file) => URL.createObjectURL(file));
+    setPreviewUrls(urls);
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, [imageFiles]);
 
-  const canSubmit = (body.trim() || imageFile) && !busy;
+  const canSubmit = (body.trim() || imageFiles.length > 0) && !busy;
+
+  const addFiles = (files) => {
+    if (!files.length) return;
+    setImageFiles((current) => [...current, ...files].slice(0, MAX_IMAGES));
+  };
+
+  const removeImage = (index) => {
+    setImageFiles((current) => current.filter((_, i) => i !== index));
+  };
 
   return (
     <Card as="section" className="mb-4 flex gap-3">
@@ -54,40 +63,46 @@ const PostComposer = forwardRef(function PostComposer(
           className="w-full resize-none bg-transparent text-[15px] leading-relaxed text-ink placeholder:text-muted focus:outline-none"
         />
 
-        {imagePreviewUrl && (
-          <div className="relative mt-2 inline-block">
-            <img
-              src={imagePreviewUrl}
-              alt="Selected"
-              className="max-h-64 rounded-lg border border-line object-contain"
-            />
-            <IconButton
-              label="Remove image"
-              icon={<Close fontSize="small" />}
-              size="sm"
-              onClick={() => onImageChange(null)}
-              className="absolute top-1.5 right-1.5 bg-black/55 text-white hover:bg-black/70 hover:text-white"
-            />
+        {previewUrls.length > 0 && (
+          <div className="mt-2 grid grid-cols-4 gap-1.5 sm:grid-cols-6">
+            {previewUrls.map((url, index) => (
+              <div
+                key={url}
+                className="relative aspect-square overflow-hidden rounded-md border border-line bg-soft"
+              >
+                <img src={url} alt="" className="size-full object-cover" />
+                <button
+                  type="button"
+                  aria-label="Remove photo"
+                  onClick={() => removeImage(index)}
+                  className="absolute top-0.5 right-0.5 flex size-4.5 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
+                >
+                  <Close style={{ fontSize: 12 }} />
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
         <div className="mt-3 flex items-center justify-between border-t border-line pt-3">
           <div className="flex items-center gap-1">
             <IconButton
-              label="Add a photo"
+              label="Add photos"
               icon={<ImageIcon fontSize="small" />}
               size="sm"
+              disabled={imageFiles.length >= MAX_IMAGES}
               onClick={() => fileInputRef.current?.click()}
             />
             <input
               ref={fileInputRef}
               type="file"
+              multiple
               className="hidden"
               accept="image/png,image/jpeg,image/gif,image/webp"
               onChange={(event) => {
-                const file = event.target.files?.[0];
+                const files = Array.from(event.target.files || []);
                 event.target.value = "";
-                if (file) onImageChange(file);
+                addFiles(files);
               }}
             />
             <EmojiPickerButton

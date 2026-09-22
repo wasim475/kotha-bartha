@@ -68,8 +68,17 @@ export default function Profile({ user }) {
     uploadError,
   } = useProfile(profileId, user);
 
-  const { posts, photos, body, setBody, busy: postBusy, createPost, patchPost } =
-    useProfilePosts(profileId);
+  const {
+    posts,
+    photos,
+    body,
+    setBody,
+    imageFiles,
+    setImageFiles,
+    busy: postBusy,
+    createPost,
+    patchPost,
+  } = useProfilePosts(profileId);
 
   const person = profile.data;
 
@@ -131,6 +140,8 @@ export default function Profile({ user }) {
                     user={user}
                     body={body}
                     setBody={setBody}
+                    imageFiles={imageFiles}
+                    setImageFiles={setImageFiles}
                     busy={postBusy}
                     onSubmit={createPost}
                   />

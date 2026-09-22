@@ -12,17 +12,28 @@ const useProfilePosts = (profileId) => {
   const posts = useResource(`/users/${profileId}/posts`);
   const photos = useResource(`/users/${profileId}/photos`);
   const [body, setBody] = useState("");
+  const [imageFiles, setImageFiles] = useState([]);
   const [busy, setBusy] = useState(false);
 
   const createPost = async () => {
     const text = body.trim();
-    if (!text || busy) return;
+    if ((!text && !imageFiles.length) || busy) return;
 
     setBusy(true);
     try {
-      const { data } = await api.post("/posts", { body: text });
+      let data;
+      if (imageFiles.length) {
+        const formData = new FormData();
+        formData.append("body", text);
+        imageFiles.forEach((file) => formData.append("files", file));
+        ({ data } = await api.post("/posts", formData));
+      } else {
+        ({ data } = await api.post("/posts", { body: text }));
+      }
       posts.setData((current = []) => [data.data, ...current]);
+      if (imageFiles.length) photos.reload();
       setBody("");
+      setImageFiles([]);
     } catch (error) {
       console.error("Failed to create post:", error);
     } finally {
@@ -36,7 +47,7 @@ const useProfilePosts = (profileId) => {
     );
   };
 
-  return { posts, photos, body, setBody, busy, createPost, patchPost };
+  return { posts, photos, body, setBody, imageFiles, setImageFiles, busy, createPost, patchPost };
 };
 
 export default useProfilePosts;

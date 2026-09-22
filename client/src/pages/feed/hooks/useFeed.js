@@ -9,7 +9,7 @@ const useFeed = () => {
   const [searchParams] = useSearchParams();
   const postId = searchParams.get("post");
   const [body, setBody] = useState("");
-  const [imageFile, setImageFile] = useState(null);
+  const [imageFiles, setImageFiles] = useState([]);
   const [busy, setBusy] = useState(false);
 
   // Ids already counted toward the "new posts" indicator, so a
@@ -46,15 +46,15 @@ const useFeed = () => {
 
   const createPost = async () => {
     const text = body.trim();
-    if ((!text && !imageFile) || busy) return;
+    if ((!text && !imageFiles.length) || busy) return;
 
     setBusy(true);
     try {
       let data;
-      if (imageFile) {
+      if (imageFiles.length) {
         const formData = new FormData();
         formData.append("body", text);
-        formData.append("file", imageFile);
+        imageFiles.forEach((file) => formData.append("files", file));
         ({ data } = await api.post("/posts", formData));
       } else {
         ({ data } = await api.post("/posts", { body: text }));
@@ -62,7 +62,7 @@ const useFeed = () => {
       countedIdsRef.current.add(data.data.id);
       posts.setData((current = []) => [data.data, ...current]);
       setBody("");
-      setImageFile(null);
+      setImageFiles([]);
     } catch (error) {
       console.error("Failed to create post:", error);
     } finally {
@@ -101,8 +101,8 @@ const useFeed = () => {
     posts,
     body,
     setBody,
-    imageFile,
-    setImageFile,
+    imageFiles,
+    setImageFiles,
     busy,
     createPost,
     patchPost,

@@ -88,9 +88,16 @@ const MessageComposer = ({
         setShowEmojiPicker(false);
       }
     };
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setShowEmojiPicker(false);
+    };
 
     document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, [showEmojiPicker]);
 
   useEffect(() => {
@@ -177,10 +184,19 @@ const MessageComposer = ({
 
             {showEmojiPicker && (
               <div className="absolute bottom-full left-0 z-40 mb-2 overflow-hidden rounded-xl border border-line bg-panel shadow-soft">
+                <div className="flex items-center justify-between border-b border-line px-2 py-1.5">
+                  <span className="text-xs font-semibold text-muted">Emoji</span>
+                  <IconButton
+                    label="Close emoji picker"
+                    icon={<Close fontSize="small" />}
+                    size="sm"
+                    onClick={() => setShowEmojiPicker(false)}
+                  />
+                </div>
                 <EmojiPicker
                   onEmojiClick={(emojiData) => addEmoji(emojiData.emoji)}
                   width={300}
-                  height={360}
+                  height={324}
                   searchDisabled={false}
                   previewConfig={{ showPreview: false }}
                   lazyLoadEmojis
