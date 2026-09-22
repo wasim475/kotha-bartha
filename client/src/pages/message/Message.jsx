@@ -188,7 +188,7 @@ const Message = ({ user }) => {
   const showingThread = Boolean(conversationId);
 
   return (
-    <div className="flex h-[calc(100dvh-195px)] min-h-105 w-full flex-col md:h-[calc(100dvh-200px)]">
+    <div className="flex h-[calc(100dvh-var(--topbar-h)-var(--bottom-nav-h)-16px)] min-h-105 w-full flex-col md:h-[calc(100dvh-200px)]">
       <div className={cx("mb-3 shrink-0", showingThread && "hidden")}>
         <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-accent">
           Inbox

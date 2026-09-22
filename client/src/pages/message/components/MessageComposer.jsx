@@ -235,7 +235,7 @@ const MessageComposer = ({
               }}
               placeholder="Write a message…"
               autoFocus
-              className="min-h-9 max-h-30 w-full resize-none rounded-2xl border border-line bg-paper px-3.5 py-2 text-sm text-ink outline-none placeholder:text-muted focus-visible:ring-2 focus-visible:ring-accent"
+              className="no-scrollbar min-h-9 max-h-30 w-full resize-none rounded-2xl border border-line bg-paper px-3.5 py-2 text-sm text-ink outline-none placeholder:text-muted focus-visible:ring-2 focus-visible:ring-accent"
             />
           </div>
 

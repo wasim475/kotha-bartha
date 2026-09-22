@@ -3,6 +3,7 @@ import { io } from "socket.io-client";
 import { api } from "../../../utility/api";
 import { isConversationMuted } from "../../../utility/conversationPreferences";
 import { realtime, setActiveSocket } from "../../../utility/helpers";
+import { playIncomingMessageSound, playSoftMessageSound } from "../../../utility/sound";
 
 const socketUrl = api.defaults.baseURL.replace(/\/api\/v1$/, "");
 const forwardedMessageIds = new Set();
@@ -28,10 +29,16 @@ export default function useSocket(userId) {
       if (messageId) forwardedMessageIds.add(messageId);
 
       if (!isConversationMuted(userId, payload?.conversationId)) {
-        const messageSound = new Audio("/sounds/message.mp3");
-        messageSound.play().catch((error) => {
-          console.error("Message sound failed:", error);
-        });
+        // A conversation already open on screen gets a softer cue instead
+        // of the full notification sound — read live each time (not from
+        // a stale closure) since this handler is set up once per socket
+        // connection, not re-created on navigation.
+        const isConversationOpen =
+          !document.hidden &&
+          window.location.pathname === `/app/messages/${payload?.conversationId}`;
+
+        if (isConversationOpen) playSoftMessageSound();
+        else playIncomingMessageSound();
       }
 
       if (

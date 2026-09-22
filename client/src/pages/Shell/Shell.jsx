@@ -11,7 +11,9 @@ import Friends from "../../pages/friends/Friends";
 import Message from "../../pages/message/Message";
 import Notifications from "../../pages/notifications/Notifications";
 import Profile from "../../pages/profile/Profile";
+import IncomingMessagePopupStack from "./components/IncomingMessagePopupStack";
 import Topbar from "./components/Topbar";
+import useIncomingMessagePopups from "./hooks/useIncomingMessagePopups";
 import useSocket from "./hooks/useSocket";
 import useTabNotifications from "./hooks/useTabNotifications";
 import useUserSearch from "./hooks/useUserSearch";
@@ -30,6 +32,7 @@ export default function Shell({ user, onLogout }) {
 
   useSocket(user.id);
   useTabNotifications();
+  const messagePopups = useIncomingMessagePopups(user.id);
 
   const selectSearchResult = (person) => {
     navigate(`/app/profile/${person.id}`);
@@ -106,6 +109,13 @@ export default function Shell({ user, onLogout }) {
           </Routes>
         </main>
       </div>
+
+      <IncomingMessagePopupStack
+        toasts={messagePopups.toasts}
+        onDismiss={messagePopups.dismissToast}
+        onOpen={messagePopups.openToast}
+        onRemoved={messagePopups.removeToast}
+      />
     </div>
   );
 }

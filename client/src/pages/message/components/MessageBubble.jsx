@@ -20,6 +20,7 @@ import IconButton from "../../../components/ui/IconButton";
 import { cx } from "../../../utility/cx";
 import { toFileUrl } from "../../../utility/fileUrl";
 import useButtonColorFix from "../../../utility/useButtonColorFix";
+import useMountedTransition from "../../../utility/useMountedTransition";
 import ImageLightbox from "./ImageLightbox";
 import LinkPreviewCard from "./LinkPreviewCard";
 import VoiceMessagePlayer from "./VoiceMessagePlayer";
@@ -37,6 +38,8 @@ const fileExtension = (fileName = "") => fileName.split(".").pop()?.slice(0, 5).
 const emojiPickerWidth = 280;
 const emojiPickerHeight = 360;
 const viewportGap = 8;
+const actionsGap = 8;
+const actionsHeightEstimate = 40;
 
 const formatMessageTime = (date) => {
   if (!date) return "";
@@ -89,6 +92,11 @@ const MessageBubble = ({
   const emojiPickerRef = useRef(null);
   const [emojiPickerPosition, setEmojiPickerPosition] = useState(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const messageColumnRef = useRef(null);
+  const actionsRef = useRef(null);
+  const [actionsPosition, setActionsPosition] = useState(null);
+
+  const showActions = Boolean((selected || emojiOpen) && !isEditing);
 
   const primaryFix = useButtonColorFix("primary");
   // The bubble itself is a <button> (clickable to reveal actions), so it's
@@ -172,7 +180,63 @@ const MessageBubble = ({
       document.removeEventListener("mousedown", handleOutsideEmojiClick);
   }, [emojiOpen, onCloseInteraction]);
 
-  const showActions = selected || emojiOpen;
+  // The action toolbar is portaled and positioned relative to this
+  // message's own bounding box so opening/closing it never changes the
+  // row's in-flow height (which would otherwise push neighboring messages
+  // and the avatar around). Anchoring to the bubble's own side (right edge
+  // for own messages, left edge for others — the side already near the
+  // viewport edge) keeps it on-screen without needing to measure its width.
+  useLayoutEffect(() => {
+    if (!showActions || !messageColumnRef.current) {
+      setActionsPosition(null);
+      return undefined;
+    }
+
+    const positionActions = () => {
+      const rect = messageColumnRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const spaceAbove = rect.top - viewportGap;
+      const top =
+        spaceAbove >= actionsHeightEstimate + actionsGap
+          ? rect.top - actionsHeightEstimate - actionsGap
+          : rect.bottom + actionsGap;
+
+      const clampedTop = Math.max(
+        viewportGap,
+        Math.min(top, window.innerHeight - actionsHeightEstimate - viewportGap),
+      );
+
+      setActionsPosition(
+        isOwn
+          ? { top: clampedTop, right: Math.max(viewportGap, window.innerWidth - rect.right) }
+          : { top: clampedTop, left: Math.max(viewportGap, rect.left) },
+      );
+    };
+
+    positionActions();
+    window.addEventListener("resize", positionActions);
+    window.addEventListener("scroll", positionActions, true);
+
+    return () => {
+      window.removeEventListener("resize", positionActions);
+      window.removeEventListener("scroll", positionActions, true);
+    };
+  }, [showActions, isOwn]);
+
+  useEffect(() => {
+    if (!showActions) return undefined;
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") onCloseInteraction();
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [showActions, onCloseInteraction]);
+
+  const actionsTransition = useMountedTransition(showActions, 150);
+
   const isAttachment = message.type === "attachment";
   const attachment = message.attachment || {};
 
@@ -192,7 +256,7 @@ const MessageBubble = ({
           </div>
         )}
 
-        <div className="relative flex min-w-0 flex-col">
+        <div ref={messageColumnRef} className="relative flex min-w-0 flex-col">
           {showSenderName && !isOwn && (
             <span className="mb-0.5 ml-1 text-xs font-semibold text-accent">
               {message.sender?.fullName}
@@ -495,64 +559,75 @@ const MessageBubble = ({
             </div>
           )}
 
-          {!isEditing && showActions && (
-            <div
-              className={cx(
-                "mt-1 flex items-center gap-0.5 rounded-full border border-line bg-panel p-0.5 shadow-soft",
-                isOwn ? "self-end" : "self-start",
-              )}
-            >
-              <IconButton
-                label="Reply to message"
-                icon={<Reply fontSize="small" />}
-                size="sm"
-                onClick={() => onReply(message)}
-              />
-              <IconButton
-                ref={emojiButtonRef}
-                label="React to message"
-                icon={<EmojiEmotions fontSize="small" />}
-                size="sm"
-                active={emojiOpen}
-                onClick={onOpenEmoji}
-              />
-              {isOwn && !isAttachment && (
-                <IconButton
-                  label="Edit message"
-                  icon={<Edit fontSize="small" />}
-                  size="sm"
-                  onClick={() => onEdit(message)}
-                />
-              )}
-              {message.type !== "call" && (
-                <IconButton
-                  label="Forward message"
-                  icon={<Forward fontSize="small" />}
-                  size="sm"
-                  onClick={() => onForward(message)}
-                />
-              )}
-              {isGroup && (
-                <IconButton
-                  label={isPinned ? "Unpin message" : "Pin message"}
-                  icon={<PushPin fontSize="small" />}
-                  size="sm"
-                  active={isPinned}
-                  onClick={() => onTogglePin(message.id, isPinned)}
-                />
-              )}
-              <IconButton
-                label={isDeleting ? "Deleting message" : "Delete message"}
-                icon={<Delete fontSize="small" />}
-                size="sm"
-                variant="danger"
-                disabled={isDeleting}
-                onClick={() => onDelete(message.id)}
-              />
-            </div>
-          )}
         </div>
       </div>
+
+      {actionsTransition.shouldRender &&
+        actionsPosition &&
+        createPortal(
+          <div
+            ref={actionsRef}
+            data-message-actions
+            style={actionsPosition}
+            onMouseDown={(event) => event.stopPropagation()}
+            className={cx(
+              "fixed z-40 flex items-center gap-0.5 rounded-full border border-line bg-panel p-0.5 shadow-soft",
+              "transition motion-safe:duration-150 ease-out",
+              actionsTransition.visible
+                ? "scale-100 opacity-100"
+                : cx("scale-95 opacity-0", isOwn ? "origin-bottom-right" : "origin-bottom-left"),
+            )}
+          >
+            <IconButton
+              label="Reply to message"
+              icon={<Reply fontSize="small" />}
+              size="sm"
+              onClick={() => onReply(message)}
+            />
+            <IconButton
+              ref={emojiButtonRef}
+              label="React to message"
+              icon={<EmojiEmotions fontSize="small" />}
+              size="sm"
+              active={emojiOpen}
+              onClick={onOpenEmoji}
+            />
+            {isOwn && !isAttachment && (
+              <IconButton
+                label="Edit message"
+                icon={<Edit fontSize="small" />}
+                size="sm"
+                onClick={() => onEdit(message)}
+              />
+            )}
+            {message.type !== "call" && (
+              <IconButton
+                label="Forward message"
+                icon={<Forward fontSize="small" />}
+                size="sm"
+                onClick={() => onForward(message)}
+              />
+            )}
+            {isGroup && (
+              <IconButton
+                label={isPinned ? "Unpin message" : "Pin message"}
+                icon={<PushPin fontSize="small" />}
+                size="sm"
+                active={isPinned}
+                onClick={() => onTogglePin(message.id, isPinned)}
+              />
+            )}
+            <IconButton
+              label={isDeleting ? "Deleting message" : "Delete message"}
+              icon={<Delete fontSize="small" />}
+              size="sm"
+              variant="danger"
+              disabled={isDeleting}
+              onClick={() => onDelete(message.id)}
+            />
+          </div>,
+          document.body,
+        )}
 
       {emojiOpen &&
         emojiPickerPosition &&

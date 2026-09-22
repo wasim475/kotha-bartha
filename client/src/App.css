@@ -13,6 +13,13 @@
   --danger-deep: #a5311f;
   --danger-soft: #fbe6e1;
   --success: #55ad72;
+  /* Shared layout chrome heights, consumed by the Messages page so its
+     fixed-height chat panel can size itself against the real topbar/bottom
+     nav instead of duplicating guessed pixel constants. --bottom-nav-h is
+     0 by default (desktop has no bottom nav) and set for real inside the
+     mobile media query below. */
+  --topbar-h: 72px;
+  --bottom-nav-h: 0px;
 }
 :root[data-theme="dark"] {
   --paper: #171716;
@@ -26,6 +33,18 @@
   --danger-deep: #ec7d72;
   --danger-soft: rgba(224, 102, 90, 0.16);
   --success: #6ac190;
+}
+/* Hides the scrollbar chrome while keeping the element scrollable — used
+   by the message composer's auto-growing textarea so it doesn't show a
+   scrollbar the moment it hits its max height. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 body {
   background: var(--paper);
@@ -240,7 +259,7 @@ button {
   position: sticky;
   z-index: 4;
   top: 0;
-  height: 72px;
+  height: var(--topbar-h);
   display: flex;
   align-items: center;
   gap: 35px;
@@ -888,6 +907,10 @@ button {
   display: none;
 }
 @media (max-width: 760px) {
+  :root {
+    --topbar-h: 62px;
+    --bottom-nav-h: calc(58px + env(safe-area-inset-bottom));
+  }
   .auth-page {
     display: block;
   }
@@ -910,7 +933,6 @@ button {
     margin-top: 58px;
   }
   .topbar {
-    height: 62px;
     gap: 12px;
     padding: 0 15px;
   }
@@ -947,6 +969,13 @@ button {
   .app-body {
     display: block;
     padding: 29px 15px 100px;
+  }
+  /* Messages needs its chat panel to sit flush between the topbar and the
+     fixed bottom nav, not padded like a normal scrolling page — the panel
+     itself (see Message.jsx) already reserves space for the bottom nav via
+     --bottom-nav-h, so this only needs a small edge gutter. */
+  .app-body.app-body--full {
+    padding: 8px 10px;
   }
   .desktop-nav {
     display: none;

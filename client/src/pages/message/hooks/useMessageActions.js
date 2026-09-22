@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { api } from "../../../utility/api";
 import { sendTypingSignal } from "../../../utility/helpers";
 import { deriveSharedKey, encryptMessage, getOrCreateKeyPair } from "../../../utility/crypto";
+import { playReactionSound } from "../../../utility/sound";
 
 const useMessageActions = ({
   user,
@@ -233,6 +234,7 @@ const useMessageActions = ({
             : message,
         ),
       );
+      playReactionSound();
     } catch (error) {
       setSendError(
         error.response?.data?.error?.message || "Reaction could not be saved.",
@@ -302,7 +304,8 @@ const useMessageActions = ({
     const handleOutsideInteraction = (event) => {
       if (
         !event.target.closest("[data-message-row]") &&
-        !event.target.closest("[data-emoji-picker]")
+        !event.target.closest("[data-emoji-picker]") &&
+        !event.target.closest("[data-message-actions]")
       ) {
         closeMessageInteractions();
       }
