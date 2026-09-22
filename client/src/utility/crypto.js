@@ -16,7 +16,17 @@ import { api } from "./api";
 
 const DB_NAME = "kotha-e2e";
 const STORE = "keys";
-const KEY_ID = "device-keypair";
+// Pre-fix, this was a single fixed string ("device-keypair") shared by
+// every account that ever used this browser/origin — logging in as two
+// different users in two tabs (the natural way to manually test a chat
+// feature) meant whichever account's tab read IndexedDB first "won" that
+// keypair for both, and a later reload could silently pick up a *different*
+// user's key, permanently desyncing a device's local private key from the
+// public key it had already published to the server (see getOrCreateKeyPair
+// below for the full fix, including how existing single-user browsers keep
+// their current key rather than losing history unnecessarily).
+const keyRecordId = (userId) => `device-keypair:${userId}`;
+const LEGACY_KEY_ID = "device-keypair";
 const PUBLISHED_FLAG_PREFIX = "kotha-e2e-published-";
 
 const cryptoAvailable = () =>
@@ -51,12 +61,26 @@ async function idbSet(key, value) {
   });
 }
 
+async function idbDelete(key) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 const bufToBase64 = (buffer) =>
   btoa(String.fromCharCode(...new Uint8Array(buffer)));
 const base64ToBuf = (base64) =>
   Uint8Array.from(atob(base64), (char) => char.charCodeAt(0)).buffer;
 
-let keyPairPromise = null;
+// userId -> Promise<CryptoKeyPair|null> — one cached promise per account,
+// never a single shared one, so opening two accounts in two tabs (or
+// switching accounts without a full page reload) can never hand one
+// user's in-memory keypair to another.
+const keyPairPromises = new Map();
 // conversationId -> { peerPublicKeyJwkString, key } — keyed on the exact
 // peer public key the shared secret was derived from, not just the
 // conversation id, so a key rotation (peer re-generating a keypair on a
@@ -64,44 +88,71 @@ let keyPairPromise = null;
 // shared secret that no longer matches either side's current key.
 const sharedKeyCache = new Map();
 
-async function generateAndStoreKeyPair() {
-  const keyPair = await crypto.subtle.generateKey(
+async function generateKeyPair() {
+  return crypto.subtle.generateKey(
     { name: "ECDH", namedCurve: "P-256" },
     false,
     ["deriveKey", "deriveBits"],
   );
-  await idbSet(KEY_ID, keyPair);
+}
+
+// Loads (or creates) this specific user's own keypair record. A pre-fix
+// browser may still have one keypair stored under the old shared,
+// un-namespaced record — the first account that finds it here adopts it
+// (preserving that account's existing message history instead of orphaning
+// it for no reason) and the record is removed so no other account can also
+// claim it later.
+async function loadOrCreateKeyPair(userId) {
+  const recordId = keyRecordId(userId);
+  const existing = await idbGet(recordId).catch(() => null);
+  if (existing) return existing;
+
+  const legacy = await idbGet(LEGACY_KEY_ID).catch(() => null);
+  if (legacy) {
+    await idbSet(recordId, legacy);
+    await idbDelete(LEGACY_KEY_ID).catch(() => {});
+    return legacy;
+  }
+
+  const keyPair = await generateKeyPair();
+  await idbSet(recordId, keyPair);
   return keyPair;
 }
 
+// The "have we published this" flag stores the exact JWK we last published,
+// not just a boolean — so if the local key ever ends up not matching what
+// the server has on file for us (e.g. a browser affected by the old
+// shared-keypair bug above, before this fix), this notices the mismatch and
+// republishes automatically instead of silently staying wrong forever.
 async function publishPublicKeyIfNeeded(publicKey, userId) {
-  const flag = `${PUBLISHED_FLAG_PREFIX}${userId}`;
-  if (localStorage.getItem(flag)) return;
+  const flagKey = `${PUBLISHED_FLAG_PREFIX}${userId}`;
 
   try {
-    const jwk = await crypto.subtle.exportKey("jwk", publicKey);
-    await api.patch("/users/me/public-key", { publicKey: JSON.stringify(jwk) });
-    localStorage.setItem(flag, "1");
+    const jwk = JSON.stringify(await crypto.subtle.exportKey("jwk", publicKey));
+    if (localStorage.getItem(flagKey) === jwk) return;
+
+    await api.patch("/users/me/public-key", { publicKey: jwk });
+    localStorage.setItem(flagKey, jwk);
   } catch {
-    // Non-fatal — sends fall back to plaintext until this succeeds on a
-    // later call (e.g. next app load).
+    // Non-fatal — retried next time getOrCreateKeyPair runs (e.g. next
+    // app load), since the flag was never updated to match.
   }
 }
 
 // Resolves to { privateKey, publicKey } (CryptoKey objects), or null if the
 // Web Crypto / IndexedDB APIs aren't available in this browser context.
 export function getOrCreateKeyPair(userId) {
-  if (!cryptoAvailable()) return Promise.resolve(null);
-  if (keyPairPromise) return keyPairPromise;
+  if (!userId || !cryptoAvailable()) return Promise.resolve(null);
+  if (keyPairPromises.has(userId)) return keyPairPromises.get(userId);
 
-  keyPairPromise = (async () => {
-    let keyPair = await idbGet(KEY_ID).catch(() => null);
-    if (!keyPair) keyPair = await generateAndStoreKeyPair();
+  const promise = (async () => {
+    const keyPair = await loadOrCreateKeyPair(userId);
     publishPublicKeyIfNeeded(keyPair.publicKey, userId);
     return keyPair;
   })();
 
-  return keyPairPromise;
+  keyPairPromises.set(userId, promise);
+  return promise;
 }
 
 // Derives (and caches) the AES-GCM key shared with a specific conversation's
