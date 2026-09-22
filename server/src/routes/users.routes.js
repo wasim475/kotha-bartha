@@ -7,8 +7,20 @@ const FriendRequest = require("../models/FriendRequest");
 const Block = require("../models/Block");
 const { safeUser, serializePost } = require("../utils/serializers");
 const { blockedPairIds } = require("../utils/blocks");
+const { upload } = require("../middleware/upload");
+const { uploadBuffer, destroyAsset } = require("../utils/cloudinary");
 
 const router = express.Router();
+
+// Posts/photos are only visible to the owner and their friends — there's
+// no post-level privacy setting in this app, so profile visibility is
+// simply keyed off the existing friendship relationship.
+const canViewProfileContent = async (viewerId, profileUserId) => {
+  if (viewerId.toString() === profileUserId.toString()) return true;
+  return Boolean(
+    await Friendship.exists({ userIds: { $all: [viewerId, profileUserId] } }),
+  );
+};
 
 router.get("/users", async (req, res, next) => {
   try {
@@ -93,6 +105,28 @@ router.patch("/users/me", async (req, res, next) => {
       updates.bio = req.body.bio.trim().slice(0, 240);
     }
 
+    if (typeof req.body.hometown === "string") {
+      updates.hometown = req.body.hometown.trim().slice(0, 80);
+    }
+
+    if (typeof req.body.currentCity === "string") {
+      updates.currentCity = req.body.currentCity.trim().slice(0, 80);
+    }
+
+    if ("dateOfBirth" in req.body) {
+      if (!req.body.dateOfBirth) {
+        updates.dateOfBirth = null;
+      } else {
+        const parsed = new Date(req.body.dateOfBirth);
+        if (Number.isNaN(parsed.getTime()) || parsed > new Date()) {
+          return res.status(400).json({
+            error: { code: "INVALID_DATE", message: "Invalid date of birth." },
+          });
+        }
+        updates.dateOfBirth = parsed;
+      }
+    }
+
     if (["light", "dark"].includes(req.body.theme)) {
       updates["settings.theme"] = req.body.theme;
     }
@@ -115,6 +149,60 @@ router.patch("/users/me", async (req, res, next) => {
     next(error);
   }
 });
+
+// ============================================================
+// UPDATE MY AVATAR / COVER PHOTO
+// ============================================================
+
+const uploadProfileImage = (field, folder) => [
+  (req, res, next) => {
+    upload.single("file")(req, res, (error) => {
+      if (!error) return next();
+      if (error.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({
+          error: { code: "FILE_TOO_LARGE", message: "Image is larger than 15MB." },
+        });
+      }
+      return res.status(400).json({
+        error: { code: "UNSUPPORTED_FILE_TYPE", message: "Choose an image file." },
+      });
+    });
+  },
+  async (req, res, next) => {
+    try {
+      if (!req.file || !req.file.mimetype.startsWith("image/")) {
+        return res.status(400).json({
+          error: { code: "INVALID_FILE", message: "Choose an image file." },
+        });
+      }
+
+      const previous = req.user[field]?.publicId;
+      const result = await uploadBuffer(req.file.buffer, { kind: "image", folder });
+
+      const user = await User.findByIdAndUpdate(
+        req.user._id,
+        { $set: { [field]: { publicId: result.public_id, secureUrl: result.secure_url } } },
+        { new: true },
+      );
+
+      if (previous) destroyAsset(previous, "image");
+
+      res.json({ data: user.toSafeJSON() });
+    } catch (error) {
+      next(error);
+    }
+  },
+];
+
+router.patch(
+  "/users/me/avatar",
+  ...uploadProfileImage("avatar", "kotha-bartha/avatars"),
+);
+
+router.patch(
+  "/users/me/cover",
+  ...uploadProfileImage("cover", "kotha-bartha/covers"),
+);
 
 // ============================================================
 // USER PROFILE
@@ -206,6 +294,10 @@ router.get("/users/:userId/posts", async (req, res, next) => {
       });
     }
 
+    if (!(await canViewProfileContent(req.user._id, req.params.userId))) {
+      return res.json({ data: [], meta: { restricted: true } });
+    }
+
     const posts = await Post.find({
       authorId: req.params.userId,
       deletedAt: null,
@@ -219,6 +311,45 @@ router.get("/users/:userId/posts", async (req, res, next) => {
       data: await Promise.all(
         posts.map((post) => serializePost(post, req.user._id)),
       ),
+      meta: { restricted: false },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
+// USER PHOTOS (media attached to their posts)
+// ============================================================
+
+router.get("/users/:userId/photos", async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.userId)) {
+      return res.status(400).json({
+        error: { code: "INVALID_ID", message: "Invalid user id." },
+      });
+    }
+
+    if (!(await canViewProfileContent(req.user._id, req.params.userId))) {
+      return res.json({ data: [], meta: { restricted: true } });
+    }
+
+    const posts = await Post.find({
+      authorId: req.params.userId,
+      deletedAt: null,
+      "media.secureUrl": { $exists: true, $ne: null },
+    })
+      .select("media createdAt")
+      .sort({ createdAt: -1 });
+
+    res.json({
+      data: posts.map((post) => ({
+        postId: post._id.toString(),
+        url: post.media.secureUrl,
+        type: post.media.type,
+        createdAt: post.createdAt,
+      })),
+      meta: { restricted: false },
     });
   } catch (error) {
     next(error);

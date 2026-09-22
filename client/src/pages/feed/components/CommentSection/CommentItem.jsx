@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 import Avatar from "../../../../components/ui/Avatar";
 import RichText from "../../../../components/ui/RichText";
 import { cx } from "../../../../utility/cx";
@@ -43,7 +45,9 @@ const CommentItem = ({
       highlighted && "bg-accent/15 ring-2 ring-accent",
     )}
   >
-    <Avatar person={entry.author} size="sm" className="mt-0.5 shrink-0" />
+    <Link to={`/app/profile/${entry.author.id}`} className="shrink-0">
+      <Avatar person={entry.author} size="sm" className="mt-0.5" />
+    </Link>
 
     <div className="min-w-0 flex-1">
       <div
@@ -53,7 +57,11 @@ const CommentItem = ({
         }
       >
         <div className="flex items-start justify-between gap-2">
-          <p className="text-sm font-semibold text-ink">{entry.author.fullName}</p>
+          <Link to={`/app/profile/${entry.author.id}`} className="min-w-0">
+            <p className="truncate text-sm font-semibold text-ink hover:underline">
+              {entry.author.fullName}
+            </p>
+          </Link>
           {entry.editable && <CommentMenu onEdit={onEdit} onDelete={onDelete} />}
         </div>
 

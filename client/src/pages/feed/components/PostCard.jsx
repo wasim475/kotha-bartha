@@ -1,5 +1,6 @@
 import { ChatBubbleOutlined, Delete, Edit, MoreHoriz } from "@mui/icons-material";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { cx } from "../../../utility/cx";
 
@@ -76,12 +77,19 @@ export default function PostCard({
     >
       {/* Author */}
       <div className="flex items-center gap-3 p-4">
-        <Avatar person={post.author} size="md" />
+        <Link
+          to={`/app/profile/${post.author.id}`}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          <Avatar person={post.author} size="md" />
 
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-ink">{post.author.fullName}</p>
-          <p className="text-xs text-muted">{formatTime(post.createdAt)}</p>
-        </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-ink hover:underline">
+              {post.author.fullName}
+            </p>
+            <p className="text-xs text-muted">{formatTime(post.createdAt)}</p>
+          </div>
+        </Link>
 
         {post.editable && (
           <Menu

@@ -15,10 +15,14 @@ function safeUser(user) {
     id: user._id.toString(),
     fullName: user.fullName,
     bio: user.bio,
+    dateOfBirth: user.dateOfBirth,
+    hometown: user.hometown,
+    currentCity: user.currentCity,
     avatar: user.avatar,
     cover: user.cover,
     initials: initials(user.fullName),
     lastSeenAt: user.lastSeenAt,
+    createdAt: user.createdAt,
   };
 }
 

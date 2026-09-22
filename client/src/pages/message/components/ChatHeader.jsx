@@ -1,4 +1,5 @@
 import { ArrowBackRounded, Call, CallEnd, Info } from "@mui/icons-material";
+import { Link } from "react-router-dom";
 
 import Avatar from "../../../components/ui/Avatar";
 import IconButton from "../../../components/ui/IconButton";
@@ -57,7 +58,10 @@ const ChatHeader = ({
           </div>
         </button>
       ) : (
-        <div className="flex min-w-0 flex-1 items-center gap-3">
+        <Link
+          to={`/app/profile/${selected.user.id}`}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
           <div className="relative shrink-0">
             <Avatar person={selected.user} size="md" />
             {selected.user.isOnline && (
@@ -68,7 +72,7 @@ const ChatHeader = ({
             )}
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-ink">
+            <p className="truncate text-sm font-semibold text-ink hover:underline">
               {selected.user.fullName}
             </p>
             {isTyping ? (
@@ -90,7 +94,7 @@ const ChatHeader = ({
               </p>
             ) : null}
           </div>
-        </div>
+        </Link>
       )}
 
       {isGroup ? (

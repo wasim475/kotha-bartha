@@ -121,6 +121,7 @@ import { api } from "./api"; // adjust path to your api.js
 export function useResource(url) {
   const [state, setState] = useState({
     data: null,
+    meta: null,
     loading: true,
     error: "",
   });
@@ -132,6 +133,7 @@ export function useResource(url) {
 
       setState({
         data: data.data,
+        meta: data.meta || null,
         loading: false,
         error: "",
       });
@@ -150,7 +152,7 @@ export function useResource(url) {
 
   useEffect(() => {
     if (!url) {
-      setState({ data: null, loading: false, error: "" });
+      setState({ data: null, meta: null, loading: false, error: "" });
       return undefined;
     }
 
@@ -159,12 +161,14 @@ export function useResource(url) {
     api
       .get(url, { signal: controller.signal })
       .then(({ data }) => {
-        if (active) setState({ data: data.data, loading: false, error: "" });
+        if (active)
+          setState({ data: data.data, meta: data.meta || null, loading: false, error: "" });
       })
       .catch((error) => {
         if (active && error.code !== "ERR_CANCELED")
           setState({
             data: null,
+            meta: null,
             loading: false,
             error:
               error.response?.data?.error?.message || "Unable to load data.",
