@@ -593,7 +593,10 @@ router.post("/quiz/attempts/:attemptId/answer", async (req, res, next) => {
     }
 
     const questionIndex = Number(req.body.questionIndex);
-    const selectedPosition = Number(req.body.selectedPosition);
+    // A timed-out question is submitted with selectedPosition: null (the
+    // client also sends timedOut: true, but null alone is treated the same
+    // way — either is enough to mean "no option was chosen").
+    const timedOut = req.body.timedOut === true || req.body.selectedPosition === null;
 
     // Only the attempt's CURRENT question can be answered — blocks
     // replaying an already-answered question or skipping ahead by
@@ -603,18 +606,23 @@ router.post("/quiz/attempts/:attemptId/answer", async (req, res, next) => {
         error: { code: "OUT_OF_SEQUENCE", message: "That question isn't currently active." },
       });
     }
-    if (!Number.isInteger(selectedPosition) || selectedPosition < 0 || selectedPosition > 3) {
-      return res.status(400).json({
-        error: { code: "VALIDATION_ERROR", message: "Choose an option." },
-      });
+
+    let selectedPosition = null;
+    if (!timedOut) {
+      selectedPosition = Number(req.body.selectedPosition);
+      if (!Number.isInteger(selectedPosition) || selectedPosition < 0 || selectedPosition > 3) {
+        return res.status(400).json({
+          error: { code: "VALIDATION_ERROR", message: "Choose an option." },
+        });
+      }
     }
 
     const questionId = attempt.questionOrder[questionIndex];
     const question = await QuizQuestion.findById(questionId).select("correctIndex");
     const optionOrder = attempt.optionOrders[questionIndex];
-    const originalIndex = optionOrder[selectedPosition];
-    const correct = originalIndex === question.correctIndex;
     const correctPosition = optionOrder.indexOf(question.correctIndex);
+    // A timeout is always wrong — there's no selected option to compare.
+    const correct = !timedOut && optionOrder[selectedPosition] === question.correctIndex;
 
     attempt.answers.push({ questionId, selectedPosition, correct, answeredAt: new Date() });
     attempt.currentIndex += 1;

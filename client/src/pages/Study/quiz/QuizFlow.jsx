@@ -156,7 +156,7 @@ export default function QuizFlow({ canManageQuiz }) {
     setStartError("");
     try {
       const { data } = await api.post(`/quiz/chapters/${chapter.id}/sets/${setNumber}/start`);
-      setAttempt(data);
+      setAttempt(data.data);
       setResult(null);
     } catch (error) {
       setStartError(error.response?.data?.error?.message || "Couldn't start this quiz set.");
