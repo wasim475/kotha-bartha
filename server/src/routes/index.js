@@ -11,6 +11,7 @@ const linkPreviewRoutes = require("./link-preview.routes");
 const storiesRoutes = require("./stories.routes");
 const notesRoutes = require("./notes.routes");
 const quizRoutes = require("./quiz.routes");
+const leaderboardRoutes = require("./leaderboard.routes");
 
 const router = express.Router();
 
@@ -26,5 +27,6 @@ router.use(linkPreviewRoutes);
 router.use(storiesRoutes);
 router.use(notesRoutes);
 router.use(quizRoutes);
+router.use(leaderboardRoutes);
 
 module.exports = router;

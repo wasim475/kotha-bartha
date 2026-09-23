@@ -7,6 +7,7 @@ import StudyNavbar from "./StudyNavbar";
 import StudyPlaceholder from "./StudyPlaceholder";
 import StudyTopbar from "./StudyTopbar";
 import { studyNavItems } from "./studyNavItems";
+import Leaderboard from "./leaderboard/Leaderboard";
 import QuizAdmin from "./quiz/QuizAdmin";
 import QuizFlow from "./quiz/QuizFlow";
 
@@ -15,8 +16,6 @@ const descriptions = {
   quiz: "Test what you know with quick, bite-sized quizzes.",
   "class-study": "Class-wise study material and structured resources.",
   games: "Learn while you play — study games are on the way.",
-  "study-ai": "Your AI study companion for questions and explanations.",
-  leaderboard: "See how you rank among fellow learners.",
 };
 
 export default function StudyShell({ user }) {
@@ -33,10 +32,14 @@ export default function StudyShell({ user }) {
 
         <main className="page-content">
           <Routes>
-            {studyNavItems.map((item) =>
-              item.key === "quiz" ? (
-                <Route key={item.path} path={item.key} element={<QuizFlow canManageQuiz={canManageQuiz} />} />
-              ) : (
+            {studyNavItems.map((item) => {
+              if (item.key === "quiz") {
+                return <Route key={item.path} path={item.key} element={<QuizFlow canManageQuiz={canManageQuiz} />} />;
+              }
+              if (item.key === "leaderboard") {
+                return <Route key={item.path} path={item.key} element={<Leaderboard />} />;
+              }
+              return (
                 <Route
                   key={item.path}
                   path={item.key}
@@ -48,8 +51,8 @@ export default function StudyShell({ user }) {
                     />
                   }
                 />
-              ),
-            )}
+              );
+            })}
             <Route
               path="quiz-admin"
               element={canManageQuiz ? <QuizAdmin user={user} /> : <Navigate to="quiz" replace />}
