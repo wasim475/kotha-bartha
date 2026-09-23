@@ -18,6 +18,7 @@ import Card from "../../../components/ui/Card";
 import { api } from "../../../utility/api";
 import { ResourceState, useResource } from "../../../utility/helpers";
 import { cx } from "../../../utility/cx";
+import QuizLoader from "./QuizLoader";
 import QuizPlayer from "./QuizPlayer";
 import QuizResult from "./QuizResult";
 
@@ -178,6 +179,13 @@ export default function QuizFlow({ canManageQuiz }) {
   // ============================================================
   // Playing / Result
   // ============================================================
+
+  // A start/resume request is in flight — show a dedicated quiz loader
+  // instead of leaving the sets grid up or letting QuizPlayer mount before
+  // its question data actually exists.
+  if (startingSet !== null && !attempt) {
+    return <QuizLoader label="Preparing your quiz…" />;
+  }
 
   if (attempt && !result) {
     return (

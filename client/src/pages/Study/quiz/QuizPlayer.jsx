@@ -1,19 +1,27 @@
-import { Check, Close, QuestionMark, Timer as TimerIcon } from "@mui/icons-material";
+import { Check, Close } from "@mui/icons-material";
 import { useEffect, useRef, useState } from "react";
 
 import Button from "../../../components/ui/Button";
 import Card from "../../../components/ui/Card";
 import { api } from "../../../utility/api";
 import { cx } from "../../../utility/cx";
+import {
+  playCorrectAnswerSound,
+  playTenSecondWarningSound,
+  playWrongAnswerSound,
+  stopSound,
+} from "../../../utility/sound";
+import QuizLoader from "./QuizLoader";
 
 const OPTION_LABELS = ["A", "B", "C", "D"];
 
 // Seconds allowed per question. Change this one constant to retune the
 // whole timer (countdown display, warning/danger thresholds below, and the
 // auto-submit-on-timeout behavior all derive from it).
-const QUESTION_TIME_LIMIT = 15;
-const WARNING_AT = 9; // <=9s and >5s: warning state
-const DANGER_AT = 5; // <=5s: danger state + one beep per second
+const QUESTION_TIME_LIMIT = 30;
+const WARNING_AT = 10; // <=10s and >5s: warning state
+const DANGER_AT = 5; // <=5s: danger state
+const TEN_SECOND_WARNING_AT = 10; // when the 10s-left sound plays, once
 
 function timerState(secondsLeft) {
   if (secondsLeft <= 0) return "timeout";
@@ -22,49 +30,61 @@ function timerState(secondsLeft) {
   return "normal";
 }
 
-const TIMER_BADGE_CLASSES = {
-  normal: "border-line bg-panel text-ink",
-  warning: "border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-  danger: "border-danger bg-danger-soft text-danger animate-pulse",
-  timeout: "border-danger bg-danger-soft text-danger",
+const TIMER_RING_CLASSES = {
+  normal: "stroke-accent",
+  warning: "stroke-amber-500",
+  danger: "stroke-danger",
+  timeout: "stroke-danger",
 };
 
-const TIMER_BAR_CLASSES = {
-  normal: "bg-accent",
-  warning: "bg-amber-500",
-  danger: "bg-danger",
-  timeout: "bg-danger",
+const TIMER_TEXT_CLASSES = {
+  normal: "text-ink",
+  warning: "text-amber-600 dark:text-amber-400",
+  danger: "text-danger",
+  timeout: "text-danger",
 };
 
-// Short, quiet "blip" — plain Web Audio API, no external package. Every
-// call is wrapped so a browser that blocks/lacks audio never breaks the
-// quiz; it just plays silently for that user.
-function playBeep(audioContextRef) {
-  try {
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return;
-    if (!audioContextRef.current) {
-      audioContextRef.current = new Ctx();
-    }
-    const ctx = audioContextRef.current;
-    if (ctx.state === "suspended") {
-      ctx.resume().catch(() => {});
-    }
+// A large, fixed-size circular countdown. The remaining seconds are always
+// shown as a bold, tabular-nums number in the center — the ring color is a
+// secondary cue, never the only signal — and the circle's footprint never
+// changes size as the number goes from 2 digits to 1, so there's no layout
+// shift between e.g. "10" and "9".
+function CircularTimer({ secondsLeft, state }) {
+  const size = 64;
+  const stroke = 5;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const progress = Math.max(0, Math.min(1, secondsLeft / QUESTION_TIME_LIMIT));
+  const dashOffset = circumference * (1 - progress);
 
-    const oscillator = ctx.createOscillator();
-    const gain = ctx.createGain();
-    oscillator.type = "sine";
-    oscillator.frequency.value = 880;
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.16, ctx.currentTime + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.18);
-    oscillator.connect(gain);
-    gain.connect(ctx.destination);
-    oscillator.start();
-    oscillator.stop(ctx.currentTime + 0.2);
-  } catch {
-    // Sound is a nice-to-have — never let it break the quiz.
-  }
+  return (
+    <div
+      role="timer"
+      aria-label={`${secondsLeft} seconds remaining`}
+      className={cx("relative shrink-0", state === "danger" && "motion-safe:animate-pulse")}
+      style={{ width: size, height: size }}
+    >
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" strokeWidth={stroke} className="stroke-soft" />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+          className={cx("transition-[stroke-dashoffset] duration-1000 ease-linear", TIMER_RING_CLASSES[state])}
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className={cx("text-xl leading-none font-extrabold tabular-nums", TIMER_TEXT_CLASSES[state])}>
+          {secondsLeft}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -76,9 +96,9 @@ function playBeep(audioContextRef) {
  * `currentIndex` (the first unanswered question), so resuming lands
  * exactly where the user left off rather than replaying answered ones.
  *
- * Each question also carries a client-only 15s countdown (QUESTION_TIME_LIMIT):
- * it resets whenever `viewIndex` changes, stops the instant an answer is
- * submitted (manually or via timeout), and auto-submits with
+ * Each question also carries a client-only QUESTION_TIME_LIMIT (30s)
+ * countdown: it resets whenever `viewIndex` changes, stops the instant an
+ * answer is submitted (manually or via timeout), and auto-submits with
  * selectedPosition: null when it reaches 0. The countdown itself is a UX
  * nudge only — scoring, resume, and everything else about the attempt is
  * still fully server-side, unaffected by whatever the browser's clock says.
@@ -95,15 +115,18 @@ export default function QuizPlayer({ attempt, onComplete }) {
   const [secondsLeft, setSecondsLeft] = useState(QUESTION_TIME_LIMIT);
 
   // Synchronous guard against a double submit (e.g. the user clicks an
-  // option in the same instant the countdown hits 0) — React state updates
-  // are async, so `submitting` alone can't be trusted to block a second
-  // call that fires before the first re-render lands.
+  // option in the same instant the countdown hits 0, or while the 10s
+  // sound is playing) — React state updates are async, so `submitting`
+  // alone can't be trusted to block a second call that fires before the
+  // first re-render lands.
   const submittingRef = useRef(false);
-  const audioContextRef = useRef(null);
-  // Tracks the last second a beep played per question, so a re-render
-  // never re-plays the beep for the same second (and StrictMode's
-  // effect double-invoke in dev never double-beeps).
-  const lastBeepedSecondRef = useRef(null);
+  // The currently-playing 10-seconds-left Audio instance (or null) — kept
+  // so it can be stopped early the moment the question is answered/changes,
+  // since the clip itself runs longer than the 10 seconds it announces.
+  const warningAudioRef = useRef(null);
+  // Guards the 10s warning sound so it plays exactly once per question,
+  // even across React re-renders/StrictMode's dev double-invoke.
+  const tenSecondPlayedRef = useRef(false);
 
   const total = questions?.length || 0;
   const current = total > 0 ? questions[viewIndex] : undefined;
@@ -115,6 +138,8 @@ export default function QuizPlayer({ attempt, onComplete }) {
     submittingRef.current = true;
     setSubmitting(true);
     setError("");
+    stopSound(warningAudioRef.current);
+    warningAudioRef.current = null;
     try {
       const { data } = await api.post(`/quiz/attempts/${attempt.attemptId}/answer`, {
         questionIndex: viewIndex,
@@ -149,6 +174,13 @@ export default function QuizPlayer({ attempt, onComplete }) {
           isFirstAttempt: result.isFirstAttempt,
         });
       }
+      // Played exactly once here, driven by the server's own verdict —
+      // never by an effect watching state, so a re-render can't repeat it.
+      if (result.correct) {
+        playCorrectAnswerSound();
+      } else {
+        playWrongAnswerSound();
+      }
     } catch (submitError) {
       setError(submitError.response?.data?.error?.message || "Couldn't submit your answer.");
     } finally {
@@ -177,11 +209,14 @@ export default function QuizPlayer({ attempt, onComplete }) {
     setSecondsLeft(QUESTION_TIME_LIMIT);
   }
 
-  // Ref mutation (not state), so it belongs in an effect rather than the
-  // render-time reset above — clears the beep dedup guard for the new
-  // question.
+  // New question: clear the 10s-warning dedup guard and stop/discard any
+  // still-playing warning sound from the previous question (ref mutation +
+  // side effect, so it belongs in an effect rather than the render-time
+  // reset above).
   useEffect(() => {
-    lastBeepedSecondRef.current = null;
+    tenSecondPlayedRef.current = false;
+    stopSound(warningAudioRef.current);
+    warningAudioRef.current = null;
   }, [viewIndex]);
 
   // Countdown ticking — one interval per unanswered current question,
@@ -199,15 +234,16 @@ export default function QuizPlayer({ attempt, onComplete }) {
     return () => clearInterval(intervalId);
   }, [current, submitting]);
 
-  // Warning beeps for the last DANGER_AT seconds (5, 4, 3, 2, 1) — one per
-  // second, deduped via lastBeepedSecondRef so it can never double-fire.
+  // 10-seconds-left warning sound — plays exactly once per question, the
+  // instant the countdown reaches TEN_SECOND_WARNING_AT, deduped via
+  // tenSecondPlayedRef so it never replays on re-render.
   useEffect(() => {
     if (!current || current.answered || submitting) return;
-    if (secondsLeft <= 0 || secondsLeft > DANGER_AT) return;
-    if (lastBeepedSecondRef.current === secondsLeft) return;
+    if (secondsLeft !== TEN_SECOND_WARNING_AT) return;
+    if (tenSecondPlayedRef.current) return;
 
-    lastBeepedSecondRef.current = secondsLeft;
-    playBeep(audioContextRef);
+    tenSecondPlayedRef.current = true;
+    warningAudioRef.current = playTenSecondWarningSound();
   }, [secondsLeft, current, submitting]);
 
   // Timeout auto-submit — fires once when the countdown reaches 0 for the
@@ -228,75 +264,43 @@ export default function QuizPlayer({ attempt, onComplete }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [secondsLeft, current, submitting]);
 
-  // Release the AudioContext when the player unmounts. Deliberately reads
-  // audioContextRef.current inside the cleanup (not captured at effect
-  // setup) because the context is created lazily on first beep, often long
-  // after this effect runs on mount — capturing it up front would always
-  // be null and never actually close the real context.
+  // Stop any playing warning sound when the player unmounts (e.g. the user
+  // navigates away from the quiz mid-countdown).
   useEffect(() => {
     return () => {
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      const ctx = audioContextRef.current;
-      ctx?.close?.().catch(() => {});
+      stopSound(warningAudioRef.current);
     };
   }, []);
 
   if (!current) {
-    return (
-      <div
-        role="status"
-        aria-live="polite"
-        aria-label="Preparing your question"
-        className="mx-auto flex w-full max-w-xl flex-col items-center justify-center gap-3 py-20 text-center"
-      >
-        <div className="flex size-12 animate-pulse items-center justify-center rounded-full bg-accent/10 text-accent">
-          <QuestionMark fontSize="small" />
-        </div>
-        <p className="text-sm font-medium text-muted">Preparing your question…</p>
-      </div>
-    );
+    return <QuizLoader label="Preparing your question…" />;
   }
 
   const state = current.answered ? null : timerState(secondsLeft);
+  // Persists once the question is answered — green/red glow around the
+  // whole card until the user moves on, independent of the live timer
+  // state above (which stops mattering the moment it's answered).
+  const resultState = current.answered ? (current.correct ? "correct" : "wrong") : null;
 
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col gap-4">
       {/* Progress + timer */}
       <div>
-        <div className="flex items-center justify-between gap-2 text-xs font-semibold text-muted">
-          <span>
-            Question {viewIndex + 1} / {total}
-          </span>
-          <div className="flex items-center gap-2">
-            <span>Score: {score}</span>
-            {state && (
-              <span
-                aria-label={`${secondsLeft} seconds remaining`}
-                className={cx(
-                  "flex items-center gap-1 rounded-full border px-2 py-0.5 font-bold tabular-nums transition-colors",
-                  TIMER_BADGE_CLASSES[state],
-                )}
-              >
-                <TimerIcon style={{ fontSize: 13 }} />
-                {secondsLeft}s
-              </span>
-            )}
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-muted">
+              Question {viewIndex + 1} / {total}
+            </p>
+            <p className="mt-0.5 text-[11px] text-muted">Score: {score}</p>
           </div>
+          {state && <CircularTimer secondsLeft={secondsLeft} state={state} />}
         </div>
-        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-soft">
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-soft">
           <div
             className="h-full rounded-full bg-accent transition-all motion-safe:duration-300"
             style={{ width: `${progressPercent}%` }}
           />
         </div>
-        {state && (
-          <div className="mt-1 h-1 overflow-hidden rounded-full bg-soft">
-            <div
-              className={cx("h-full rounded-full transition-all duration-1000 ease-linear", TIMER_BAR_CLASSES[state])}
-              style={{ width: `${(secondsLeft / QUESTION_TIME_LIMIT) * 100}%` }}
-            />
-          </div>
-        )}
         <div className="mt-1 flex items-center gap-3 text-[11px] text-muted">
           <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
             <Check style={{ fontSize: 13 }} /> {correctCount}
@@ -307,7 +311,14 @@ export default function QuizPlayer({ attempt, onComplete }) {
         </div>
       </div>
 
-      <Card className="flex flex-col gap-4">
+      <Card
+        className={cx(
+          "flex flex-col gap-4 border-2 transition-shadow motion-safe:duration-300",
+          resultState === "correct" && "border-green-500 shadow-lg shadow-green-500/30",
+          resultState === "wrong" && "border-danger shadow-lg shadow-danger/30",
+          !resultState && "border-line",
+        )}
+      >
         <p className="text-base leading-relaxed font-semibold text-ink sm:text-lg">
           {current.question}
         </p>
