@@ -9,6 +9,7 @@ const User = require("./models/User");
 const { pairKey } = require("./utils/ids");
 const { isBlockedEitherWay } = require("./utils/blocks");
 const { addConnection, removeConnection, isOnline } = require("./utils/presence");
+const { startLeaderboardArchiveScheduler } = require("./services/leaderboardArchive.service");
 
 const port = process.env.PORT || 5000;
 const httpServer = http.createServer(app);
@@ -116,6 +117,11 @@ io.on("connection", (socket) => {
 
 async function start() {
   if (process.env.MONGODB_URI) await mongoose.connect(process.env.MONGODB_URI);
+  // Server-authoritative monthly Leaderboard finalization — reconciles on
+  // startup (so time offline never loses/delays an archive beyond the
+  // next boot) and then periodically; see services/leaderboardArchive.service.js
+  // for why this is safe to run repeatedly/concurrently.
+  startLeaderboardArchiveScheduler();
   httpServer.listen(port, () => console.log(`KOTHA-BARTA Connected...`));
 }
 

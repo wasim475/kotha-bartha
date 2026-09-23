@@ -1,5 +1,6 @@
-import { Groups, Public } from "@mui/icons-material";
+import { Groups, History, Public } from "@mui/icons-material";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import Button from "../../../components/ui/Button";
 import Card from "../../../components/ui/Card";
@@ -7,6 +8,54 @@ import { api } from "../../../utility/api";
 import SegmentedControl from "./LeaderboardFilters";
 import LeaderboardPodium from "./LeaderboardPodium";
 import LeaderboardRow, { RankChangeBadge } from "./LeaderboardRow";
+
+function formatCycleDateTime(iso, timezone) {
+  return new Date(iso).toLocaleString("en-US", {
+    timeZone: timezone,
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+// Subtle premium status line shown only for the "This Month" period —
+// tells the viewer which monthly cycle they're looking at and, using the
+// server's configured LEADERBOARD_TIMEZONE (never the browser's own), when
+// it closes. When the cycle is between months (finalized but the next one
+// hasn't opened yet), this replaces the normal Top 3/Top 20 content
+// entirely with a closed-state message, since there's nothing active to
+// rank during that window.
+function CycleStatusBanner({ cycle }) {
+  if (!cycle) return null;
+  if (cycle.status === "active") {
+    return (
+      <p className="mb-3 text-xs text-muted">
+        <span className="font-semibold text-ink">{cycle.label}</span> · closes{" "}
+        {formatCycleDateTime(cycle.closesAt, cycle.timezone)}
+      </p>
+    );
+  }
+  return null;
+}
+
+function ClosedCycleState({ cycle }) {
+  return (
+    <div className="flex flex-col items-center gap-2 py-16 text-center">
+      <p className="text-sm font-semibold text-ink">Leaderboard Closed</p>
+      <p className="max-w-xs text-sm text-muted">
+        {cycle.closedMonthLabel ? `The ${cycle.closedMonthLabel} leaderboard has been finalized.` : "The previous leaderboard has been finalized."}
+        {" "}The new leaderboard starts {formatCycleDateTime(cycle.opensAt, cycle.timezone)}.
+      </p>
+      <Link
+        to="/study/leaderboard/history"
+        className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-accent hover:underline"
+      >
+        <History style={{ fontSize: 15 }} /> See Previous Month Leaderboards
+      </Link>
+    </div>
+  );
+}
 
 const CATEGORY_OPTIONS = [
   { value: "overall", label: "Overall" },
@@ -170,11 +219,21 @@ export default function Leaderboard() {
         )}
       </div>
 
-      <div className="mb-5 flex flex-wrap items-center gap-2">
-        <SegmentedControl ariaLabel="Category" options={CATEGORY_OPTIONS} value={category} onChange={setCategory} />
-        <SegmentedControl ariaLabel="Time period" options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
-        <SegmentedControl ariaLabel="Audience" options={AUDIENCE_OPTIONS} value={audience} onChange={setAudience} />
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <SegmentedControl ariaLabel="Category" options={CATEGORY_OPTIONS} value={category} onChange={setCategory} />
+          <SegmentedControl ariaLabel="Time period" options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
+          <SegmentedControl ariaLabel="Audience" options={AUDIENCE_OPTIONS} value={audience} onChange={setAudience} />
+        </div>
+        <Link
+          to="/study/leaderboard/history"
+          className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-accent hover:underline"
+        >
+          <History style={{ fontSize: 15 }} /> Previous Leaderboards
+        </Link>
       </div>
+
+      {period === "month" && summary?.cycle && <CycleStatusBanner cycle={summary.cycle} />}
 
       {loading && (
         <>
@@ -198,32 +257,38 @@ export default function Leaderboard() {
 
       {!loading && !error && summary && (
         <>
-          {summary.me && !summary.me.inTop20 && <YourRankCard me={summary.me} />}
-
-          {summary.top20.length ? (
-            <>
-              <LeaderboardPodium top3={summary.top3} />
-              <div className="flex flex-col gap-2">
-                {summary.top20.map((row) => (
-                  <LeaderboardRow
-                    key={row.id}
-                    row={row}
-                    isMe={summary.me?.id === row.id}
-                    expanded={expandedId === row.id}
-                    onToggle={() => toggleRow(row.id)}
-                    stats={statsById[`${row.id}:${period}`]}
-                  />
-                ))}
-              </div>
-            </>
+          {period === "month" && summary.cycle?.status === "closed" ? (
+            <ClosedCycleState cycle={summary.cycle} />
           ) : (
-            <div className="flex flex-col items-center gap-2 py-16 text-center">
-              <p className="text-sm text-muted">
-                {audience === "friends"
-                  ? "None of your friends have completed a quiz yet."
-                  : "No one has completed a quiz yet — be the first!"}
-              </p>
-            </div>
+            <>
+              {summary.me && !summary.me.inTop20 && <YourRankCard me={summary.me} />}
+
+              {summary.top20.length ? (
+                <>
+                  <LeaderboardPodium top3={summary.top3} />
+                  <div className="flex flex-col gap-2">
+                    {summary.top20.map((row) => (
+                      <LeaderboardRow
+                        key={row.id}
+                        row={row}
+                        isMe={summary.me?.id === row.id}
+                        expanded={expandedId === row.id}
+                        onToggle={() => toggleRow(row.id)}
+                        stats={statsById[`${row.id}:${period}`]}
+                      />
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center gap-2 py-16 text-center">
+                  <p className="text-sm text-muted">
+                    {audience === "friends"
+                      ? "None of your friends have completed a quiz yet."
+                      : "No one has completed a quiz yet — be the first!"}
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </>
       )}

@@ -8,6 +8,7 @@ import StudyPlaceholder from "./StudyPlaceholder";
 import StudyTopbar from "./StudyTopbar";
 import { studyNavItems } from "./studyNavItems";
 import Leaderboard from "./leaderboard/Leaderboard";
+import PreviousLeaderboards from "./leaderboard/PreviousLeaderboards";
 import QuizAdmin from "./quiz/QuizAdmin";
 import QuizFlow from "./quiz/QuizFlow";
 
@@ -57,6 +58,7 @@ export default function StudyShell({ user }) {
               path="quiz-admin"
               element={canManageQuiz ? <QuizAdmin user={user} /> : <Navigate to="quiz" replace />}
             />
+            <Route path="leaderboard/history" element={<PreviousLeaderboards />} />
             <Route path="*" element={<Navigate to="blogs" replace />} />
           </Routes>
         </main>

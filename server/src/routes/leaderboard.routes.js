@@ -2,162 +2,46 @@ const express = require("express");
 const mongoose = require("mongoose");
 const QuizAttempt = require("../models/QuizAttempt");
 const User = require("../models/User");
-const Friendship = require("../models/Friendship");
-const { isBlockedEitherWay, blockedPairIds } = require("../utils/blocks");
+const LeaderboardArchive = require("../models/LeaderboardArchive");
+const { isBlockedEitherWay } = require("../utils/blocks");
+const { LEADERBOARD_TIMEZONE } = require("../utils/timezone");
+const { getCycleStatus } = require("../services/leaderboardCycle.service");
+const {
+  TOP_COUNT,
+  CATEGORIES,
+  AUDIENCES,
+  PERIODS,
+  BASE_ATTEMPT_FILTER,
+  periodDateMatch,
+  previousPeriodDateMatch,
+  rankedParticipants,
+  rankChangeFor,
+  nextRankInfo,
+} = require("../services/leaderboardRanking.service");
 
 const router = express.Router();
 
-const TOP_COUNT = 20;
-const CATEGORIES = ["overall", "quiz", "games"];
-const PERIODS = ["all", "month", "week"];
-const AUDIENCES = ["everyone", "friends"];
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
 
-// Only a completed FIRST attempt counts toward the leaderboard — the same
-// rule quiz.routes.js already enforces for an individual set's score (see
-// isFirstAttempt there). Kept as one shared base filter so every view
-// (ranking, rank-change, per-user stats) can never disagree with each other.
-const BASE_ATTEMPT_FILTER = { isFirstAttempt: true, status: "completed" };
-
-// ============================================================
-// Date windows — period-based points are derived from each attempt's own
-// `completedAt`, which already exists on every attempt; no new schema or
-// stored snapshot is needed to answer "points earned this week/month."
-// ============================================================
-
-function startOfWeek(referenceDate) {
-  const day = referenceDate.getDay(); // 0 = Sunday
-  const diffToMonday = (day + 6) % 7;
-  const start = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate() - diffToMonday);
-  start.setHours(0, 0, 0, 0);
-  return start;
-}
-
-function periodDateMatch(period, referenceDate = new Date()) {
-  if (period === "week") {
-    return { completedAt: { $gte: startOfWeek(referenceDate), $lte: referenceDate } };
+function cyclePayload(cycle) {
+  if (cycle.status === "active") {
+    return {
+      status: "active",
+      label: `${MONTH_NAMES[cycle.month - 1]} ${cycle.year} Leaderboard`,
+      closesAt: cycle.closesAt,
+      timezone: LEADERBOARD_TIMEZONE,
+    };
   }
-  if (period === "month") {
-    const start = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1);
-    return { completedAt: { $gte: start, $lte: referenceDate } };
-  }
-  return {};
-}
-
-// The immediately-preceding window for the same period, used only for
-// rank-change — never for the points/ranking actually shown. Returns null
-// for "all" (there's no reliable "previous all-time" to compare against,
-// so rank-change is simply not offered for that period — see
-// rankChangeFor below).
-function previousPeriodDateMatch(period, referenceDate = new Date()) {
-  if (period === "week") {
-    const currentStart = startOfWeek(referenceDate);
-    const start = new Date(currentStart);
-    start.setDate(start.getDate() - 7);
-    return { completedAt: { $gte: start, $lt: currentStart } };
-  }
-  if (period === "month") {
-    const start = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - 1, 1);
-    const end = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1);
-    return { completedAt: { $gte: start, $lt: end } };
-  }
-  return null;
-}
-
-async function friendIdsOf(userId) {
-  const friendships = await Friendship.find({ userIds: userId }).select("userIds").lean();
-  return friendships.flatMap((friendship) => friendship.userIds.map(String)).filter((id) => id !== userId.toString());
-}
-
-// Groups every qualifying attempt (within the given date window) by user,
-// joins in the user's profile fields, and — critically — drops
-// admin/moderator accounts and blocked pairs at the query stage, not just
-// hidden afterward in the response, so they can never occupy a rank or
-// count toward a participant total. Ranks are assigned only after every
-// exclusion, so the sequence is always contiguous (1, 2, 3, …) with no
-// gaps left by a removed user.
-//
-// `category: "games"` returns an empty list rather than a real query —
-// there's no Games attempt data source in this app yet, so "reporting
-// zero participation" is the honest answer, not an invented one.
-// `category: "overall"` currently equals `"quiz"` for the same reason
-// (overall = quiz + games, and games always contributes 0 today); a real
-// Games source would only need to be unioned in here later.
-async function rankedParticipants({ category, dateMatch, audience, requesterId }) {
-  if (category === "games") return [];
-
-  const match = { ...BASE_ATTEMPT_FILTER, ...dateMatch };
-
-  if (audience === "friends") {
-    const friendIds = await friendIdsOf(requesterId);
-    const scopeIds = [...friendIds, requesterId.toString()].map((id) => new mongoose.Types.ObjectId(id));
-    match.userId = { $in: scopeIds };
-  }
-
-  const rows = await QuizAttempt.aggregate([
-    { $match: match },
-    {
-      $group: {
-        _id: "$userId",
-        quizPoints: { $sum: "$score" },
-        correctCount: { $sum: "$correctCount" },
-        wrongCount: { $sum: "$wrongCount" },
-        attempted: { $sum: 1 },
-      },
-    },
-    { $lookup: { from: "users", localField: "_id", foreignField: "_id", as: "user" } },
-    { $unwind: "$user" },
-    { $match: { "user.role": "user" } },
-    {
-      $project: {
-        userId: "$_id",
-        fullName: "$user.fullName",
-        avatar: "$user.avatar",
-        currentCity: "$user.currentCity",
-        totalPoints: "$quizPoints",
-        correctCount: 1,
-      },
-    },
-    // Deterministic ranking: total points, then more correct answers as a
-    // tie-break, then a stable id order so ties never reorder between
-    // requests.
-    { $sort: { totalPoints: -1, correctCount: -1, userId: 1 } },
-  ]);
-
-  const blocked = await blockedPairIds(requesterId);
-  const eligible = rows.filter((row) => !blocked.has(row.userId.toString()));
-
-  return eligible.map((row, index) => ({
-    rank: index + 1,
-    id: row.userId.toString(),
-    fullName: row.fullName,
-    avatar: row.avatar || null,
-    currentCity: row.currentCity || "",
-    points: row.totalPoints,
-  }));
-}
-
-function rankChangeFor(userId, currentRank, previousRankById) {
-  if (!previousRankById) return null; // period "all" — no reliable "previous" to compare
-  const previousRank = previousRankById.get(userId);
-  if (previousRank === undefined) return null; // wasn't ranked last period — don't invent movement
-  const delta = previousRank - currentRank; // positive = moved up (a smaller rank number is better)
-  return { direction: delta > 0 ? "up" : delta < 0 ? "down" : "same", delta: Math.abs(delta) };
-}
-
-// The row immediately above the current user in the SAME already-ranked
-// list, so "next rank" always reflects the exact same filtered dataset as
-// everything else on the page (never a different category/period/audience).
-function nextRankInfo(participants, myRank) {
-  if (myRank === 1) return { isFirst: true };
-  const aboveRow = participants[myRank - 2];
-  const myRow = participants[myRank - 1];
-  if (!aboveRow || !myRow) return null;
   return {
-    rank: aboveRow.rank,
-    points: aboveRow.points,
-    // A tie with the row above means 0 more points are actually needed —
-    // reporting anything else would be misleading.
-    pointsNeeded: Math.max(0, aboveRow.points - myRow.points),
+    status: "closed",
+    label: "Leaderboard Closed",
+    closedMonthLabel: `${MONTH_NAMES[cycle.closedMonth - 1]} ${cycle.closedYear}`,
+    opensAt: cycle.opensAt,
+    closesAt: cycle.closesAt,
+    timezone: LEADERBOARD_TIMEZONE,
   };
 }
 
@@ -166,6 +50,29 @@ router.get("/leaderboard/top", async (req, res, next) => {
     const category = CATEGORIES.includes(req.query.category) ? req.query.category : "overall";
     const period = PERIODS.includes(req.query.period) ? req.query.period : "all";
     const audience = AUDIENCES.includes(req.query.audience) ? req.query.audience : "everyone";
+
+    const cycle = period === "month" ? getCycleStatus() : null;
+
+    // The monthly cycle is currently closed (between one month's 4:00 PM
+    // finalization and the next month's 8:00 AM start) — there is no
+    // active "this month" ranking to show, by design (see
+    // leaderboardRanking.service.js's periodDateMatch). Report that
+    // explicitly rather than running a query with a meaningless range.
+    if (period === "month" && cycle.status === "closed") {
+      return res.json({
+        data: {
+          category,
+          period,
+          audience,
+          top3: [],
+          top20: [],
+          totalParticipants: 0,
+          participantLabel: audience === "friends" ? "Friends Participating" : "Total Participants",
+          me: null,
+          cycle: cyclePayload(cycle),
+        },
+      });
+    }
 
     const participants = await rankedParticipants({
       category,
@@ -211,6 +118,7 @@ router.get("/leaderboard/top", async (req, res, next) => {
         totalParticipants: participants.length,
         participantLabel: audience === "friends" ? "Friends Participating" : "Total Participants",
         me,
+        cycle: cycle ? cyclePayload(cycle) : null,
       },
     });
   } catch (error) {
@@ -239,14 +147,13 @@ router.get("/leaderboard/users/:userId/stats", async (req, res, next) => {
     }
 
     const period = PERIODS.includes(req.query.period) ? req.query.period : "all";
+    const dateMatch = periodDateMatch(period);
 
-    const attempts = await QuizAttempt.find({
-      userId: user._id,
-      ...BASE_ATTEMPT_FILTER,
-      ...periodDateMatch(period),
-    })
-      .select("score correctCount wrongCount")
-      .lean();
+    const attempts = dateMatch
+      ? await QuizAttempt.find({ userId: user._id, ...BASE_ATTEMPT_FILTER, ...dateMatch })
+          .select("score correctCount wrongCount")
+          .lean()
+      : [];
 
     const attempted = attempts.length;
     const correct = attempts.reduce((sum, attempt) => sum + attempt.correctCount, 0);
@@ -268,6 +175,94 @@ router.get("/leaderboard/users/:userId/stats", async (req, res, next) => {
         totalPoints: quizPoints,
         categories: [{ key: "quiz", label: "Quiz", points: quizPoints }],
         quiz: { attempted, correct, wrong, correctPercent, wrongPercent },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
+// MONTHLY ARCHIVE (historical, read-only)
+// ============================================================
+
+// Lightweight — just the {year, month} pairs that actually have an
+// archive, so the Previous Leaderboards page's selectors only ever offer
+// months that exist instead of guessing a calendar range and hoping.
+router.get("/leaderboard/archive/months", async (req, res, next) => {
+  try {
+    const months = await LeaderboardArchive.find({}).select("year month -_id").sort({ year: -1, month: -1 }).lean();
+    res.json({ data: months });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/leaderboard/archive/:year/:month", async (req, res, next) => {
+  try {
+    const year = Number(req.params.year);
+    const month = Number(req.params.month);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+      return res.status(400).json({
+        error: { code: "INVALID_MONTH", message: "Choose a valid month and year." },
+      });
+    }
+
+    const archive = await LeaderboardArchive.findOne({ year, month }).lean();
+    if (!archive) {
+      // Distinguish "this is the currently active/not-yet-finalized
+      // month" from "this month genuinely has no archive" — the frontend
+      // shows a different message for each (see requirement to not treat
+      // the active month as a historical archive).
+      const cycle = getCycleStatus();
+      const isCurrentActiveMonth = cycle.status === "active" && cycle.year === year && cycle.month === month;
+      return res.json({
+        data: null,
+        meta: { label: `${MONTH_NAMES[month - 1]} ${year}`, isCurrentActiveMonth },
+      });
+    }
+
+    const withStats = (entry) => {
+      const totalAnswered = entry.correctCount + entry.wrongCount;
+      const correctPercent = totalAnswered > 0 ? Math.round((entry.correctCount / totalAnswered) * 100) : 0;
+      const wrongPercent = totalAnswered > 0 ? 100 - correctPercent : 0;
+      return {
+        rank: entry.rank,
+        id: entry.userId ? entry.userId.toString() : null,
+        fullName: entry.fullName,
+        avatar: entry.avatar || null,
+        currentCity: entry.currentCity || "",
+        points: entry.points,
+        categories: [{ key: "quiz", label: "Quiz", points: entry.quizPoints }],
+        quiz: {
+          attempted: entry.attempted,
+          correct: entry.correctCount,
+          wrong: entry.wrongCount,
+          correctPercent,
+          wrongPercent,
+        },
+      };
+    };
+
+    const top20 = archive.entries.slice(0, TOP_COUNT).map(withStats);
+    const top3 = top20.slice(0, 3);
+
+    const selfEntry = archive.entries.find((entry) => entry.userId && entry.userId.toString() === req.user._id.toString());
+    const me = selfEntry
+      ? { ...withStats(selfEntry), inTop20: selfEntry.rank <= TOP_COUNT }
+      : null;
+
+    res.json({
+      data: {
+        year: archive.year,
+        month: archive.month,
+        label: `${MONTH_NAMES[archive.month - 1]} ${archive.year}`,
+        periodStart: archive.periodStart,
+        periodEnd: archive.periodEnd,
+        totalParticipants: archive.totalParticipants,
+        top3,
+        top20,
+        me,
       },
     });
   } catch (error) {
