@@ -1,34 +1,25 @@
-import { cx } from "../../../utility/cx";
-
 /**
- * A compact pill-style filter group (category / period / audience). Wraps
- * horizontally on narrow screens instead of overflowing — options are
- * short enough (2-3 words max) to never need horizontal scrolling even at
- * 320px.
+ * A single labeled dropdown filter (Category / Period). Replaces the
+ * earlier segmented pill-button group with a compact select — same
+ * information, far less visual weight, so the header stays clean at every
+ * width instead of needing to wrap several rows of buttons.
  */
-export default function SegmentedControl({ ariaLabel, options, value, onChange }) {
+export default function LeaderboardSelect({ ariaLabel, label, options, value, onChange }) {
   return (
-    <div
-      role="tablist"
-      aria-label={ariaLabel}
-      className="inline-flex flex-wrap items-center gap-1 rounded-full border border-line bg-panel p-1"
-    >
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          role="tab"
-          aria-selected={value === option.value}
-          onClick={() => onChange(option.value)}
-          className={cx(
-            "flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors motion-safe:duration-150 sm:px-3",
-            value === option.value ? "bg-accent text-white" : "text-muted hover:text-ink",
-          )}
-        >
-          {option.icon}
-          {option.label}
-        </button>
-      ))}
-    </div>
+    <label className="flex items-center gap-1.5 rounded-full border border-line bg-panel px-3 py-1.5 text-xs font-semibold text-muted shadow-sm transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/25">
+      {label}
+      <select
+        aria-label={ariaLabel}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="bg-transparent text-xs font-bold text-ink outline-none"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

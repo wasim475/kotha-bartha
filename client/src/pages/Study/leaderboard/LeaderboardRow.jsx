@@ -6,9 +6,9 @@ import ProfileAvatarLink from "../../../components/ui/ProfileAvatarLink";
 import { cx } from "../../../utility/cx";
 
 const RANK_BADGE_CLASSES = {
-  1: "bg-gradient-to-br from-amber-300 to-amber-500 text-amber-950",
-  2: "bg-gradient-to-br from-slate-300 to-slate-400 text-slate-900",
-  3: "bg-gradient-to-br from-orange-300 to-orange-500 text-orange-950",
+  1: "bg-linear-to-br from-amber-300 to-amber-500 text-amber-950",
+  2: "bg-linear-to-br from-slate-300 to-slate-400 text-slate-900",
+  3: "bg-linear-to-br from-orange-300 to-orange-500 text-orange-950",
 };
 
 // Only rendered when the backend actually has a reliable previous-period

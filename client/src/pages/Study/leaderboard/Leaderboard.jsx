@@ -1,11 +1,11 @@
-import { Groups, History, Public } from "@mui/icons-material";
+import { EmojiEvents, History } from "@mui/icons-material";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import Button from "../../../components/ui/Button";
 import Card from "../../../components/ui/Card";
 import { api } from "../../../utility/api";
-import SegmentedControl from "./LeaderboardFilters";
+import LeaderboardSelect from "./LeaderboardFilters";
 import LeaderboardPodium from "./LeaderboardPodium";
 import LeaderboardRow, { RankChangeBadge } from "./LeaderboardRow";
 
@@ -63,13 +63,9 @@ const CATEGORY_OPTIONS = [
   { value: "games", label: "Games" },
 ];
 const PERIOD_OPTIONS = [
-  { value: "all", label: "All Time" },
-  { value: "month", label: "This Month" },
+  { value: "today", label: "Today" },
   { value: "week", label: "This Week" },
-];
-const AUDIENCE_OPTIONS = [
-  { value: "everyone", label: "Everyone", icon: <Public style={{ fontSize: 14 }} /> },
-  { value: "friends", label: "Friends", icon: <Groups style={{ fontSize: 14 }} /> },
+  { value: "month", label: "This Month" },
 ];
 
 function LeaderboardRowSkeleton() {
@@ -91,7 +87,7 @@ function LeaderboardRowSkeleton() {
 
 function PodiumSkeleton() {
   return (
-    <div className="mb-5 flex animate-pulse items-end justify-center gap-2 motion-reduce:animate-none sm:gap-4">
+    <div className="mb-5 flex animate-pulse items-end justify-center gap-2 rounded-3xl bg-linear-to-b from-accent/5 to-transparent py-4 motion-reduce:animate-none sm:gap-4">
       <div className="h-32 w-16 rounded-2xl bg-soft sm:w-24" />
       <div className="h-40 w-20 rounded-2xl bg-soft sm:w-28" />
       <div className="h-32 w-16 rounded-2xl bg-soft sm:w-24" />
@@ -106,9 +102,9 @@ function YourRankCard({ me }) {
     : 100;
 
   return (
-    <Card className="mb-4 flex flex-col gap-3 border-accent/40 bg-accent/5 sm:flex-row sm:items-center sm:justify-between">
+    <Card className="mb-4 flex flex-col gap-3 border-accent/30 bg-linear-to-br from-accent/10 via-accent/5 to-transparent shadow-sm sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-3">
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-accent/15 text-sm font-bold tabular-nums text-accent">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-accent to-accent-deep text-sm font-bold tabular-nums text-white shadow-sm">
           #{me.rank}
         </span>
         <div className="min-w-0">
@@ -129,7 +125,7 @@ function YourRankCard({ me }) {
             </div>
             <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-soft">
               <div
-                className="h-full rounded-full bg-accent transition-all motion-safe:duration-300"
+                className="h-full rounded-full bg-linear-to-r from-accent to-accent-deep transition-all motion-safe:duration-300"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
@@ -142,16 +138,15 @@ function YourRankCard({ me }) {
 
 /**
  * The Study section's Leaderboard tab. Ranking, admin/moderator exclusion,
- * period windows, friends scoping, rank-change and next-rank are all
- * computed server-side (server/src/routes/leaderboard.routes.js) — this
- * component only renders what it's given and lazily fetches each row's
- * detailed stats the moment it's expanded (cached per user+period so
- * re-expanding the same row under the same period never refetches).
+ * period windows, rank-change and next-rank are all computed server-side
+ * (server/src/routes/leaderboard.routes.js) — this component only renders
+ * what it's given and lazily fetches each row's detailed stats the moment
+ * it's expanded (cached per user+period so re-expanding the same row under
+ * the same period never refetches).
  */
 export default function Leaderboard() {
   const [category, setCategory] = useState("overall");
-  const [period, setPeriod] = useState("all");
-  const [audience, setAudience] = useState("everyone");
+  const [period, setPeriod] = useState("month");
 
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -164,7 +159,7 @@ export default function Leaderboard() {
     setError("");
     setExpandedId(null);
     try {
-      const { data } = await api.get("/leaderboard/top", { params: { category, period, audience } });
+      const { data } = await api.get("/leaderboard/top", { params: { category, period } });
       setSummary(data.data);
     } catch (loadError) {
       setError(loadError.response?.data?.error?.message || "Couldn't load the leaderboard.");
@@ -178,7 +173,7 @@ export default function Leaderboard() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, period, audience]);
+  }, [category, period]);
 
   const fetchStats = async (userId) => {
     const cacheKey = `${userId}:${period}`;
@@ -206,14 +201,19 @@ export default function Leaderboard() {
 
   return (
     <div className="mx-auto w-full max-w-3xl">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-xl font-bold text-ink">Leaderboard</h1>
-          <p className="text-sm text-muted">Top learners ranked by points.</p>
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-accent to-accent-deep text-white shadow-md">
+            <EmojiEvents fontSize="small" />
+          </span>
+          <div>
+            <h1 className="font-display text-xl font-bold text-ink sm:text-2xl">Leaderboard</h1>
+            <p className="text-sm text-muted">Top learners ranked by points.</p>
+          </div>
         </div>
         {summary && (
-          <div className="rounded-xl border border-line bg-panel px-4 py-2.5 text-right">
-            <p className="text-[10px] font-semibold tracking-wide text-muted uppercase">{summary.participantLabel}</p>
+          <div className="rounded-2xl border border-accent/20 bg-linear-to-br from-accent/10 to-transparent px-4 py-2.5 text-right shadow-sm">
+            <p className="text-[10px] font-semibold tracking-wide text-accent uppercase">{summary.participantLabel}</p>
             <p className="text-lg font-bold tabular-nums text-ink">{summary.totalParticipants.toLocaleString()}</p>
           </div>
         )}
@@ -221,9 +221,8 @@ export default function Leaderboard() {
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <SegmentedControl ariaLabel="Category" options={CATEGORY_OPTIONS} value={category} onChange={setCategory} />
-          <SegmentedControl ariaLabel="Time period" options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
-          <SegmentedControl ariaLabel="Audience" options={AUDIENCE_OPTIONS} value={audience} onChange={setAudience} />
+          <LeaderboardSelect ariaLabel="Category" label="Category" options={CATEGORY_OPTIONS} value={category} onChange={setCategory} />
+          <LeaderboardSelect ariaLabel="Time period" label="Period" options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
         </div>
         <Link
           to="/study/leaderboard/history"
@@ -281,11 +280,7 @@ export default function Leaderboard() {
                 </>
               ) : (
                 <div className="flex flex-col items-center gap-2 py-16 text-center">
-                  <p className="text-sm text-muted">
-                    {audience === "friends"
-                      ? "None of your friends have completed a quiz yet."
-                      : "No one has completed a quiz yet — be the first!"}
-                  </p>
+                  <p className="text-sm text-muted">No one has completed a quiz yet — be the first!</p>
                 </div>
               )}
             </>

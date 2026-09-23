@@ -10,8 +10,14 @@ const { getCycleStatus, cycleStartInstant, previousMonthOf } = require("./leader
 
 const TOP_COUNT = 20;
 const CATEGORIES = ["overall", "quiz", "games"];
-const PERIODS = ["all", "month", "week"];
-const AUDIENCES = ["everyone", "friends"];
+// "All Time" was removed from the Leaderboard entirely (UI and API) — the
+// only selectable periods now are Today, This Week, and This Month.
+const PERIODS = ["today", "week", "month"];
+// The Everyone/Friends audience filter was removed from the Leaderboard —
+// every ranking is now always the global "everyone" view. `rankedParticipants`
+// below still accepts an `audience`/`requesterId` pair so the underlying
+// friends-scoping capability isn't deleted outright, but routes/leaderboard.routes.js
+// no longer reads an audience from the client and always passes "everyone".
 
 // Only a completed FIRST attempt counts toward the leaderboard — the same
 // rule quiz.routes.js already enforces for an individual set's score (see
@@ -19,6 +25,12 @@ const AUDIENCES = ["everyone", "friends"];
 // (ranking, rank-change, per-user stats, the monthly archive) can never
 // disagree with each other.
 const BASE_ATTEMPT_FILTER = { isFirstAttempt: true, status: "completed" };
+
+function startOfDay(referenceDate) {
+  const start = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
 
 function startOfWeek(referenceDate) {
   const day = referenceDate.getDay(); // 0 = Sunday
@@ -39,6 +51,9 @@ function startOfWeek(referenceDate) {
 // closed window) — the caller is expected to treat that as "no data" /
 // "leaderboard closed" rather than running a query with a 0-width range.
 function periodDateMatch(period, referenceDate = new Date()) {
+  if (period === "today") {
+    return { completedAt: { $gte: startOfDay(referenceDate), $lte: referenceDate } };
+  }
   if (period === "week") {
     return { completedAt: { $gte: startOfWeek(referenceDate), $lte: referenceDate } };
   }
@@ -52,11 +67,16 @@ function periodDateMatch(period, referenceDate = new Date()) {
 
 // The immediately-preceding window for the same period, used only for
 // rank-change — never for the points/ranking actually shown. Returns null
-// for "all" (there's no reliable "previous all-time" to compare against)
-// and whenever there's no well-defined previous cycle to compare a closed
-// "month" view against — see rankChangeFor below, which never invents
-// movement when this is null.
+// whenever there's no well-defined previous window to compare against
+// (e.g. a closed "month" cycle) — see rankChangeFor below, which never
+// invents movement when this is null.
 function previousPeriodDateMatch(period, referenceDate = new Date()) {
+  if (period === "today") {
+    const todayStart = startOfDay(referenceDate);
+    const yesterdayStart = new Date(todayStart);
+    yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+    return { completedAt: { $gte: yesterdayStart, $lt: todayStart } };
+  }
   if (period === "week") {
     const currentStart = startOfWeek(referenceDate);
     const start = new Date(currentStart);
@@ -190,7 +210,6 @@ module.exports = {
   TOP_COUNT,
   CATEGORIES,
   PERIODS,
-  AUDIENCES,
   BASE_ATTEMPT_FILTER,
   periodDateMatch,
   previousPeriodDateMatch,

@@ -8,7 +8,7 @@ const TIER = {
     medal: "🥇",
     avatarSize: "lg",
     width: "w-20 sm:w-28",
-    card: "border-amber-400/70 bg-gradient-to-b from-amber-50 to-panel shadow-md dark:from-amber-950/40 dark:to-panel -translate-y-2 sm:-translate-y-3",
+    card: "border-amber-400/70 bg-linear-to-b from-amber-50 to-panel shadow-md dark:from-amber-950/40 dark:to-panel -translate-y-2 sm:-translate-y-3",
     name: "text-xs font-bold sm:text-sm",
   },
   2: {
@@ -65,7 +65,7 @@ export default function LeaderboardPodium({ top3 }) {
   const third = top3.find((entry) => entry.rank === 3);
 
   return (
-    <div className="mb-5 flex items-end justify-center gap-2 sm:gap-4">
+    <div className="mb-5 flex items-end justify-center gap-2 rounded-3xl bg-linear-to-b from-accent/5 to-transparent py-4 sm:gap-4">
       {second && <PodiumCard entry={second} />}
       {first && <PodiumCard entry={first} />}
       {third && <PodiumCard entry={third} />}

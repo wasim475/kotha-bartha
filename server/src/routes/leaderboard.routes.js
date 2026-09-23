@@ -9,7 +9,6 @@ const { getCycleStatus } = require("../services/leaderboardCycle.service");
 const {
   TOP_COUNT,
   CATEGORIES,
-  AUDIENCES,
   PERIODS,
   BASE_ATTEMPT_FILTER,
   periodDateMatch,
@@ -18,6 +17,10 @@ const {
   rankChangeFor,
   nextRankInfo,
 } = require("../services/leaderboardRanking.service");
+
+// The Everyone/Friends audience filter was removed from the Leaderboard —
+// every ranking request is now always the single, global "everyone" view.
+const AUDIENCE = "everyone";
 
 const router = express.Router();
 
@@ -48,8 +51,7 @@ function cyclePayload(cycle) {
 router.get("/leaderboard/top", async (req, res, next) => {
   try {
     const category = CATEGORIES.includes(req.query.category) ? req.query.category : "overall";
-    const period = PERIODS.includes(req.query.period) ? req.query.period : "all";
-    const audience = AUDIENCES.includes(req.query.audience) ? req.query.audience : "everyone";
+    const period = PERIODS.includes(req.query.period) ? req.query.period : "month";
 
     const cycle = period === "month" ? getCycleStatus() : null;
 
@@ -63,11 +65,10 @@ router.get("/leaderboard/top", async (req, res, next) => {
         data: {
           category,
           period,
-          audience,
           top3: [],
           top20: [],
           totalParticipants: 0,
-          participantLabel: audience === "friends" ? "Friends Participating" : "Total Participants",
+          participantLabel: "Total Participants",
           me: null,
           cycle: cyclePayload(cycle),
         },
@@ -77,7 +78,7 @@ router.get("/leaderboard/top", async (req, res, next) => {
     const participants = await rankedParticipants({
       category,
       dateMatch: periodDateMatch(period),
-      audience,
+      audience: AUDIENCE,
       requesterId: req.user._id,
     });
 
@@ -87,7 +88,7 @@ router.get("/leaderboard/top", async (req, res, next) => {
       const previousParticipants = await rankedParticipants({
         category,
         dateMatch: previousDateMatch,
-        audience,
+        audience: AUDIENCE,
         requesterId: req.user._id,
       });
       previousRankById = new Map(previousParticipants.map((row) => [row.id, row.rank]));
@@ -112,11 +113,10 @@ router.get("/leaderboard/top", async (req, res, next) => {
       data: {
         category,
         period,
-        audience,
         top3,
         top20,
         totalParticipants: participants.length,
-        participantLabel: audience === "friends" ? "Friends Participating" : "Total Participants",
+        participantLabel: "Total Participants",
         me,
         cycle: cycle ? cyclePayload(cycle) : null,
       },
@@ -146,7 +146,7 @@ router.get("/leaderboard/users/:userId/stats", async (req, res, next) => {
       });
     }
 
-    const period = PERIODS.includes(req.query.period) ? req.query.period : "all";
+    const period = PERIODS.includes(req.query.period) ? req.query.period : "month";
     const dateMatch = periodDateMatch(period);
 
     const attempts = dateMatch
