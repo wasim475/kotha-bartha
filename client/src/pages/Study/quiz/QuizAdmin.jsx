@@ -7,6 +7,7 @@ import { api } from "../../../utility/api";
 import { ResourceState, useResource } from "../../../utility/helpers";
 import { cx } from "../../../utility/cx";
 import AddNameDialog from "./AddNameDialog";
+import { parsePastedQuestion } from "./parsePastedQuestion";
 
 const OPTION_LABELS = ["A", "B", "C", "D"];
 const EMPTY_OPTIONS = ["", "", "", ""];
@@ -42,6 +43,7 @@ export default function QuizAdmin({ user }) {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [justPublishedSet, setJustPublishedSet] = useState(null);
+  const [pasteStatus, setPasteStatus] = useState(null);
   const imageInputRef = useRef(null);
   const imagesRef = useRef(images);
   useEffect(() => {
@@ -108,6 +110,44 @@ export default function QuizAdmin({ user }) {
       return [];
     });
     setImageCaption("");
+    setPasteStatus(null);
+  };
+
+  // Smart paste: pasting a full "question + ক)/A) ... ঘ)/D)" block into the
+  // Question field auto-fills the question/option inputs and the
+  // correct-answer radio below — see parsePastedQuestion.js. A paste with
+  // no recognizable option markers falls through to the normal browser
+  // paste behavior untouched, so plain manual pasting/typing keeps working.
+  const handleQuestionPaste = (event) => {
+    const text = event.clipboardData?.getData("text");
+    if (!text) return;
+
+    const result = parsePastedQuestion(text);
+    if (!result.ok) {
+      if (result.reason === "no-options") return;
+      event.preventDefault();
+      setPasteStatus({
+        type: "error",
+        message: `Detected ${result.count} option${result.count === 1 ? "" : "s"} — need exactly 4. Nothing was changed.`,
+      });
+      return;
+    }
+
+    event.preventDefault();
+    setQuestion(result.question);
+    setOptions([result.options.A, result.options.B, result.options.C, result.options.D]);
+
+    if (result.multipleCorrect) {
+      setPasteStatus({
+        type: "error",
+        message: "Multiple ✅ found — question and options were filled in, but choose the correct answer manually.",
+      });
+    } else {
+      if (result.correctAnswer) {
+        setCorrectIndex(OPTION_LABELS.indexOf(result.correctAnswer));
+      }
+      setPasteStatus({ type: "success", message: "✓ Question and 4 options detected" });
+    }
   };
 
   const addImages = (files) => {
@@ -367,12 +407,27 @@ export default function QuizAdmin({ user }) {
                   </label>
                   <textarea
                     value={question}
-                    onChange={(event) => setQuestion(event.target.value)}
+                    onChange={(event) => {
+                      setQuestion(event.target.value);
+                      setPasteStatus(null);
+                    }}
+                    onPaste={handleQuestionPaste}
                     rows={2}
                     maxLength={1000}
-                    placeholder="Type the question…"
+                    placeholder="Type the question, or paste a full question + ক)/A) … ঘ)/D) block…"
                     className="mt-1.5 w-full resize-none rounded-md border border-line bg-paper p-2.5 text-sm text-ink outline-none placeholder:text-muted focus-visible:ring-2 focus-visible:ring-accent"
                   />
+
+                  {pasteStatus && (
+                    <p
+                      className={cx(
+                        "mt-1.5 text-[11px] font-medium",
+                        pasteStatus.type === "success" ? "text-green-600 dark:text-green-400" : "text-danger",
+                      )}
+                    >
+                      {pasteStatus.message}
+                    </p>
+                  )}
 
                   {images.length > 0 && (
                     <div className="mt-2 grid grid-cols-4 gap-1.5 sm:grid-cols-6">

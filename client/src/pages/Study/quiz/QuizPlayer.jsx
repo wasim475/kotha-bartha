@@ -27,7 +27,7 @@ export default function QuizPlayer({ attempt, onComplete }) {
   const [completionData, setCompletionData] = useState(null);
   const [error, setError] = useState("");
 
-  const total = questions.length;
+  const total = questions?.length;
   const current = questions[viewIndex];
   const isLast = viewIndex === total - 1;
   const progressPercent = Math.round((viewIndex / total) * 100);
