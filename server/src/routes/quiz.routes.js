@@ -6,7 +6,7 @@ const QuizQuestion = require("../models/QuizQuestion");
 const QuizAttempt = require("../models/QuizAttempt");
 const { requireRole } = require("../middleware/requireRole");
 const { upload } = require("../middleware/upload");
-const { uploadBuffer } = require("../utils/cloudinary");
+const { uploadBuffer, destroyAsset } = require("../utils/cloudinary");
 
 const router = express.Router();
 
@@ -445,6 +445,186 @@ router.post(
       });
     } catch (error) {
       next(error);
+    }
+  },
+);
+
+// ============================================================
+// ADMIN: BULK QUESTION AUTHORING
+// ============================================================
+
+// Images for any of the batch's questions arrive as files whose field name
+// encodes which question they belong to ("question-<index>-images"), since
+// a single multipart request can't otherwise associate an arbitrary number
+// of files with an arbitrary number of JSON array entries. upload.any()
+// accepts files under any field name; they're grouped back to their
+// question index below.
+router.post(
+  "/quiz/chapters/:chapterId/questions/bulk",
+  requireRole("admin", "moderator"),
+  (req, res, next) => {
+    upload.any()(req, res, (error) => {
+      if (!error) return next();
+      if (error.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({
+          error: { code: "FILE_TOO_LARGE", message: "One of the images is larger than 15MB." },
+        });
+      }
+      if (error.message === "UNSUPPORTED_FILE_TYPE") {
+        return res.status(400).json({
+          error: { code: "UNSUPPORTED_FILE_TYPE", message: "Choose images for these questions." },
+        });
+      }
+      next(error);
+    });
+  },
+  async (req, res, next) => {
+    // Tracks Cloudinary assets already uploaded in this request, so a
+    // later failure (bad chapter, a Mongo write conflict, etc.) can clean
+    // them up instead of leaving orphaned images behind — the closest
+    // this endpoint can get to "all or nothing" across two systems that
+    // don't share a single transaction (Cloudinary isn't part of Mongo's).
+    const uploadedForCleanup = [];
+    const session = await mongoose.startSession();
+    try {
+      const chapter = await Chapter.findById(req.params.chapterId);
+      if (!chapter) {
+        return res.status(404).json({ error: { code: "NOT_FOUND", message: "Chapter not found." } });
+      }
+
+      let rawQuestions = req.body.questions;
+      if (typeof rawQuestions === "string") {
+        try {
+          rawQuestions = JSON.parse(rawQuestions);
+        } catch {
+          rawQuestions = null;
+        }
+      }
+      if (!Array.isArray(rawQuestions) || rawQuestions.length === 0) {
+        return res.status(400).json({
+          error: { code: "VALIDATION_ERROR", message: "No questions were provided." },
+        });
+      }
+
+      const fieldPattern = /^question-(\d+)-images$/;
+      const filesByIndex = new Map();
+      for (const file of req.files || []) {
+        const match = fieldPattern.exec(file.fieldname);
+        if (!match) continue;
+        if (!file.mimetype.startsWith("image/")) {
+          return res.status(400).json({
+            error: { code: "INVALID_FILE", message: `Question ${Number(match[1]) + 1}: choose images only.` },
+          });
+        }
+        const index = Number(match[1]);
+        if (!filesByIndex.has(index)) filesByIndex.set(index, []);
+        filesByIndex.get(index).push(file);
+      }
+
+      // Validate every question BEFORE touching Cloudinary or the
+      // database — a bad question anywhere in the batch fails the whole
+      // request cleanly instead of partially uploading images or
+      // creating documents for the questions before it.
+      const errors = [];
+      const normalized = rawQuestions.map((raw, index) => {
+        const question = String(raw?.question || "").trim();
+        const options = Array.isArray(raw?.options)
+          ? raw.options.map((option) => String(option || "").trim())
+          : [];
+        const correctIndex = Number(raw?.correctIndex);
+        const imageCaption = String(raw?.imageCaption || "").trim();
+
+        if (!question) {
+          errors.push({ index, message: "Question text is required." });
+        } else if (options.length !== 4 || options.some((option) => !option)) {
+          errors.push({ index, message: "Exactly 4 non-empty options are required." });
+        } else if (!Number.isInteger(correctIndex) || correctIndex < 0 || correctIndex > 3) {
+          errors.push({ index, message: "Choose exactly one correct option." });
+        }
+
+        return { question, options, correctIndex, imageCaption };
+      });
+
+      if (errors.length) {
+        return res.status(400).json({
+          error: { code: "VALIDATION_ERROR", message: "Some questions are invalid.", details: errors },
+        });
+      }
+
+      const imagesByIndex = new Map();
+      for (const [index, files] of filesByIndex) {
+        const uploaded = await Promise.all(
+          files.map(async (file) => {
+            const result = await uploadBuffer(file.buffer, {
+              kind: "image",
+              folder: "kotha-bartha/quiz-questions",
+            });
+            const asset = { publicId: result.public_id, secureUrl: result.secure_url, kind: "image" };
+            uploadedForCleanup.push(asset);
+            return asset;
+          }),
+        );
+        imagesByIndex.set(index, uploaded);
+      }
+
+      let created;
+      let publishedSetsBefore;
+      try {
+        await session.withTransaction(async () => {
+          const baseCount = await QuizQuestion.countDocuments({ chapterId: chapter._id }).session(session);
+          publishedSetsBefore = Math.floor(baseCount / QUESTIONS_PER_SET);
+
+          const docs = normalized.map((q, index) => {
+            const slotIndex = baseCount + index;
+            const setNumber = Math.floor(slotIndex / QUESTIONS_PER_SET) + 1;
+            return {
+              chapterId: chapter._id,
+              subjectId: chapter.subjectId,
+              classLevel: chapter.classLevel,
+              question: q.question,
+              options: q.options,
+              correctIndex: q.correctIndex,
+              images: imagesByIndex.get(index) || [],
+              imageCaption: q.imageCaption,
+              slotIndex,
+              setNumber,
+              createdBy: req.user._id,
+            };
+          });
+
+          created = await QuizQuestion.insertMany(docs, { session, ordered: true });
+        });
+      } catch (createError) {
+        await Promise.all(uploadedForCleanup.map((asset) => destroyAsset(asset.publicId, asset.kind)));
+        if (createError.code === 11000) {
+          return res.status(409).json({
+            error: {
+              code: "CONFLICT",
+              message: "Someone else just added questions to this chapter — please refresh and try again.",
+            },
+          });
+        }
+        throw createError;
+      }
+
+      const summary = await chapterQuestionSummary(chapter._id);
+      const newlyPublishedSets = [];
+      for (let setNumber = publishedSetsBefore + 1; setNumber <= summary.publishedSets; setNumber++) {
+        newlyPublishedSets.push(setNumber);
+      }
+
+      res.status(201).json({
+        data: {
+          createdCount: created.length,
+          summary,
+          newlyPublishedSets,
+        },
+      });
+    } catch (error) {
+      await Promise.all(uploadedForCleanup.map((asset) => destroyAsset(asset.publicId, asset.kind)));
+      next(error);
+    } finally {
+      await session.endSession();
     }
   },
 );

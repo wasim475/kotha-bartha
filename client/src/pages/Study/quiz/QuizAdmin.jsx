@@ -7,6 +7,7 @@ import { api } from "../../../utility/api";
 import { ResourceState, useResource } from "../../../utility/helpers";
 import { cx } from "../../../utility/cx";
 import AddNameDialog from "./AddNameDialog";
+import BulkQuizCreator from "./BulkQuizCreator";
 import { parsePastedQuestion } from "./parsePastedQuestion";
 
 const OPTION_LABELS = ["A", "B", "C", "D"];
@@ -24,6 +25,11 @@ const MAX_QUESTION_IMAGES = 4;
  * enforcement.
  */
 export default function QuizAdmin({ user }) {
+  // "single" preserves the existing one-question-at-a-time form exactly as
+  // it was; "bulk" is the new paste-many-questions flow (BulkQuizCreator.jsx)
+  // — both share the same Category/Class/বিভাগ/Subject/Chapter selection
+  // above, never asking for it twice.
+  const [mode, setMode] = useState("single");
   const [category, setCategory] = useState(null);
   const [classLevel, setClassLevel] = useState(null);
   const [division, setDivision] = useState(null);
@@ -211,6 +217,17 @@ export default function QuizAdmin({ user }) {
       setSaving(false);
     }
   };
+
+  const categoryLabel = categories.data?.find((item) => item.key === category)?.label || category;
+  const bulkContextSummary = [
+    categoryLabel && `Category: ${categoryLabel}`,
+    classLevel && `Class: ${classLevel === "SSC" ? "SSC" : classLevel}`,
+    division && `বিভাগ: ${division}`,
+    subject && `Subject: ${subject.name}`,
+    chapter && `Chapter: ${chapter.name}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
@@ -400,6 +417,34 @@ export default function QuizAdmin({ user }) {
                 )}
               </Card>
 
+              <div className="inline-flex items-center gap-1 self-start rounded-full border border-line bg-panel p-1">
+                <button
+                  type="button"
+                  onClick={() => setMode("single")}
+                  className={cx(
+                    "rounded-full px-3 py-1.5 text-xs font-semibold transition-colors motion-safe:duration-150",
+                    mode === "single" ? "bg-accent text-white" : "text-muted hover:text-ink",
+                  )}
+                >
+                  Add Single Question
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode("bulk")}
+                  className={cx(
+                    "rounded-full px-3 py-1.5 text-xs font-semibold transition-colors motion-safe:duration-150",
+                    mode === "bulk" ? "bg-accent text-white" : "text-muted hover:text-ink",
+                  )}
+                >
+                  Add Multiple Questions
+                </button>
+              </div>
+
+              {mode === "bulk" && (
+                <BulkQuizCreator chapter={chapter} contextSummary={bulkContextSummary} summary={summary} />
+              )}
+
+              {mode === "single" && (
               <Card as="form" onSubmit={submitQuestion} className="flex flex-col gap-3.5">
                 <div>
                   <label className="text-xs font-semibold tracking-wide text-muted uppercase">
@@ -546,6 +591,7 @@ export default function QuizAdmin({ user }) {
                   Submit Question
                 </Button>
               </Card>
+              )}
             </>
           )}
         </ResourceState>
