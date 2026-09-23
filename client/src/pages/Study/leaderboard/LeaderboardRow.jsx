@@ -1,4 +1,4 @@
-import { ChevronRight } from "@mui/icons-material";
+import { ArrowDownward, ArrowUpward, ChevronRight } from "@mui/icons-material";
 import { Link } from "react-router-dom";
 
 import Card from "../../../components/ui/Card";
@@ -10,6 +10,30 @@ const RANK_BADGE_CLASSES = {
   2: "bg-gradient-to-br from-slate-300 to-slate-400 text-slate-900",
   3: "bg-gradient-to-br from-orange-300 to-orange-500 text-orange-950",
 };
+
+// Only rendered when the backend actually has a reliable previous-period
+// rank to compare against (period "this week"/"this month" — never "all
+// time", and never for a user who wasn't ranked last period) — see
+// leaderboard.routes.js's rankChangeFor, which returns null rather than
+// guessing whenever that data isn't available.
+export function RankChangeBadge({ rankChange }) {
+  if (!rankChange) return null;
+  if (rankChange.direction === "same") {
+    return <span className="text-[10px] font-semibold text-muted">— 0</span>;
+  }
+  const isUp = rankChange.direction === "up";
+  return (
+    <span
+      className={cx(
+        "flex items-center gap-0.5 text-[10px] font-semibold tabular-nums",
+        isUp ? "text-green-600 dark:text-green-400" : "text-danger",
+      )}
+    >
+      {isUp ? <ArrowUpward style={{ fontSize: 11 }} /> : <ArrowDownward style={{ fontSize: 11 }} />}
+      {rankChange.delta}
+    </span>
+  );
+}
 
 function StatTile({ label, value, sub, tone }) {
   const toneClass =
@@ -80,7 +104,7 @@ function ExpandedStats({ stats }) {
             <div className="h-full bg-danger" style={{ width: `${quiz.wrongPercent}%` }} />
           </div>
         ) : (
-          <p className="mt-2 text-[11px] text-muted">No quizzes completed yet.</p>
+          <p className="mt-2 text-[11px] text-muted">No quizzes completed in this period.</p>
         )}
       </div>
     </div>
@@ -88,12 +112,13 @@ function ExpandedStats({ stats }) {
 }
 
 /**
- * One Top-20 row. Collapsed: rank badge + avatar/name/city + points.
- * Clicking anywhere on the row toggles the expanded stats panel below it
- * (smooth CSS-grid height transition, motion-safe-gated); clicking the
- * avatar or name specifically navigates to that person's profile instead
- * (stopPropagation keeps the two interactions from conflicting, per the
- * existing app convention of avatar/name as a profile link).
+ * One Top-20 row. Collapsed: rank badge + rank-change + avatar/name/city +
+ * points. Clicking anywhere on the row toggles the expanded stats panel
+ * below it (smooth CSS-grid height transition, motion-safe-gated);
+ * clicking the avatar or name specifically navigates to that person's
+ * profile instead (stopPropagation keeps the two interactions from
+ * conflicting, per the existing app convention of avatar/name as a
+ * profile link).
  */
 export default function LeaderboardRow({ row, isMe, expanded, onToggle, stats }) {
   const rankBadgeClass = RANK_BADGE_CLASSES[row.rank] || "bg-soft text-muted";
@@ -111,16 +136,19 @@ export default function LeaderboardRow({ row, isMe, expanded, onToggle, stats })
             onToggle();
           }
         }}
-        className="flex cursor-pointer items-center gap-3 p-3 transition-colors motion-safe:duration-150 hover:bg-soft active:bg-soft sm:gap-3.5 sm:p-3.5"
+        className="flex cursor-pointer items-center gap-2.5 p-3 transition-colors motion-safe:duration-150 hover:bg-soft active:bg-soft sm:gap-3.5 sm:p-3.5"
       >
-        <span
-          className={cx(
-            "flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums sm:size-8",
-            rankBadgeClass,
-          )}
-        >
-          {row.rank}
-        </span>
+        <div className="flex shrink-0 flex-col items-center gap-0.5">
+          <span
+            className={cx(
+              "flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums sm:size-8",
+              rankBadgeClass,
+            )}
+          >
+            {row.rank}
+          </span>
+          <RankChangeBadge rankChange={row.rankChange} />
+        </div>
 
         <span onClick={(event) => event.stopPropagation()} className="shrink-0">
           <ProfileAvatarLink person={{ id: row.id, fullName: row.fullName, avatar: row.avatar }} size="md" />
@@ -155,17 +183,17 @@ export default function LeaderboardRow({ row, isMe, expanded, onToggle, stats })
         />
       </div>
 
+      {/* Content stays mounted through the collapse transition (only
+          gated by grid-rows going to 0fr) rather than unmounting the
+          instant `expanded` flips false, so collapsing a row visibly
+          shrinks its content away instead of leaving a blank shrinking
+          box. */}
       <div
         className={cx(
           "grid transition-[grid-template-rows] motion-safe:duration-300 ease-in-out",
           expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
         )}
       >
-        {/* Content stays mounted through the collapse transition (only
-            gated by grid-rows going to 0fr) rather than unmounting the
-            instant `expanded` flips false, so collapsing a row visibly
-            shrinks its content away instead of leaving a blank shrinking
-            box. */}
         <div className="overflow-hidden">
           <ExpandedStats stats={stats} />
         </div>
