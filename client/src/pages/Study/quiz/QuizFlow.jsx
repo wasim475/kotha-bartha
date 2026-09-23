@@ -16,7 +16,7 @@ import { useNavigate } from "react-router-dom";
 import Button from "../../../components/ui/Button";
 import Card from "../../../components/ui/Card";
 import { api } from "../../../utility/api";
-import { ResourceState, useResource } from "../../../utility/helpers";
+import { useResource } from "../../../utility/helpers";
 import { cx } from "../../../utility/cx";
 import QuizLoader from "./QuizLoader";
 import QuizPlayer from "./QuizPlayer";
@@ -27,6 +27,31 @@ const CATEGORY_ICONS = {
   general_knowledge: EmojiObjects,
   sports: SportsSoccer,
 };
+
+// Fetches `url` and shows a premium, quiz-specific loader/error state in
+// its place until the data actually arrives — never an empty area.
+// Callers pass a `key` that changes whenever the underlying selection
+// changes (e.g. a different subjectId), which forces React to fully
+// remount this component instead of reusing the previous instance. That
+// matters because `useResource` (utility/helpers.jsx) does not reset its
+// own `loading` flag back to true when its `url` argument changes to a
+// new value — remounting sidesteps that without needing to touch the
+// shared hook (used across the whole app, not just Quiz).
+function QuizDataStep({ url, loaderLabel, children }) {
+  const resource = useResource(url);
+
+  if (resource.loading) {
+    return <QuizLoader label={loaderLabel} />;
+  }
+  if (resource.error) {
+    return (
+      <div className="flex flex-col items-center gap-2 py-14 text-center">
+        <p className="text-sm font-medium text-danger">{resource.error}</p>
+      </div>
+    );
+  }
+  return children(resource);
+}
 
 function TileGrid({ items, onSelect, renderIcon, renderLabel }) {
   return (
@@ -117,11 +142,18 @@ const setStatusMeta = {
  * as one component with internal step state rather than deep-linked routes
  * (kept simple; resume itself is already server-side via QuizAttempt, so a
  * hard refresh mid-quiz just needs the user to reselect their way back in
- * and "start" transparently resumes their in-progress attempt).
+ * and "start" transparently resumes their in-progress attempt). Every step
+ * that fetches from the backend is wrapped in QuizDataStep, so there's
+ * always a loader or error state in place of the step's content — never an
+ * empty area — while that step's request is in flight.
  */
 export default function QuizFlow({ canManageQuiz }) {
   const navigate = useNavigate();
   const [category, setCategory] = useState(null);
+  // Captured at selection time (see TileGrid onSelect below) instead of
+  // re-derived later from the categories resource, since that resource's
+  // QuizDataStep unmounts once a category is chosen.
+  const [categoryLabel, setCategoryLabel] = useState("");
   const [classLevel, setClassLevel] = useState(null);
   const [division, setDivision] = useState(null);
   const [subject, setSubject] = useState(null);
@@ -130,12 +162,10 @@ export default function QuizFlow({ canManageQuiz }) {
   const [result, setResult] = useState(null);
   const [startingSet, setStartingSet] = useState(null);
   const [startError, setStartError] = useState("");
-
-  const categories = useResource(!category ? "/quiz/categories" : null);
-  const classLevels = useResource(category === "class" && !classLevel ? "/quiz/class-levels" : null);
-  const divisions = useResource(
-    category === "class" && classLevel === "SSC" && !division ? "/quiz/ssc-divisions" : null,
-  );
+  // Bumped by backToSets() to force QuizDataStep to remount (and therefore
+  // refetch) the sets list even though the chapter itself hasn't changed —
+  // a set's status/leaderboard score may have just changed.
+  const [setsRefreshToken, setSetsRefreshToken] = useState(0);
 
   // Subjects only become fetchable once every prior required step is
   // resolved: for "class" that's classLevel (+division when SSC); for the
@@ -148,9 +178,6 @@ export default function QuizFlow({ canManageQuiz }) {
       ? `category=class&classLevel=${classLevel}${classLevel === "SSC" ? `&division=${encodeURIComponent(division)}` : ""}`
       : `category=${category}`
     : null;
-  const subjects = useResource(subjectsQuery && !subject && !attempt ? `/quiz/subjects?${subjectsQuery}` : null);
-  const chapters = useResource(subject && !attempt ? `/quiz/chapters?subjectId=${subject.id}` : null);
-  const sets = useResource(chapter && !attempt ? `/quiz/chapters/${chapter.id}/sets` : null);
 
   const startSet = async (setNumber) => {
     setStartingSet(setNumber);
@@ -169,7 +196,7 @@ export default function QuizFlow({ canManageQuiz }) {
   const backToSets = () => {
     setAttempt(null);
     setResult(null);
-    sets.reload();
+    setSetsRefreshToken((token) => token + 1);
   };
 
   const retry = () => {
@@ -214,8 +241,6 @@ export default function QuizFlow({ canManageQuiz }) {
   // Category -> [Class -> Division] -> Subject -> Chapter -> Sets
   // ============================================================
 
-  const categoryLabel = (key) => categories.data?.find((item) => item.key === key)?.label || key;
-
   const crumbs = [
     {
       key: "quiz",
@@ -234,7 +259,7 @@ export default function QuizFlow({ canManageQuiz }) {
   if (category) {
     crumbs.push({
       key: "category",
-      label: categoryLabel(category),
+      label: categoryLabel,
       onClick: classLevel || subject
         ? () => {
             setClassLevel(null);
@@ -293,111 +318,140 @@ export default function QuizFlow({ canManageQuiz }) {
       </div>
 
       {!category && (
-        <ResourceState loading={categories.loading} error={categories.error}>
-          <TileGrid
-            items={categories.data || []}
-            onSelect={(item) => setCategory(item.key)}
-            renderIcon={(item) => CATEGORY_ICONS[item.key] || QuizIcon}
-            renderLabel={(item) => item.label}
-          />
-        </ResourceState>
+        <QuizDataStep key="categories" url="/quiz/categories" loaderLabel="Loading quiz categories…">
+          {(resource) => (
+            <TileGrid
+              items={resource.data || []}
+              onSelect={(item) => {
+                setCategory(item.key);
+                setCategoryLabel(item.label);
+              }}
+              renderIcon={(item) => CATEGORY_ICONS[item.key] || QuizIcon}
+              renderLabel={(item) => item.label}
+            />
+          )}
+        </QuizDataStep>
       )}
 
       {category === "class" && !classLevel && (
-        <ResourceState loading={classLevels.loading} error={classLevels.error}>
-          <TileGrid
-            items={(classLevels.data || []).map((level) => ({ key: level }))}
-            onSelect={(item) => setClassLevel(item.key)}
-            renderIcon={() => MenuBook}
-            renderLabel={(item) => (item.key === "SSC" ? "SSC" : `Class ${item.key}`)}
-          />
-        </ResourceState>
+        <QuizDataStep key="class-levels" url="/quiz/class-levels" loaderLabel="Loading classes…">
+          {(resource) => (
+            <TileGrid
+              items={(resource.data || []).map((level) => ({ key: level }))}
+              onSelect={(item) => setClassLevel(item.key)}
+              renderIcon={() => MenuBook}
+              renderLabel={(item) => (item.key === "SSC" ? "SSC" : `Class ${item.key}`)}
+            />
+          )}
+        </QuizDataStep>
       )}
 
       {category === "class" && classLevel === "SSC" && !division && (
-        <ResourceState loading={divisions.loading} error={divisions.error}>
-          <TileGrid
-            items={(divisions.data || []).map((name) => ({ key: name }))}
-            onSelect={(item) => setDivision(item.key)}
-            renderIcon={() => MenuBook}
-            renderLabel={(item) => item.key}
-          />
-        </ResourceState>
+        <QuizDataStep key="ssc-divisions" url="/quiz/ssc-divisions" loaderLabel="Loading বিভাগ options…">
+          {(resource) => (
+            <TileGrid
+              items={(resource.data || []).map((name) => ({ key: name }))}
+              onSelect={(item) => setDivision(item.key)}
+              renderIcon={() => MenuBook}
+              renderLabel={(item) => item.key}
+            />
+          )}
+        </QuizDataStep>
       )}
 
       {subjectsReady && !subject && (
-        <ResourceState loading={subjects.loading} error={subjects.error}>
-          <SelectionGrid
-            items={subjects.data || []}
-            onSelect={setSubject}
-            renderLabel={(item) => item.name}
-            emptyLabel="No subjects yet here."
-          />
-        </ResourceState>
+        <QuizDataStep
+          key={subjectsQuery}
+          url={`/quiz/subjects?${subjectsQuery}`}
+          loaderLabel="Loading subjects…"
+        >
+          {(resource) => (
+            <SelectionGrid
+              items={resource.data || []}
+              onSelect={setSubject}
+              renderLabel={(item) => item.name}
+              emptyLabel="No subjects yet here."
+            />
+          )}
+        </QuizDataStep>
       )}
 
       {subject && !chapter && (
-        <ResourceState loading={chapters.loading} error={chapters.error}>
-          <SelectionGrid
-            items={chapters.data || []}
-            onSelect={setChapter}
-            renderLabel={(item) => item.name}
-            emptyLabel="No chapters yet for this subject."
-          />
-        </ResourceState>
+        <QuizDataStep
+          key={subject.id}
+          url={`/quiz/chapters?subjectId=${subject.id}`}
+          loaderLabel="Loading chapters…"
+        >
+          {(resource) => (
+            <SelectionGrid
+              items={resource.data || []}
+              onSelect={setChapter}
+              renderLabel={(item) => item.name}
+              emptyLabel="No chapters yet for this subject."
+            />
+          )}
+        </QuizDataStep>
       )}
 
       {chapter && (
-        <ResourceState loading={sets.loading} error={sets.error}>
-          {sets.data?.length ? (
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-              {sets.data.map((set) => {
-                const meta = setStatusMeta[set.status];
-                const StatusIcon = meta.icon;
-                return (
-                  <Card key={set.setNumber} className="flex flex-col gap-3">
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-2 text-sm font-semibold text-ink">
-                        <QuizIcon fontSize="small" className="text-accent" /> Set {set.setNumber}
-                      </span>
-                      <span className={cx("text-xs font-medium", meta.className)}>{meta.label}</span>
-                    </div>
-                    <p className="text-xs text-muted">{set.totalQuestions} questions</p>
-                    {set.status === "in_progress" && (
-                      <p className="text-xs text-muted">
-                        Progress: {set.currentIndex} / {set.totalQuestions}
-                      </p>
-                    )}
-                    {set.firstAttemptScore !== null && (
-                      <p className="text-xs text-muted">Leaderboard score: {set.firstAttemptScore}</p>
-                    )}
-                    <Button
-                      variant={set.status === "completed" ? "outline" : "primary"}
-                      size="sm"
-                      loading={startingSet === set.setNumber}
-                      disabled={startingSet !== null}
-                      onClick={() => startSet(set.setNumber)}
-                    >
-                      <StatusIcon fontSize="small" />
-                      {set.status === "not_started" && "Start Quiz"}
-                      {set.status === "in_progress" && "Resume"}
-                      {set.status === "completed" && "Try Again"}
-                    </Button>
-                  </Card>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-2 py-14 text-center">
-              <Lock fontSize="large" className="text-muted" />
-              <p className="text-sm text-muted">
-                No quiz sets are available for this chapter yet — a set unlocks once 30 questions
-                have been added.
-              </p>
-            </div>
+        <QuizDataStep
+          key={`${chapter.id}:${setsRefreshToken}`}
+          url={`/quiz/chapters/${chapter.id}/sets`}
+          loaderLabel="Loading quiz sets…"
+        >
+          {(resource) => (
+            <>
+              {resource.data?.length ? (
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                  {resource.data.map((set) => {
+                    const meta = setStatusMeta[set.status];
+                    const StatusIcon = meta.icon;
+                    return (
+                      <Card key={set.setNumber} className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                          <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+                            <QuizIcon fontSize="small" className="text-accent" /> Set {set.setNumber}
+                          </span>
+                          <span className={cx("text-xs font-medium", meta.className)}>{meta.label}</span>
+                        </div>
+                        <p className="text-xs text-muted">{set.totalQuestions} questions</p>
+                        {set.status === "in_progress" && (
+                          <p className="text-xs text-muted">
+                            Progress: {set.currentIndex} / {set.totalQuestions}
+                          </p>
+                        )}
+                        {set.firstAttemptScore !== null && (
+                          <p className="text-xs text-muted">Leaderboard score: {set.firstAttemptScore}</p>
+                        )}
+                        <Button
+                          variant={set.status === "completed" ? "outline" : "primary"}
+                          size="sm"
+                          loading={startingSet === set.setNumber}
+                          disabled={startingSet !== null}
+                          onClick={() => startSet(set.setNumber)}
+                        >
+                          <StatusIcon fontSize="small" />
+                          {set.status === "not_started" && "Start Quiz"}
+                          {set.status === "in_progress" && "Resume"}
+                          {set.status === "completed" && "Try Again"}
+                        </Button>
+                      </Card>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2 py-14 text-center">
+                  <Lock fontSize="large" className="text-muted" />
+                  <p className="text-sm text-muted">
+                    No quiz sets are available for this chapter yet — a set unlocks once 30 questions
+                    have been added.
+                  </p>
+                </div>
+              )}
+              {startError && <p className="mt-3 text-center text-xs font-medium text-danger">{startError}</p>}
+            </>
           )}
-          {startError && <p className="mt-3 text-center text-xs font-medium text-danger">{startError}</p>}
-        </ResourceState>
+        </QuizDataStep>
       )}
     </div>
   );

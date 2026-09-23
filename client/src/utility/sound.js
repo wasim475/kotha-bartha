@@ -23,33 +23,43 @@ export const playSoftMessageSound = () => playSound("/sounds/message-soft.wav", 
 
 export const playReactionSound = () => playSound("/sounds/reaction.wav", 0.4);
 
-// Quiz timer/answer feedback (QuizPlayer.jsx). Correct/wrong are simple
-// fire-and-forget cues like the ones above. The 10-second warning clip is
-// ~11s long — longer than the time it's meant to cover — so the caller
-// keeps the returned Audio instance and stops it early (pause + rewind)
-// the moment the question is answered or a new one starts, rather than
-// letting it play to completion underneath the next question.
+// Quiz answer feedback (QuizPlayer.jsx) — fire-and-forget cues like the
+// ones above.
 export const playCorrectAnswerSound = () => playSound("/sounds/correctAnswer.mp3", 0.6);
 
 export const playWrongAnswerSound = () => playSound("/sounds/wronanswer.mp3", 0.6);
 
-export function playTenSecondWarningSound() {
-  try {
-    const audio = new Audio("/sounds/10secLeft.mp3");
-    audio.volume = 0.5;
-    audio.play()?.catch(() => {});
-    return audio;
-  } catch {
-    return null;
-  }
-}
+// Quiz countdown beep (QuizPlayer.jsx) — plays at the 10s-left and 5s-left
+// marks. A short synthesized blip via the Web Audio API rather than an
+// audio file, since it just needs to be a quick, unmistakable "tick," not
+// a longer clip to manage/cut off. The AudioContext is created lazily on
+// first use and reused for every later beep (creating a fresh one per call
+// is unnecessary and some browsers cap how many can exist at once).
+let beepContext = null;
 
-export function stopSound(audio) {
-  if (!audio) return;
+export function playCountdownBeep() {
   try {
-    audio.pause();
-    audio.currentTime = 0;
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    if (!beepContext) {
+      beepContext = new Ctx();
+    }
+    if (beepContext.state === "suspended") {
+      beepContext.resume().catch(() => {});
+    }
+
+    const oscillator = beepContext.createOscillator();
+    const gain = beepContext.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.value = 880;
+    gain.gain.setValueAtTime(0.0001, beepContext.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.18, beepContext.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, beepContext.currentTime + 0.2);
+    oscillator.connect(gain);
+    gain.connect(beepContext.destination);
+    oscillator.start();
+    oscillator.stop(beepContext.currentTime + 0.22);
   } catch {
-    // Nothing to clean up if the element is already gone/unsupported.
+    // Sound is a nice-to-have — never let it break the quiz.
   }
 }

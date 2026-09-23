@@ -5,12 +5,7 @@ import Button from "../../../components/ui/Button";
 import Card from "../../../components/ui/Card";
 import { api } from "../../../utility/api";
 import { cx } from "../../../utility/cx";
-import {
-  playCorrectAnswerSound,
-  playTenSecondWarningSound,
-  playWrongAnswerSound,
-  stopSound,
-} from "../../../utility/sound";
+import { playCorrectAnswerSound, playCountdownBeep, playWrongAnswerSound } from "../../../utility/sound";
 import QuizLoader from "./QuizLoader";
 
 const OPTION_LABELS = ["A", "B", "C", "D"];
@@ -21,7 +16,9 @@ const OPTION_LABELS = ["A", "B", "C", "D"];
 const QUESTION_TIME_LIMIT = 30;
 const WARNING_AT = 10; // <=10s and >5s: warning state
 const DANGER_AT = 5; // <=5s: danger state
-const TEN_SECOND_WARNING_AT = 10; // when the 10s-left sound plays, once
+// Seconds-remaining marks at which a short beep plays, once each per
+// question.
+const BEEP_AT_SECONDS = [10, 5];
 
 function timerState(secondsLeft) {
   if (secondsLeft <= 0) return "timeout";
@@ -115,18 +112,27 @@ export default function QuizPlayer({ attempt, onComplete }) {
   const [secondsLeft, setSecondsLeft] = useState(QUESTION_TIME_LIMIT);
 
   // Synchronous guard against a double submit (e.g. the user clicks an
-  // option in the same instant the countdown hits 0, or while the 10s
-  // sound is playing) — React state updates are async, so `submitting`
-  // alone can't be trusted to block a second call that fires before the
-  // first re-render lands.
+  // option in the same instant the countdown hits 0) — React state updates
+  // are async, so `submitting` alone can't be trusted to block a second
+  // call that fires before the first re-render lands.
   const submittingRef = useRef(false);
-  // The currently-playing 10-seconds-left Audio instance (or null) — kept
-  // so it can be stopped early the moment the question is answered/changes,
-  // since the clip itself runs longer than the 10 seconds it announces.
-  const warningAudioRef = useRef(null);
-  // Guards the 10s warning sound so it plays exactly once per question,
-  // even across React re-renders/StrictMode's dev double-invoke.
-  const tenSecondPlayedRef = useRef(false);
+  // Which of BEEP_AT_SECONDS have already beeped for the current question
+  // — guards each mark to fire exactly once, even across React
+  // re-renders/StrictMode's dev double-invoke.
+  const beepedThresholdsRef = useRef(new Set());
+  // The single source of truth for this question's countdown — a fixed
+  // wall-clock timestamp, not a counter. Every tick re-derives secondsLeft
+  // from `Math.ceil((deadline - Date.now()) / 1000)` instead of
+  // decrementing a running value, so the display, the beep marks, and the
+  // timeout can never drift apart from each other or from real elapsed
+  // time (which a plain `setInterval(fn, 1000)` decrement is prone to —
+  // that's what previously caused the 10s cue to fire anywhere from 7-9s).
+  // Set to a real deadline in the viewIndex effect below, not here —
+  // Date.now() is an impure call and can't run in render.
+  const deadlineRef = useRef(null);
+  // The previous tick's secondsLeft, used only to detect the moment the
+  // countdown crosses each beep threshold (see the beep effect).
+  const previousSecondsRef = useRef(QUESTION_TIME_LIMIT);
 
   const total = questions?.length || 0;
   const current = total > 0 ? questions[viewIndex] : undefined;
@@ -138,8 +144,6 @@ export default function QuizPlayer({ attempt, onComplete }) {
     submittingRef.current = true;
     setSubmitting(true);
     setError("");
-    stopSound(warningAudioRef.current);
-    warningAudioRef.current = null;
     try {
       const { data } = await api.post(`/quiz/attempts/${attempt.attemptId}/answer`, {
         questionIndex: viewIndex,
@@ -209,49 +213,65 @@ export default function QuizPlayer({ attempt, onComplete }) {
     setSecondsLeft(QUESTION_TIME_LIMIT);
   }
 
-  // New question: clear the 10s-warning dedup guard and stop/discard any
-  // still-playing warning sound from the previous question (ref mutation +
-  // side effect, so it belongs in an effect rather than the render-time
-  // reset above).
+  // New question: set a fresh 30s deadline and clear the beep dedup guard.
+  // Also covers the very first question (this effect runs on mount, same
+  // as every later viewIndex change).
   useEffect(() => {
-    tenSecondPlayedRef.current = false;
-    stopSound(warningAudioRef.current);
-    warningAudioRef.current = null;
+    deadlineRef.current = Date.now() + QUESTION_TIME_LIMIT * 1000;
+    previousSecondsRef.current = QUESTION_TIME_LIMIT;
+    beepedThresholdsRef.current = new Set();
   }, [viewIndex]);
 
-  // Countdown ticking — one interval per unanswered current question,
-  // fully cleared (cleanup) the instant the question is answered, a
-  // submission is in flight, or this effect re-runs for any reason (new
-  // question, StrictMode's dev double-invoke, etc.), so there is never
-  // more than one interval ticking at a time.
+  // Countdown ticking. Each tick re-derives secondsLeft from
+  // deadlineRef/Date.now() rather than decrementing a counter, so it's
+  // immune to setInterval's cumulative drift — the exact bug that used to
+  // make the countdown cues fire anywhere from 7-9 seconds instead of
+  // exactly on the mark. Polls at 250ms (well under 1s) so no whole
+  // second, including 10, 5, and 0, is ever skipped under normal
+  // conditions. One interval per unanswered current question, fully
+  // cleared the instant it's answered, a submission is in flight, or this
+  // effect re-runs for any reason (new question, StrictMode's dev
+  // double-invoke, etc.) — never more than one at a time.
   useEffect(() => {
     if (!current || current.answered || submitting) return undefined;
 
     const intervalId = setInterval(() => {
-      setSecondsLeft((value) => Math.max(0, value - 1));
-    }, 1000);
+      const remaining = Math.max(0, Math.ceil((deadlineRef.current - Date.now()) / 1000));
+      setSecondsLeft((value) => (value === remaining ? value : remaining));
+    }, 250);
 
     return () => clearInterval(intervalId);
   }, [current, submitting]);
 
-  // 10-seconds-left warning sound — plays exactly once per question, the
-  // instant the countdown reaches TEN_SECOND_WARNING_AT, deduped via
-  // tenSecondPlayedRef so it never replays on re-render.
+  // Countdown beep — plays once each time the countdown crosses down to a
+  // BEEP_AT_SECONDS mark (10s and 5s left), detected via the
+  // previous-vs-current transition rather than a single equality check, so
+  // a rare skipped tick under heavy throttling still fires it instead of
+  // missing it entirely. beepedThresholdsRef guards each mark so it can
+  // never replay on a later re-render.
   useEffect(() => {
-    if (!current || current.answered || submitting) return;
-    if (secondsLeft !== TEN_SECOND_WARNING_AT) return;
-    if (tenSecondPlayedRef.current) return;
+    const previous = previousSecondsRef.current;
+    previousSecondsRef.current = secondsLeft;
 
-    tenSecondPlayedRef.current = true;
-    warningAudioRef.current = playTenSecondWarningSound();
+    if (!current || current.answered || submitting) return;
+
+    for (const threshold of BEEP_AT_SECONDS) {
+      if (beepedThresholdsRef.current.has(threshold)) continue;
+      if (previous > threshold && secondsLeft <= threshold && secondsLeft > 0) {
+        beepedThresholdsRef.current.add(threshold);
+        playCountdownBeep();
+      }
+    }
   }, [secondsLeft, current, submitting]);
 
-  // Timeout auto-submit — fires once when the countdown reaches 0 for the
-  // current, still-unanswered question. The actual submission is deferred
-  // into a timeout callback (rather than called directly from the effect
-  // body) purely so state updates happen from a callback, not synchronously
-  // during the effect; submitAnswer's own ref guard is what actually
-  // prevents a duplicate submission.
+  // Timeout auto-submit — fires once when the deadline-derived countdown
+  // reaches 0 for the current, still-unanswered question (secondsLeft
+  // clamps at 0 and stays there once the deadline passes, so this can't be
+  // skipped by a tick). The actual submission is deferred into a timeout
+  // callback (rather than called directly from the effect body) purely so
+  // state updates happen from a callback, not synchronously during the
+  // effect; submitAnswer's own ref guard is what actually prevents a
+  // duplicate submission.
   useEffect(() => {
     if (!current || current.answered || submitting) return undefined;
     if (secondsLeft !== 0) return undefined;
@@ -263,14 +283,6 @@ export default function QuizPlayer({ attempt, onComplete }) {
     // below — listing it would just make this effect re-run every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [secondsLeft, current, submitting]);
-
-  // Stop any playing warning sound when the player unmounts (e.g. the user
-  // navigates away from the quiz mid-countdown).
-  useEffect(() => {
-    return () => {
-      stopSound(warningAudioRef.current);
-    };
-  }, []);
 
   if (!current) {
     return <QuizLoader label="Preparing your question…" />;
@@ -311,12 +323,20 @@ export default function QuizPlayer({ attempt, onComplete }) {
         </div>
       </div>
 
+      {/*
+        Uses `ring` (box-shadow based) rather than `border-*` for the
+        correct/wrong glow — Card's own base classes already set
+        `border border-line` (see components/ui/Card.jsx), and appending a
+        conditional `border-green-500`/`border-danger` after it competed
+        for the same border-color property and lost, which is why the glow
+        previously never actually appeared. `ring`/`shadow` are a distinct
+        box-shadow layer, so they can't be overridden by Card's own border.
+      */}
       <Card
         className={cx(
-          "flex flex-col gap-4 border-2 transition-shadow motion-safe:duration-300",
-          resultState === "correct" && "border-green-500 shadow-lg shadow-green-500/30",
-          resultState === "wrong" && "border-danger shadow-lg shadow-danger/30",
-          !resultState && "border-line",
+          "flex flex-col gap-4 transition-shadow motion-safe:duration-300",
+          resultState === "correct" && "ring-2 ring-green-500/70 shadow-lg shadow-green-500/30",
+          resultState === "wrong" && "ring-2 ring-danger/70 shadow-lg shadow-danger/30",
         )}
       >
         <p className="text-base leading-relaxed font-semibold text-ink sm:text-lg">
