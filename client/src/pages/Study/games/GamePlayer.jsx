@@ -13,7 +13,7 @@ import GameQuestion from "./components/GameQuestion";
 import GameResult from "./GameResult";
 import useGameAnimation from "./hooks/useGameAnimation";
 import useGameSession from "./hooks/useGameSession";
-import { ANSWER_STATE, OPTION_LETTERS, toneFor } from "./utility/gameTypes";
+import { ANSWER_STATE, OPTION_LETTERS, gamesHomePath, toneFor } from "./utility/gameTypes";
 
 // Short numeric answers fit two-up even on a 320px phone; longer text
 // (future English options) stacks on small screens instead of overflowing.
@@ -69,7 +69,7 @@ function GamePlayerScreen({ gameType }) {
   const outlineFix = useButtonColorFix("outline");
 
   const { phase, session, question, answerState, feedback, pendingPosition, select } = game;
-  const backToGames = () => navigate("/study/games");
+  const backToGames = () => navigate(gamesHomePath(session?.category));
   const timer = game.timer;
   const locked = answerState !== ANSWER_STATE.PLAYING || pendingPosition !== null;
   const tone = toneFor(session?.category);

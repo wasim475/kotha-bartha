@@ -617,3 +617,61 @@
   outline: 2px solid var(--tone);
   outline-offset: 2px;
 }
+
+/* ---------- Category selector (Games page) ---------- */
+.game-tabs {
+  display: grid;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--soft);
+}
+.game-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.18s ease;
+}
+.game-tab:focus-visible {
+  outline: 2px solid var(--tone);
+  outline-offset: 1px;
+}
+@media (hover: hover) {
+  .game-tab[data-active="false"]:hover {
+    color: var(--ink);
+  }
+}
+.game-tab[data-active="true"] {
+  color: var(--tone);
+}
+/* The sliding highlight behind the selected tab. */
+.game-tab-pill {
+  position: absolute;
+  inset: 0;
+  border: 1px solid color-mix(in srgb, var(--tone) 30%, var(--line));
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.game-tab-icon,
+.game-tab-label {
+  position: relative;
+}
+.game-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

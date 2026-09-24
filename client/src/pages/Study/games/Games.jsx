@@ -1,7 +1,9 @@
 import { ChevronRight, ManageAccounts } from "@mui/icons-material";
-import { useNavigate } from "react-router-dom";
+import { motion as Motion } from "framer-motion";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { ResourceState, formatTime, useResource } from "../../../utility/helpers";
+import CategoryTabs from "./components/CategoryTabs";
 import FixedButton from "./components/FixedButton";
 import GameCard from "./components/GameCard";
 import { toneFor } from "./utility/gameTypes";
@@ -40,6 +42,7 @@ function LastGameCard({ last, onOpen }) {
  */
 export default function Games({ canManage = false }) {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const catalog = useResource("/games");
   const last = useResource("/games/last");
 
@@ -55,10 +58,19 @@ export default function Games({ canManage = false }) {
     .map((category) => ({ ...category, games: games.filter((game) => game.category === category.key) }))
     .filter((section) => section.games.length);
 
+  // Math is selected whenever the page is opened without an explicit category
+  // (an unknown category falls back to it too); only ONE category's games show.
+  const requested = searchParams.get("category");
+  const activeSection =
+    sections.find((section) => section.key === requested) ||
+    sections.find((section) => section.key === "math") ||
+    sections[0];
+  const selectCategory = (key) => setSearchParams(key === "math" ? {} : { category: key }, { replace: true });
+
   return (
-    <div className="games-scope flex min-w-0 flex-col gap-7">
-      <header className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1">
+    <div className="games-scope flex min-w-0 flex-col gap-5">
+      <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+        <div className="flex min-w-0 flex-1 basis-56 flex-col gap-1">
           <h1 className="font-display text-3xl font-semibold text-ink">Games</h1>
           <p className="text-sm text-muted">Learn while you play — ten quick questions per game.</p>
         </div>
@@ -78,19 +90,26 @@ export default function Games({ canManage = false }) {
         error={catalog.error}
         empty={!games.length ? "No games are available yet." : ""}
       >
-        {sections.map((section) => (
-          <section key={section.key} data-tone={toneFor(section.key)} className="flex flex-col gap-3">
-            <h2 className="flex items-center gap-2 text-sm font-bold tracking-wide text-ink uppercase">
-              <span aria-hidden="true">{section.icon}</span>
-              {section.label}
-            </h2>
-            <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
-              {section.games.map((game) => (
+        {activeSection && (
+          <div className="flex flex-col gap-3.5">
+            <CategoryTabs categories={sections} activeKey={activeSection.key} onSelect={selectCategory} />
+            <Motion.div
+              key={activeSection.key}
+              id="game-tabpanel"
+              role="tabpanel"
+              aria-labelledby={`game-tab-${activeSection.key}`}
+              data-tone={toneFor(activeSection.key)}
+              className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+            >
+              {activeSection.games.map((game) => (
                 <GameCard key={game.type} game={game} onPlay={() => navigate(`/study/games/play/${game.type}`)} />
               ))}
-            </div>
-          </section>
-        ))}
+            </Motion.div>
+          </div>
+        )}
       </ResourceState>
     </div>
   );

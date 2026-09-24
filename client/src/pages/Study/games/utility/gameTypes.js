@@ -44,3 +44,9 @@ export const timerTone = (secondsLeft) => {
   if (secondsLeft <= TIMER_WARNING_SECONDS) return "warning";
   return "normal";
 };
+
+// Where "Back to Games" should land: the Games page with the category the
+// player came from selected (the page itself defaults to Math when no
+// category is given).
+export const gamesHomePath = (category) =>
+  category && category !== "math" ? `/study/games?category=${encodeURIComponent(category)}` : "/study/games";

@@ -8,7 +8,7 @@ import useButtonColorFix from "../../../utility/useButtonColorFix";
 import GameResultCard from "./components/GameResultCard";
 import MistakeCard from "./components/MistakeCard";
 import useGameAnimation from "./hooks/useGameAnimation";
-import { toneFor } from "./utility/gameTypes";
+import { gamesHomePath, toneFor } from "./utility/gameTypes";
 
 /**
  * Last-game review: the result numbers plus only the questions that were
@@ -25,7 +25,7 @@ export default function GameReview() {
   const primaryFix = useButtonColorFix("primary");
   const outlineFix = useButtonColorFix("outline");
   const data = review.data;
-  const backToGames = () => navigate("/study/games");
+  const backToGames = () => navigate(gamesHomePath(data?.category));
 
   return (
     <div className="games-scope mx-auto flex w-full max-w-xl min-w-0 flex-col gap-4" data-tone={toneFor(data?.category)}>

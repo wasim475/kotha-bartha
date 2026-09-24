@@ -23,12 +23,15 @@ const { selectEnglishQuestions } = require("../englishQuestion.service");
 //   isAvailable(n)— whether the game can be offered at all
 
 const DEFAULT_QUESTION_COUNT = 10;
-const MATH_TIME_LIMIT_SEC = 10;
+const MATH_TIME_LIMIT_SEC = 15;
 // Math is a speed game: a wrong answer AND a timeout each cost a point.
 const MATH_SCORING = { correct: 1, wrong: -1, timeout: -1 };
 // English keeps its existing scoring — a wrong pick costs nothing — and a
 // question left to time out costs a point, exactly like Math.
-const ENGLISH_TIME_LIMIT_SEC = 15;
+// Per-game English limits: the Word game keeps its 15s; Conversion needs longer
+// because a whole sentence has to be read, translated and compared.
+const ENGLISH_WORD_TIME_LIMIT_SEC = 15;
+const ENGLISH_CONVERSION_TIME_LIMIT_SEC = 30;
 const ENGLISH_SCORING = { correct: 1, wrong: 0, timeout: -1 };
 
 const GAME_CATEGORIES = [
@@ -54,7 +57,7 @@ const mathGame = (operation, sortOrder, name, description, icon) => ({
 // admin-managed, and never repeated for the same user. Whether a particular
 // user still has enough NEW questions is checked when they start (see
 // selectEnglishQuestions), not here.
-const englishGame = ({ type, sortOrder, name, description, icon }) => ({
+const englishGame = ({ type, sortOrder, name, description, icon, timeLimitSec }) => ({
   type,
   category: "english",
   name,
@@ -62,7 +65,7 @@ const englishGame = ({ type, sortOrder, name, description, icon }) => ({
   icon,
   sortOrder,
   questionCount: DEFAULT_QUESTION_COUNT,
-  timeLimitSec: ENGLISH_TIME_LIMIT_SEC,
+  timeLimitSec,
   scoring: ENGLISH_SCORING,
   generate: ({ count, userId }) => selectEnglishQuestions({ gameType: type, count, userId }),
   isAvailable: () => true,
@@ -79,6 +82,7 @@ const GAME_TYPES = [
     name: "English Word Game",
     description: "Meanings, synonyms and antonyms.",
     icon: "Aa",
+    timeLimitSec: ENGLISH_WORD_TIME_LIMIT_SEC,
   }),
   englishGame({
     type: "english-conversion",
@@ -86,6 +90,7 @@ const GAME_TYPES = [
     name: "English Conversion Game",
     description: "Bengali to English sentences.",
     icon: "⇄",
+    timeLimitSec: ENGLISH_CONVERSION_TIME_LIMIT_SEC,
   }),
 ];
 
