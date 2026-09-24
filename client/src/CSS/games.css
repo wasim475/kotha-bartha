@@ -9,8 +9,12 @@
   colors and always resolve to the theme's own success / danger tokens.
 */
 .games-scope {
+  /* DM Sans has no Bengali glyphs; Hind Siliguri is loaded app-wide and is
+     used per-character, so English text keeps looking exactly the same. */
+  font-family: "DM Sans", "Hind Siliguri", ui-sans-serif, system-ui, sans-serif;
   --game-correct: var(--success);
   --game-wrong: var(--danger);
+  --game-warn: #c27a0e;
   --tone: var(--study-accent, var(--accent));
   --tone-soft: var(--study-accent-soft, rgba(233, 100, 73, 0.12));
 }
@@ -18,6 +22,9 @@
 .games-scope [data-tone="english"] {
   --tone: #c96f14;
   --tone-soft: rgba(201, 111, 20, 0.13);
+}
+:root[data-theme="dark"] .games-scope {
+  --game-warn: #f0b74e;
 }
 :root[data-theme="dark"] .games-scope[data-tone="english"],
 :root[data-theme="dark"] .games-scope [data-tone="english"] {
@@ -388,4 +395,225 @@
   .game-launch {
     transition: none;
   }
+}
+
+/* ---------- Per-question countdown (timed games) ---------- */
+/* Fixed footprint in every state: only colour, the ring and the number change,
+   so the header never shifts. Scales down a little on very narrow phones. */
+.game-timer {
+  position: relative;
+  flex: 0 0 auto;
+  width: clamp(46px, 13vw, 56px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--panel);
+  box-shadow:
+    0 0 0 1px var(--line),
+    var(--shadow);
+  transition:
+    box-shadow 0.25s ease,
+    opacity 0.25s ease;
+}
+.game-timer svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.game-timer-track {
+  fill: none;
+  stroke: var(--soft);
+}
+.game-timer-progress {
+  fill: none;
+  stroke: var(--tone);
+  stroke-linecap: round;
+  transition:
+    stroke-dashoffset 0.12s linear,
+    stroke 0.2s ease;
+}
+.game-timer-value {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  font-size: clamp(1.05rem, 4.8vw, 1.3rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  transition: color 0.2s ease;
+}
+.game-timer[data-tone="warning"] .game-timer-progress {
+  stroke: var(--game-warn);
+}
+.game-timer[data-tone="warning"] .game-timer-value {
+  color: var(--game-warn);
+}
+.game-timer[data-tone="danger"] .game-timer-progress {
+  stroke: var(--game-wrong);
+}
+.game-timer[data-tone="danger"] .game-timer-value {
+  color: var(--game-wrong);
+}
+.game-timer[data-tone="danger"] {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--game-wrong) 55%, var(--line)),
+    0 0 18px -4px color-mix(in srgb, var(--game-wrong) 65%, transparent);
+}
+.game-timer[data-tone="danger"][data-running="true"] {
+  animation: game-timer-pulse 0.8s ease-in-out infinite;
+}
+/* Stopped: an answer is in / a result is showing. */
+.game-timer[data-running="false"] {
+  opacity: 0.6;
+}
+@keyframes game-timer-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.07);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .game-timer,
+  .game-timer-progress {
+    transition: none;
+  }
+  .game-timer[data-tone="danger"][data-running="true"] {
+    animation: none;
+  }
+}
+
+/* ---------- Text answers (English games) ---------- */
+/* Numbers keep the large answer look; words and whole sentences get a size
+   that fits a two-up grid on a phone and wraps naturally instead of overflowing. */
+.game-option[data-kind="word"] {
+  font-size: clamp(1.05rem, 4.4vw, 1.3rem);
+  font-weight: 700;
+}
+.game-option[data-kind="sentence"] {
+  justify-content: flex-start;
+  font-size: clamp(0.95rem, 3.7vw, 1.05rem);
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: left;
+}
+.game-option[data-kind="sentence"] .game-option-text {
+  flex: 1;
+  text-align: left;
+}
+
+/* ---------- Last-game review ---------- */
+.game-mistake {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--game-wrong);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.game-mistake[data-status="timeout"] {
+  border-left-color: var(--game-warn);
+}
+.game-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px 3px 7px;
+  border: 1px solid var(--game-wrong);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--game-wrong) 14%, var(--panel));
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 800;
+}
+.game-status-pill[data-status="timeout"] {
+  border-color: var(--game-warn);
+  background: color-mix(in srgb, var(--game-warn) 16%, var(--panel));
+}
+.game-mistake-prompt {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.game-mistake-answers {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+@media (min-width: 420px) {
+  .game-mistake-answers {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.game-answer-box {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--soft);
+}
+.game-answer-box[data-kind="mine"] {
+  border-color: color-mix(in srgb, var(--game-wrong) 45%, var(--line));
+  background: color-mix(in srgb, var(--game-wrong) 10%, var(--panel));
+}
+.game-answer-box[data-kind="right"] {
+  border-color: color-mix(in srgb, var(--game-correct) 50%, var(--line));
+  background: color-mix(in srgb, var(--game-correct) 12%, var(--panel));
+}
+.game-answer-label {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.game-answer-value {
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.game-last {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--tone) 35%, var(--line));
+  border-radius: 18px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--tone) 9%, var(--panel)),
+    var(--panel)
+  );
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: border-color 0.18s ease;
+}
+@media (hover: hover) {
+  .game-last:hover {
+    border-color: var(--tone);
+  }
+}
+.game-last:focus-visible {
+  outline: 2px solid var(--tone);
+  outline-offset: 2px;
 }

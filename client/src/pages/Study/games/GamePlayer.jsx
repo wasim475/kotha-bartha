@@ -8,6 +8,7 @@ import useButtonColorFix from "../../../utility/useButtonColorFix";
 import GameHeader from "./components/GameHeader";
 import GameOption from "./components/GameOption";
 import GameProgress from "./components/GameProgress";
+import GameTimer from "./components/GameTimer";
 import GameQuestion from "./components/GameQuestion";
 import GameResult from "./GameResult";
 import useGameAnimation from "./hooks/useGameAnimation";
@@ -69,6 +70,7 @@ function GamePlayerScreen({ gameType }) {
 
   const { phase, session, question, answerState, feedback, pendingPosition, select } = game;
   const backToGames = () => navigate("/study/games");
+  const timer = game.timer;
   const locked = answerState !== ANSWER_STATE.PLAYING || pendingPosition !== null;
   const tone = toneFor(session?.category);
 
@@ -141,6 +143,16 @@ function GamePlayerScreen({ gameType }) {
             correctCount={session.correctCount}
             wrongCount={session.wrongCount}
             pop={motionVariants.statPop}
+            timer={
+              timer.enabled ? (
+                <GameTimer
+                  secondsLeft={timer.secondsLeft}
+                  remainingMs={timer.remainingMs}
+                  limitSec={timer.limitSec}
+                  running={timer.running}
+                />
+              ) : null
+            }
           />
 
           <GameProgress {...game.progress} />
@@ -149,6 +161,7 @@ function GamePlayerScreen({ gameType }) {
             key={game.questionNumber}
             prompt={question.prompt}
             state={answerState}
+            timedOut={Boolean(feedback?.timedOut)}
             motionVariants={motionVariants}
           >
             <div className={cx("grid gap-2.5 sm:gap-3", optionGridClass(question.options))}>
@@ -181,6 +194,7 @@ function GamePlayerScreen({ gameType }) {
           motionVariants={motionVariants}
           onPlayAgain={game.restart}
           onBack={backToGames}
+          onReview={() => navigate(`/study/games/review/${game.result.attemptId}`)}
         />
       )}
     </div>

@@ -9,12 +9,17 @@ import { motion as Motion } from "framer-motion";
  *   wrong   — the chosen wrong answer (red)
  *   dimmed  — every other option once a result is showing
  */
+// How big to set the label: short numbers get the large "answer" look, words
+// a medium size, and full sentences (English conversion) a compact wrapped one.
+const kindOf = (label) => (/^-?d{1,6}$/.test(label) ? "number" : label.length > 14 ? "sentence" : "word");
+
 export default function GameOption({ letter, label, state, disabled, onSelect, tap }) {
   return (
     <Motion.button
       type="button"
       className="game-option"
       data-state={state}
+      data-kind={kindOf(label)}
       disabled={disabled}
       onClick={onSelect}
       whileTap={disabled ? undefined : tap}

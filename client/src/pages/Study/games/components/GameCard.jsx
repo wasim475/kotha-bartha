@@ -1,3 +1,4 @@
+import { Timer } from "@mui/icons-material";
 import { motion as Motion } from "framer-motion";
 
 /**
@@ -31,6 +32,11 @@ export default function GameCard({ game, onPlay }) {
           <>
             <span className="game-chip game-chip--tone">Play</span>
             <span className="game-chip">{game.questionCount} questions</span>
+            {game.timeLimitSec && (
+              <span className="game-chip">
+                <Timer style={{ fontSize: 13 }} /> {game.timeLimitSec}s each
+              </span>
+            )}
           </>
         ) : (
           <span className="game-chip">Coming soon</span>

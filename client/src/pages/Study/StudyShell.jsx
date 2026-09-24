@@ -8,6 +8,7 @@ import StudyPlaceholder from "./StudyPlaceholder";
 import StudyTopbar from "./StudyTopbar";
 import { studyNavItems } from "./studyNavItems";
 import GamePlayer from "./games/GamePlayer";
+import GameReview from "./games/GameReview";
 import Games from "./games/Games";
 import Leaderboard from "./leaderboard/Leaderboard";
 import PreviousLeaderboards from "./leaderboard/PreviousLeaderboards";
@@ -64,6 +65,7 @@ export default function StudyShell({ user }) {
             />
             <Route path="leaderboard/history" element={<PreviousLeaderboards />} />
             <Route path="games/play/:gameType" element={<GamePlayer />} />
+            <Route path="games/review/:attemptId" element={<GameReview />} />
             <Route path="*" element={<Navigate to="blogs" replace />} />
           </Routes>
         </main>

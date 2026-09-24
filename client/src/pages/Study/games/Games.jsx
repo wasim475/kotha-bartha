@@ -1,8 +1,37 @@
+import { ChevronRight } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 
-import { ResourceState, useResource } from "../../../utility/helpers";
+import { ResourceState, formatTime, useResource } from "../../../utility/helpers";
 import GameCard from "./components/GameCard";
 import { toneFor } from "./utility/gameTypes";
+
+/**
+ * "Your last game" entry — opens the mistake review for the most recent
+ * COMPLETED game. Stays put while a new game is being played and only changes
+ * once another game is completed. Renders nothing if there is no such game
+ * (or the lookup fails — it's a convenience, never a blocker).
+ */
+function LastGameCard({ last, onOpen }) {
+  const mistakes = last.mistakeCount;
+  return (
+    <button type="button" className="game-last" data-tone={toneFor(last.category)} onClick={onOpen}>
+      <span className="game-tile" aria-hidden="true">
+        {last.icon}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
+        <span className="text-[11px] font-bold tracking-wide text-muted uppercase">Your last game</span>
+        <span className="truncate font-display text-base leading-tight font-semibold text-ink">
+          {last.gameName} · {last.score} / {last.totalQuestions}
+        </span>
+        <span className="truncate text-xs text-muted">
+          {mistakes > 0 ? `Review ${mistakes} mistake${mistakes === 1 ? "" : "s"}` : "Perfect game — view result"}
+          {last.completedAt ? ` · ${formatTime(last.completedAt)}` : ""}
+        </span>
+      </span>
+      <ChevronRight className="shrink-0 text-muted" />
+    </button>
+  );
+}
 
 /**
  * Games landing page: every game from the server's catalog, grouped by
@@ -11,6 +40,7 @@ import { toneFor } from "./utility/gameTypes";
 export default function Games() {
   const navigate = useNavigate();
   const catalog = useResource("/games");
+  const last = useResource("/games/last");
 
   const categories = catalog.meta?.categories || [];
   const games = catalog.data || [];
@@ -30,6 +60,10 @@ export default function Games() {
         <h1 className="font-display text-3xl font-semibold text-ink">Games</h1>
         <p className="text-sm text-muted">Learn while you play — ten quick questions per game.</p>
       </header>
+
+      {last.data && (
+        <LastGameCard last={last.data} onOpen={() => navigate(`/study/games/review/${last.data.attemptId}`)} />
+      )}
 
       <ResourceState
         loading={catalog.loading}

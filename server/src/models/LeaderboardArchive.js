@@ -17,9 +17,8 @@ const leaderboardArchiveEntrySchema = new mongoose.Schema(
     currentCity: { type: String, default: "" },
     points: { type: Number, required: true },
     quizPoints: { type: Number, required: true },
-    // No Games data source exists yet (see leaderboard.routes.js) — kept
-    // here, defaulted to 0, so a future Games source doesn't need a schema
-    // migration to slot in.
+    // Points from completed game attempts (see GameAttempt) — 0 for months
+    // archived before Games counted toward the leaderboard.
     gamesPoints: { type: Number, default: 0 },
     correctCount: { type: Number, default: 0 },
     wrongCount: { type: Number, default: 0 },

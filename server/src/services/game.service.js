@@ -5,13 +5,36 @@ const { GAME_CATEGORIES, GAME_TYPES, getGameType, pointsFor } = require("./games
 const { OPTION_COUNT } = require("./games/questionBuilder");
 
 class GameError extends Error {
-  constructor(status, code, message) {
+  constructor(status, code, message, extra = {}) {
     super(message);
     this.name = "GameError";
     this.status = status;
     this.code = code;
+    this.extra = extra;
   }
 }
+
+// ------------------------------------------------------------
+// Question timing (timed games only — see timeLimitSec in gameTypes.js)
+//
+// The server owns the clock. Each attempt stores `questionStartedAt`, when
+// the CURRENT question's window opens, and every answer/timeout is measured
+// against it using the time the request ARRIVED — never a client-reported
+// "time remaining". After each answer the next question's window is scheduled
+// to open ACTIVATION_DELAY_MS later, which is how long the client keeps the
+// result on screen (about 1s hold + a short fade) before the next question
+// appears, so the player gets the full time limit rather than losing the
+// result animation out of their 10 seconds.
+// ------------------------------------------------------------
+const ACTIVATION_DELAY_MS = 1200;
+// Network slack: an answer that arrives up to this long after the limit is
+// still graded normally, so an honest player on a slow connection isn't
+// timed out for latency. Anything later is a timeout, however the client
+// describes it.
+const TIME_LIMIT_GRACE_MS = 1500;
+// A client can report "my timer hit zero" only once the server agrees the
+// window has (nearly) closed; otherwise the claim is rejected.
+const EARLY_TIMEOUT_TOLERANCE_MS = 250;
 
 // ------------------------------------------------------------
 // Catalog
@@ -53,8 +76,7 @@ function ensureGamesSynced() {
 }
 
 // A game is playable only when it's switched on AND its question source can
-// currently supply enough questions (an English game with an empty bank is
-// therefore "coming soon" without any flag having to be flipped by hand).
+// currently supply enough questions.
 const isPlayable = (game, definition) =>
   Boolean(definition) && game.active && definition.isAvailable(game.questionCount);
 
@@ -73,6 +95,7 @@ async function listGames() {
         description: game.description,
         icon: game.icon,
         questionCount: game.questionCount,
+        timeLimitSec: definition.timeLimitSec,
         available: isPlayable(game, definition),
       })),
     categories: GAME_CATEGORIES,
@@ -86,35 +109,66 @@ async function listGames() {
 const accuracyOf = (attempt) =>
   attempt.questions.length ? Math.round((attempt.correctCount / attempt.questions.length) * 100) : 0;
 
-// The single place that decides what an attempt looks like to the client.
-// Every question's prompt and (already shuffled) options are included, but
-// the correct answer is included only for questions already answered.
-async function serializeAttempt(attempt) {
-  const game = await Game.findOne({ type: attempt.gameType }).select("name icon").lean();
-  const definition = getGameType(attempt.gameType);
+const timeoutCountOf = (attempt) => attempt.answers.filter((answer) => answer.timedOut).length;
+
+// Milliseconds left in the current question's window, or null for an
+// untimed game / finished attempt. Clamped to [0, limit] — a window that
+// hasn't opened yet (the short gap after an answer) reports the full limit.
+function remainingMsFor(attempt, now) {
+  if (!attempt.timeLimitMs || attempt.status !== "playing" || !attempt.questionStartedAt) return null;
+  const elapsed = now - attempt.questionStartedAt.getTime();
+  return Math.max(0, Math.min(attempt.timeLimitMs, attempt.timeLimitMs - elapsed));
+}
+
+async function gameDisplay(gameType) {
+  const game = await Game.findOne({ type: gameType }).select("name icon").lean();
+  const definition = getGameType(gameType);
+  return {
+    gameName: game?.name || definition?.name || gameType,
+    icon: game?.icon || definition?.icon || "",
+  };
+}
+
+// The result numbers shared by the result screen, the review and the
+// "last game" summary — always straight from the stored attempt.
+const summaryFields = (attempt) => ({
+  attemptId: attempt._id.toString(),
+  gameType: attempt.gameType,
+  category: attempt.category,
+  status: attempt.status,
+  totalQuestions: attempt.questions.length,
+  score: attempt.score,
+  correctCount: attempt.correctCount,
+  wrongCount: attempt.wrongCount,
+  timeoutCount: timeoutCountOf(attempt),
+  accuracy: accuracyOf(attempt),
+  completedAt: attempt.completedAt || null,
+});
+
+// The single place that decides what an attempt looks like to the client
+// DURING and right after play. Every question's prompt and (already
+// shuffled) options are included, but the correct answer is included only
+// for questions already answered (or timed out).
+async function serializeAttempt(attempt, now = Date.now()) {
+  const display = await gameDisplay(attempt.gameType);
   const answersByIndex = new Map(attempt.answers.map((answer) => [answer.questionIndex, answer]));
 
   return {
-    attemptId: attempt._id.toString(),
-    gameType: attempt.gameType,
-    category: attempt.category,
-    gameName: game?.name || definition?.name || attempt.gameType,
-    icon: game?.icon || definition?.icon || "",
-    status: attempt.status,
+    ...summaryFields(attempt),
+    ...display,
     currentIndex: attempt.currentIndex,
-    totalQuestions: attempt.questions.length,
-    score: attempt.score,
-    correctCount: attempt.correctCount,
-    wrongCount: attempt.wrongCount,
-    accuracy: accuracyOf(attempt),
     startedAt: attempt.startedAt,
-    completedAt: attempt.completedAt || null,
+    // Timer configuration comes from the game itself; `remainingMs` is the
+    // server's own reading of the current question's clock.
+    timeLimitSec: attempt.timeLimitMs ? attempt.timeLimitMs / 1000 : null,
+    remainingMs: remainingMsFor(attempt, now),
     questions: attempt.questions.map((question, index) => {
       const answer = answersByIndex.get(index);
       const item = { index, prompt: question.prompt, options: question.options, answered: Boolean(answer) };
       if (answer) {
-        item.selectedPosition = answer.selectedPosition;
+        item.selectedPosition = answer.selectedPosition ?? null;
         item.correct = answer.correct;
+        item.timedOut = Boolean(answer.timedOut);
         item.correctPosition = question.correctIndex;
       }
       return item;
@@ -141,6 +195,7 @@ async function startAttempt(userId, gameType) {
 
   if (!attempt) {
     const questions = definition.generate(game.questionCount);
+    const timeLimitMs = definition.timeLimitSec ? definition.timeLimitSec * 1000 : null;
     try {
       attempt = await GameAttempt.create({
         userId,
@@ -148,6 +203,9 @@ async function startAttempt(userId, gameType) {
         gameType,
         category: game.category,
         questions,
+        timeLimitMs,
+        // The first question's window opens the moment the attempt exists.
+        questionStartedAt: timeLimitMs ? new Date() : null,
       });
     } catch (createError) {
       if (createError.code === 11000) {
@@ -177,23 +235,31 @@ async function getAttempt(userId, attemptId) {
   return serializeAttempt(await findOwnedAttempt(userId, attemptId));
 }
 
-// Grades one answer. The client sends only which question and which
-// option position — correctness, points, counts and completion are all
-// decided and written here.
-async function answerAttempt(userId, attemptId, { questionIndex, selectedPosition }) {
+const isInteger = (value) => typeof value === "number" && Number.isInteger(value);
+
+// Grades one answer — or one timeout. The client sends only which question
+// and which option position (or `timedOut: true` when its countdown hit
+// zero). Correctness, timing verdict, points, counts and completion are all
+// decided and written here; any other field in the request is ignored.
+async function answerAttempt(userId, attemptId, body, receivedAt = Date.now()) {
   const attempt = await findOwnedAttempt(userId, attemptId);
 
   if (attempt.status === "completed") {
     throw new GameError(400, "ALREADY_COMPLETED", "This game is already finished.");
   }
 
+  const { questionIndex, selectedPosition } = body;
+  const timed = Boolean(attempt.timeLimitMs);
+  const claimsTimeout = body.timedOut === true;
+
   // Strictly typed integers only — never coerced with Number(), which would
   // silently turn null / "" / [] / true into 0 or 1 and record a phantom answer.
-  const isInteger = (value) => typeof value === "number" && Number.isInteger(value);
-  if (!isInteger(questionIndex) || !isInteger(selectedPosition)) {
+  if (!isInteger(questionIndex)) {
     throw new GameError(400, "VALIDATION_ERROR", "Choose an option.");
   }
-  if (selectedPosition < 0 || selectedPosition >= OPTION_COUNT) {
+  if (claimsTimeout) {
+    if (!timed) throw new GameError(400, "VALIDATION_ERROR", "This game has no time limit.");
+  } else if (!isInteger(selectedPosition) || selectedPosition < 0 || selectedPosition >= OPTION_COUNT) {
     throw new GameError(400, "VALIDATION_ERROR", "Choose an option.");
   }
   // Only the CURRENT question can be answered — blocks replaying an
@@ -201,39 +267,68 @@ async function answerAttempt(userId, attemptId, { questionIndex, selectedPositio
   if (questionIndex !== attempt.currentIndex) {
     throw new GameError(409, "OUT_OF_SEQUENCE", "That question isn't currently active.");
   }
-  const index = questionIndex;
-  const position = selectedPosition;
 
-  const question = attempt.questions[index];
-  const correct = position === question.correctIndex;
+  // Timing verdict (timed games): measured on the server clock only.
+  let timedOut = false;
+  if (timed) {
+    const startedAt = attempt.questionStartedAt ? attempt.questionStartedAt.getTime() : receivedAt;
+    const elapsed = receivedAt - startedAt;
+    if (claimsTimeout) {
+      const remaining = attempt.timeLimitMs - EARLY_TIMEOUT_TOLERANCE_MS - elapsed;
+      if (remaining > 0) {
+        throw new GameError(409, "TOO_EARLY", "That question hasn't timed out yet.", {
+          retryAfterMs: remaining,
+        });
+      }
+      timedOut = true;
+    } else if (elapsed > attempt.timeLimitMs + TIME_LIMIT_GRACE_MS) {
+      // Answered too late: a timeout, even if the option chosen was right.
+      timedOut = true;
+    }
+  }
+
+  const question = attempt.questions[questionIndex];
+  const correct = !timedOut && selectedPosition === question.correctIndex;
+  const outcome = timedOut ? "timeout" : correct ? "correct" : "wrong";
   const definition = getGameType(attempt.gameType);
-  const points = definition ? pointsFor(definition, correct) : correct ? 1 : 0;
-  const isComplete = index + 1 >= attempt.questions.length;
+  const points = definition ? pointsFor(definition, outcome) : correct ? 1 : 0;
+  const isComplete = questionIndex + 1 >= attempt.questions.length;
 
   const update = {
     $push: {
       answers: {
-        questionIndex: index,
-        selectedPosition: position,
+        questionIndex,
+        selectedPosition: timedOut ? null : selectedPosition,
         correct,
+        timedOut,
         pointsAwarded: points,
-        answeredAt: new Date(),
+        answeredAt: new Date(receivedAt),
       },
     },
     $inc: {
       currentIndex: 1,
       score: points,
+      // A timeout is a wrong answer.
       [correct ? "correctCount" : "wrongCount"]: 1,
     },
   };
-  if (isComplete) update.$set = { status: "completed", completedAt: new Date() };
+  const $set = {};
+  if (isComplete) {
+    $set.status = "completed";
+    $set.completedAt = new Date();
+  } else if (timed) {
+    // The next question's window opens after the result has been shown.
+    $set.questionStartedAt = new Date(receivedAt + ACTIVATION_DELAY_MS);
+  }
+  if (Object.keys($set).length) update.$set = $set;
 
   // Atomic and conditional on the question still being current: if two
-  // requests for the same question race (a double-click, two tabs), only the
-  // first matches and is scored — the second finds currentIndex already
-  // advanced and is rejected, so an answer can never be counted twice.
+  // requests for the same question race (a double-click, two tabs, an answer
+  // racing its own timeout), only the first matches and is scored — the
+  // second finds currentIndex already advanced and is rejected, so an answer
+  // can never be counted twice.
   const updated = await GameAttempt.findOneAndUpdate(
-    { _id: attempt._id, userId, status: "playing", currentIndex: index },
+    { _id: attempt._id, userId, status: "playing", currentIndex: questionIndex },
     update,
     { returnDocument: "after" },
   );
@@ -243,16 +338,60 @@ async function answerAttempt(userId, attemptId, { questionIndex, selectedPositio
 
   return {
     correct,
+    timedOut,
     correctPosition: question.correctIndex,
     scoreDelta: points,
-    score: updated.score,
-    correctCount: updated.correctCount,
-    wrongCount: updated.wrongCount,
+    ...summaryFields(updated),
     currentIndex: updated.currentIndex,
-    totalQuestions: updated.questions.length,
-    accuracy: accuracyOf(updated),
-    status: updated.status,
     isComplete,
+  };
+}
+
+// ------------------------------------------------------------
+// Last-game review (completed attempts only)
+// ------------------------------------------------------------
+
+// The user's most recent COMPLETED game, or null. An in-progress attempt
+// never appears here, so starting a new game doesn't hide or overwrite the
+// previous result — it stays until the new game is actually completed.
+async function getLastCompleted(userId) {
+  const attempt = await GameAttempt.findOne({ userId, status: "completed" }).sort({ completedAt: -1 });
+  if (!attempt) return null;
+  return {
+    ...summaryFields(attempt),
+    ...(await gameDisplay(attempt.gameType)),
+    mistakeCount: attempt.answers.filter((answer) => !answer.correct).length,
+  };
+}
+
+// Only the questions answered wrongly or timed out, with the correct answer
+// revealed — and only once the whole game is finished, so this can never be
+// used to read answers mid-game.
+async function getReview(userId, attemptId) {
+  const attempt = await findOwnedAttempt(userId, attemptId);
+  if (attempt.status !== "completed") {
+    throw new GameError(409, "NOT_COMPLETED", "Finish the game to review your mistakes.");
+  }
+
+  const mistakes = attempt.answers
+    .filter((answer) => !answer.correct)
+    .sort((a, b) => a.questionIndex - b.questionIndex)
+    .map((answer) => {
+      const question = attempt.questions[answer.questionIndex];
+      return {
+        index: answer.questionIndex,
+        number: answer.questionIndex + 1,
+        prompt: question.prompt,
+        status: answer.timedOut ? "timeout" : "wrong",
+        selectedText: answer.timedOut ? null : (question.options[answer.selectedPosition] ?? null),
+        correctText: question.options[question.correctIndex],
+      };
+    });
+
+  return {
+    ...summaryFields(attempt),
+    ...(await gameDisplay(attempt.gameType)),
+    mistakes,
   };
 }
 
@@ -263,4 +402,6 @@ module.exports = {
   startAttempt,
   getAttempt,
   answerAttempt,
+  getLastCompleted,
+  getReview,
 };

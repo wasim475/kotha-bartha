@@ -9,8 +9,20 @@ function Tile({ label, value, kind }) {
   );
 }
 
-/** Score, correct, wrong and accuracy — every number comes from the server's final response. */
-export default function GameResultCard({ score, total, correctCount, wrongCount, accuracy, itemVariants }) {
+/**
+ * Score, correct, wrong and accuracy — every number comes from the server.
+ * A timed-out question counts as wrong, so when there were any the card says
+ * how many of the wrong ones were time-outs.
+ */
+export default function GameResultCard({
+  score,
+  total,
+  correctCount,
+  wrongCount,
+  timeoutCount = 0,
+  accuracy,
+  itemVariants,
+}) {
   return (
     <Motion.div variants={itemVariants} className="flex flex-col gap-3">
       <div className="game-result-score">
@@ -25,6 +37,12 @@ export default function GameResultCard({ score, total, correctCount, wrongCount,
         <Tile label="Wrong" value={wrongCount} kind="wrong" />
         <Tile label="Accuracy" value={`${accuracy}%`} />
       </div>
+
+      {timeoutCount > 0 && (
+        <p className="text-center text-xs text-muted">
+          Wrong includes {timeoutCount} time-out{timeoutCount === 1 ? "" : "s"}.
+        </p>
+      )}
     </Motion.div>
   );
 }

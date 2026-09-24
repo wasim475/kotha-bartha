@@ -53,10 +53,12 @@ async function archiveMonthIfDue(year, month, now) {
         currentCity: row.currentCity,
         points: row.points,
         quizPoints: row.quizPoints,
-        gamesPoints: 0,
-        correctCount: row.correctCount,
-        wrongCount: row.wrongCount,
-        attempted: row.attempted,
+        gamesPoints: row.gamePoints,
+        // The archive's stats block is labelled Quiz, so it keeps the quiz-only
+        // counts even though `points` is the combined overall total.
+        correctCount: row.quizCorrectCount,
+        wrongCount: row.quizWrongCount,
+        attempted: row.quizAttempted,
       })),
     });
     console.log(`Leaderboard archived for ${year}-${String(month).padStart(2, "0")} (${participants.length} participants).`);

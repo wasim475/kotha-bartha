@@ -13,9 +13,10 @@ function Stat({ label, value, kind, pop }) {
 }
 
 /**
- * Game name, "Question X / N", and the live score / correct / wrong counts.
- * Stays readable on a 320px screen: the title row truncates, and the three
- * stats sit in an equal-width grid underneath.
+ * Game name, "Question X / N", the live score / correct / wrong counts, and —
+ * for timed games — the countdown (`timer`). Stays readable on a 320px
+ * screen: the title row truncates, the timer keeps a fixed size at its right,
+ * and the three stats sit in an equal-width grid underneath.
  */
 export default function GameHeader({
   name,
@@ -26,6 +27,7 @@ export default function GameHeader({
   correctCount,
   wrongCount,
   pop,
+  timer,
 }) {
   return (
     <header className="flex flex-col gap-3">
@@ -33,12 +35,13 @@ export default function GameHeader({
         <span className="game-tile game-tile--sm" aria-hidden="true">
           {icon}
         </span>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="truncate font-display text-lg leading-tight font-semibold text-ink">{name}</h1>
           <p className="text-xs font-semibold text-muted">
             Question {questionNumber} / {total}
           </p>
         </div>
+        {timer}
       </div>
 
       <div className="grid grid-cols-3 gap-2">

@@ -1,6 +1,7 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const QuizAttempt = require("../models/QuizAttempt");
+const GameAttempt = require("../models/GameAttempt");
 const User = require("../models/User");
 const LeaderboardArchive = require("../models/LeaderboardArchive");
 const { isBlockedEitherWay } = require("../utils/blocks");
@@ -11,6 +12,7 @@ const {
   CATEGORIES,
   PERIODS,
   BASE_ATTEMPT_FILTER,
+  GAME_ATTEMPT_FILTER,
   periodDateMatch,
   previousPeriodDateMatch,
   rankedParticipants,
@@ -159,6 +161,12 @@ router.get("/leaderboard/users/:userId/stats", async (req, res, next) => {
     const correct = attempts.reduce((sum, attempt) => sum + attempt.correctCount, 0);
     const wrong = attempts.reduce((sum, attempt) => sum + attempt.wrongCount, 0);
     const quizPoints = attempts.reduce((sum, attempt) => sum + attempt.score, 0);
+    // Completed game attempts count every time (see GAME_ATTEMPT_FILTER).
+    const gameAttempts = dateMatch
+      ? await GameAttempt.find({ userId: user._id, ...GAME_ATTEMPT_FILTER, ...dateMatch }).select("score").lean()
+      : [];
+    const gamePoints = gameAttempts.reduce((sum, attempt) => sum + attempt.score, 0);
+
     const totalAnswered = correct + wrong;
     // wrongPercent derived as the remainder (not rounded independently) so
     // the two always sum to exactly 100, never 99 or 101.
@@ -172,8 +180,11 @@ router.get("/leaderboard/users/:userId/stats", async (req, res, next) => {
         avatar: user.avatar || null,
         currentCity: user.currentCity || "",
         period,
-        totalPoints: quizPoints,
-        categories: [{ key: "quiz", label: "Quiz", points: quizPoints }],
+        totalPoints: quizPoints + gamePoints,
+        categories: [
+          { key: "quiz", label: "Quiz", points: quizPoints },
+          { key: "games", label: "Games", points: gamePoints },
+        ],
         quiz: { attempted, correct, wrong, correctPercent, wrongPercent },
       },
     });
@@ -233,7 +244,10 @@ router.get("/leaderboard/archive/:year/:month", async (req, res, next) => {
         avatar: entry.avatar || null,
         currentCity: entry.currentCity || "",
         points: entry.points,
-        categories: [{ key: "quiz", label: "Quiz", points: entry.quizPoints }],
+        categories: [
+          { key: "quiz", label: "Quiz", points: entry.quizPoints },
+          { key: "games", label: "Games", points: entry.gamesPoints || 0 },
+        ],
         quiz: {
           attempted: entry.attempted,
           correct: entry.correctCount,

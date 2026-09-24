@@ -33,3 +33,14 @@ export const resultHeadline = (accuracy) => {
   if (accuracy >= 40) return "Good effort — go again!";
   return "Keep practicing — you'll get there!";
 };
+
+// Countdown colour thresholds (seconds left). Purely visual — the server, not
+// this, decides whether an answer was in time.
+export const TIMER_WARNING_SECONDS = 5;
+export const TIMER_DANGER_SECONDS = 3;
+
+export const timerTone = (secondsLeft) => {
+  if (secondsLeft <= TIMER_DANGER_SECONDS) return "danger";
+  if (secondsLeft <= TIMER_WARNING_SECONDS) return "warning";
+  return "normal";
+};

@@ -4,6 +4,7 @@
 // ranking logic as the live view, never a parallel reimplementation.
 const mongoose = require("mongoose");
 const QuizAttempt = require("../models/QuizAttempt");
+const GameAttempt = require("../models/GameAttempt");
 const Friendship = require("../models/Friendship");
 const { blockedPairIds } = require("../utils/blocks");
 const { getCycleStatus, cycleStartInstant, previousMonthOf } = require("./leaderboardCycle.service");
@@ -25,6 +26,14 @@ const PERIODS = ["today", "week", "month"];
 // (ranking, rank-change, per-user stats, the monthly archive) can never
 // disagree with each other.
 const BASE_ATTEMPT_FILTER = { isFirstAttempt: true, status: "completed" };
+
+// Games are the opposite rule: EVERY completed game attempt counts, each
+// time, with its own score — there is no first-attempt restriction. A
+// completed GameAttempt is one immutable row (completion is a one-way atomic
+// transition in game.service.js), so aggregating over them can never count
+// the same attempt twice, and an unfinished/abandoned attempt (status
+// "playing") is never included.
+const GAME_ATTEMPT_FILTER = { status: "completed" };
 
 function startOfDay(referenceDate) {
   const start = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
@@ -102,42 +111,21 @@ async function friendIdsOf(userId) {
   return friendships.flatMap((friendship) => friendship.userIds.map(String)).filter((id) => id !== userId.toString());
 }
 
-// Groups every qualifying attempt (within the given date window) by user,
-// joins in the user's profile fields, and — critically — drops
-// admin/moderator accounts and blocked pairs at the query stage, not just
-// hidden afterward in the response, so they can never occupy a rank or
-// count toward a participant total. Ranks are assigned only after every
-// exclusion, so the sequence is always contiguous (1, 2, 3, …) with no
-// gaps left by a removed user.
-//
-// `category: "games"` returns an empty list rather than a real query —
-// there's no Games attempt data source in this app yet, so "reporting
-// zero participation" is the honest answer, not an invented one.
-// `category: "overall"` currently equals `"quiz"` for the same reason
-// (overall = quiz + games, and games always contributes 0 today); a real
-// Games source would only need to be unioned in here later.
-//
-// `requesterId` is optional — pass null/undefined for a viewer-independent
-// snapshot (friends scoping and block-filtering are both inherently
-// relative to a specific viewer, so the monthly archive job calls this
-// without one to get one objective, global ranking).
-async function rankedParticipants({ category, dateMatch, audience, requesterId }) {
-  if (category === "games" || dateMatch === null) return [];
+// Sums every qualifying attempt (within the given date window) per user
+// from one source collection, joins in the user's profile fields, and —
+// critically — drops admin/moderator accounts at the query stage, not just
+// hidden afterward in the response, so they can never occupy a rank or count
+// toward a participant total.
+async function sourceRows(Model, baseFilter, dateMatch, scopeIds) {
+  const match = { ...baseFilter, ...dateMatch };
+  if (scopeIds) match.userId = { $in: scopeIds };
 
-  const match = { ...BASE_ATTEMPT_FILTER, ...dateMatch };
-
-  if (audience === "friends" && requesterId) {
-    const friendIds = await friendIdsOf(requesterId);
-    const scopeIds = [...friendIds, requesterId.toString()].map((id) => new mongoose.Types.ObjectId(id));
-    match.userId = { $in: scopeIds };
-  }
-
-  const rows = await QuizAttempt.aggregate([
+  return Model.aggregate([
     { $match: match },
     {
       $group: {
         _id: "$userId",
-        quizPoints: { $sum: "$score" },
+        points: { $sum: "$score" },
         correctCount: { $sum: "$correctCount" },
         wrongCount: { $sum: "$wrongCount" },
         attempted: { $sum: 1 },
@@ -152,17 +140,82 @@ async function rankedParticipants({ category, dateMatch, audience, requesterId }
         fullName: "$user.fullName",
         avatar: "$user.avatar",
         currentCity: "$user.currentCity",
-        totalPoints: "$quizPoints",
+        points: 1,
         correctCount: 1,
         wrongCount: 1,
         attempted: 1,
       },
     },
-    // Deterministic ranking: total points, then more correct answers as a
-    // tie-break, then a stable id order so ties never reorder between
-    // requests.
-    { $sort: { totalPoints: -1, correctCount: -1, userId: 1 } },
   ]);
+}
+
+const EMPTY_PART = { points: 0, correctCount: 0, wrongCount: 0, attempted: 0 };
+const partOf = (row) => ({
+  points: row.points,
+  correctCount: row.correctCount,
+  wrongCount: row.wrongCount,
+  attempted: row.attempted,
+});
+
+// Ranks participants for one category:
+//   "quiz"    — completed FIRST quiz attempts only (unchanged rule)
+//   "games"   — every completed game attempt
+//   "overall" — quiz points + game points, per user
+// Ranks are assigned only after every exclusion, so the sequence is always
+// contiguous (1, 2, 3, …) with no gaps left by a removed user.
+//
+// `requesterId` is optional — pass null/undefined for a viewer-independent
+// snapshot (friends scoping and block-filtering are both inherently
+// relative to a specific viewer, so the monthly archive job calls this
+// without one to get one objective, global ranking).
+async function rankedParticipants({ category, dateMatch, audience, requesterId }) {
+  if (dateMatch === null) return [];
+
+  let scopeIds = null;
+  if (audience === "friends" && requesterId) {
+    const friendIds = await friendIdsOf(requesterId);
+    scopeIds = [...friendIds, requesterId.toString()].map((id) => new mongoose.Types.ObjectId(id));
+  }
+
+  const wantsQuiz = category !== "games";
+  const wantsGames = category !== "quiz";
+  const [quizRows, gameRows] = await Promise.all([
+    wantsQuiz ? sourceRows(QuizAttempt, BASE_ATTEMPT_FILTER, dateMatch, scopeIds) : [],
+    wantsGames ? sourceRows(GameAttempt, GAME_ATTEMPT_FILTER, dateMatch, scopeIds) : [],
+  ]);
+
+  const byUser = new Map();
+  const entryFor = (row) => {
+    const key = row.userId.toString();
+    if (!byUser.has(key)) {
+      byUser.set(key, {
+        userId: row.userId,
+        fullName: row.fullName,
+        avatar: row.avatar,
+        currentCity: row.currentCity,
+        quiz: EMPTY_PART,
+        games: EMPTY_PART,
+      });
+    }
+    return byUser.get(key);
+  };
+  quizRows.forEach((row) => { entryFor(row).quiz = partOf(row); });
+  gameRows.forEach((row) => { entryFor(row).games = partOf(row); });
+
+  const rows = [...byUser.values()].map((entry) => {
+    const parts = category === "quiz" ? [entry.quiz] : category === "games" ? [entry.games] : [entry.quiz, entry.games];
+    const sum = (field) => parts.reduce((total, part) => total + part[field], 0);
+    return { ...entry, points: sum("points"), correctCount: sum("correctCount"), wrongCount: sum("wrongCount"), attempted: sum("attempted") };
+  });
+
+  // Deterministic ranking: total points, then more correct answers as a
+  // tie-break, then a stable id order so ties never reorder between requests.
+  rows.sort(
+    (a, b) =>
+      b.points - a.points ||
+      b.correctCount - a.correctCount ||
+      (a.userId.toString() < b.userId.toString() ? -1 : a.userId.toString() > b.userId.toString() ? 1 : 0),
+  );
 
   const blocked = requesterId ? await blockedPairIds(requesterId) : new Set();
   const eligible = rows.filter((row) => !blocked.has(row.userId.toString()));
@@ -173,11 +226,17 @@ async function rankedParticipants({ category, dateMatch, audience, requesterId }
     fullName: row.fullName,
     avatar: row.avatar || null,
     currentCity: row.currentCity || "",
-    points: row.totalPoints,
-    quizPoints: row.totalPoints,
+    points: row.points,
+    quizPoints: row.quiz.points,
+    gamePoints: row.games.points,
     correctCount: row.correctCount,
     wrongCount: row.wrongCount,
     attempted: row.attempted,
+    // Quiz-only counts, so the archive's "Quiz" stats stay quiz-only even
+    // when the ranking is the combined overall one.
+    quizCorrectCount: row.quiz.correctCount,
+    quizWrongCount: row.quiz.wrongCount,
+    quizAttempted: row.quiz.attempted,
   }));
 }
 
@@ -211,6 +270,7 @@ module.exports = {
   CATEGORIES,
   PERIODS,
   BASE_ATTEMPT_FILTER,
+  GAME_ATTEMPT_FILTER,
   periodDateMatch,
   previousPeriodDateMatch,
   rankedParticipants,

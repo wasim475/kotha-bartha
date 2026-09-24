@@ -1,4 +1,4 @@
-import { Replay } from "@mui/icons-material";
+import { FactCheck, Replay } from "@mui/icons-material";
 import { motion as Motion } from "framer-motion";
 
 import Button from "../../../components/ui/Button";
@@ -8,11 +8,13 @@ import { resultHeadline } from "./utility/gameTypes";
 
 /**
  * End-of-game screen. Reusable for any game type — it only needs the final
- * numbers (from the server's last answer response) and two callbacks.
+ * numbers (from the server's last answer response) and a few callbacks.
+ * "Review Mistakes" opens the last-game review for this attempt.
  */
-export default function GameResult({ result, gameName, motionVariants, onPlayAgain, onBack }) {
+export default function GameResult({ result, gameName, motionVariants, onPlayAgain, onBack, onReview }) {
   const primaryFix = useButtonColorFix("primary");
   const outlineFix = useButtonColorFix("outline");
+  const mistakes = result.wrongCount;
 
   return (
     <Motion.div
@@ -37,34 +39,55 @@ export default function GameResult({ result, gameName, motionVariants, onPlayAga
           total={result.totalQuestions}
           correctCount={result.correctCount}
           wrongCount={result.wrongCount}
+          timeoutCount={result.timeoutCount}
           accuracy={result.accuracy}
           itemVariants={motionVariants.resultItem}
         />
       </div>
 
-      <Motion.div variants={motionVariants.resultItem} className="flex w-full gap-2.5">
-        <Button
-          variant="outline"
-          className="min-w-0 flex-1"
-          onClick={onBack}
-          style={outlineFix.style}
-          onMouseEnter={outlineFix.onMouseEnter}
-          onMouseLeave={outlineFix.onMouseLeave}
-        >
-          Back to Games
-        </Button>
-        <Button
-          variant="primary"
-          className="min-w-0 flex-1"
-          onClick={onPlayAgain}
-          autoFocus
-          style={primaryFix.style}
-          onMouseEnter={primaryFix.onMouseEnter}
-          onMouseLeave={primaryFix.onMouseLeave}
-        >
-          <Replay fontSize="small" />
-          Play Again
-        </Button>
+      <Motion.div variants={motionVariants.resultItem} className="flex w-full flex-col gap-2.5">
+        {mistakes > 0 ? (
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={onReview}
+            style={outlineFix.style}
+            onMouseEnter={outlineFix.onMouseEnter}
+            onMouseLeave={outlineFix.onMouseLeave}
+          >
+            <FactCheck fontSize="small" />
+            Review Mistakes ({mistakes})
+          </Button>
+        ) : (
+          <p className="rounded-xl border border-line bg-soft px-3 py-2.5 text-xs font-semibold text-muted">
+            Perfect game — no mistakes to review.
+          </p>
+        )}
+
+        <div className="flex w-full gap-2.5">
+          <Button
+            variant="outline"
+            className="min-w-0 flex-1"
+            onClick={onBack}
+            style={outlineFix.style}
+            onMouseEnter={outlineFix.onMouseEnter}
+            onMouseLeave={outlineFix.onMouseLeave}
+          >
+            Back to Games
+          </Button>
+          <Button
+            variant="primary"
+            className="min-w-0 flex-1"
+            onClick={onPlayAgain}
+            autoFocus
+            style={primaryFix.style}
+            onMouseEnter={primaryFix.onMouseEnter}
+            onMouseLeave={primaryFix.onMouseLeave}
+          >
+            <Replay fontSize="small" />
+            Play Again
+          </Button>
+        </div>
       </Motion.div>
     </Motion.div>
   );
