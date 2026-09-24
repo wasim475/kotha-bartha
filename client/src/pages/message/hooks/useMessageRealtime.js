@@ -69,6 +69,17 @@ const useMessageRealtime = ({
   });
 
   useRealtime("message:read", (event) => {
+    // Keeps the conversation-list read tick (see ConversationList.jsx) live
+    // for the sender without waiting for an unrelated conversations.reload()
+    // — any "read" event for this conversation means its last message (if
+    // it's the sender's own) is now read too, since the server marks every
+    // unread message read together when the recipient opens the thread.
+    conversations.setData((rows = []) =>
+      rows.map((row) =>
+        row.id === event.detail.conversationId ? { ...row, lastMessageStatus: "read" } : row,
+      ),
+    );
+
     if (event.detail.conversationId !== conversationId) return;
     thread.setData((messages = []) =>
       messages.map((message) =>

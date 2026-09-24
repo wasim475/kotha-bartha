@@ -2,6 +2,8 @@ import {
   Add,
   Archive,
   Delete,
+  Done,
+  DoneAll,
   ErrorOutlined,
   ForumOutlined,
   MoreHoriz,
@@ -190,6 +192,10 @@ const ConversationList = ({
         const active = conversation.id === activeId;
         const unread = conversation.unreadCount > 0;
         const muted = isConversationMuted(userId, conversation.id);
+        // The last message's own sent/delivered/read tick, shown only when
+        // it's the viewer's own message — same icon/color convention as the
+        // per-message tick inside the open thread (see MessageBubble.jsx).
+        const isOwnLastMessage = Boolean(conversation.lastMessage) && conversation.lastMessageSenderId === userId;
         const display = conversation.isGroup
           ? {
               fullName: conversation.group.name,
@@ -240,11 +246,29 @@ const ConversationList = ({
                 </div>
                 <p
                   className={cx(
-                    "truncate text-xs",
+                    "flex items-center gap-1 truncate text-xs",
                     unread ? "font-semibold text-ink" : "text-muted",
                   )}
                 >
-                  {conversation.lastMessage?.slice(0, 60) || "No messages yet"}
+                  {isOwnLastMessage && (
+                    <span className="flex shrink-0 items-center">
+                      {conversation.lastMessageStatus === "read" ||
+                      conversation.lastMessageStatus === "delivered" ? (
+                        <DoneAll
+                          fontSize="inherit"
+                          className={cx(
+                            "text-[13px]",
+                            conversation.lastMessageStatus === "read" && "text-sky-500 dark:text-sky-400",
+                          )}
+                        />
+                      ) : (
+                        <Done fontSize="inherit" className="text-[13px]" />
+                      )}
+                    </span>
+                  )}
+                  <span className="truncate">
+                    {conversation.lastMessage?.slice(0, 60) || "No messages yet"}
+                  </span>
                 </p>
               </div>
 

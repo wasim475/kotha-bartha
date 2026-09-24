@@ -395,6 +395,14 @@ button {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  /* Keeps the desktop/tablet sidebar in view while the page content
+     scrolls — sticks right below the already-sticky .topbar rather than
+     scrolling away with a long feed. Hidden entirely on mobile (see the
+     max-width: 760px override below), so this never affects the bottom
+     nav. */
+  position: sticky;
+  top: var(--topbar-h);
+  z-index: 3;
 }
 .nav-label {
   margin: 5px 0 19px;

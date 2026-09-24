@@ -48,6 +48,17 @@ export default function useUnreadCounts() {
     }));
   });
 
+  // Local-only counterpart dispatched by useNotifications after deleting an
+  // unread notification — never goes over the socket, just keeps this
+  // badge in sync with the list without a full unread-counts refetch.
+  useRealtime("notification:deleted", (event) => {
+    if (!event.detail?.wasUnread) return;
+    setCounts((current) => ({
+      ...current,
+      notifications: Math.max(0, current.notifications - 1),
+    }));
+  });
+
   useRealtime("post:new", () => {
     setCounts((current) => ({
       ...current,

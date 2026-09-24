@@ -19,6 +19,9 @@ export default function Notifications() {
         <NotificationList
           notifications={notifications.data || []}
           onNotificationClick={notifications.handleNotificationClick}
+          onDelete={notifications.deleteNotification}
+          deletingIds={notifications.deletingIds}
+          deleteErrors={notifications.deleteErrors}
         />
       </ResourceState>
     </>

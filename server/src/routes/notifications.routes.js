@@ -190,6 +190,36 @@ router.post("/notifications/:notificationId/read", async (req, res, next) => {
 });
 
 // ============================================================
+// DELETE ONE NOTIFICATION
+// ============================================================
+router.delete("/notifications/:notificationId", async (req, res, next) => {
+  try {
+    const notification = await Notification.findOneAndDelete({
+      _id: req.params.notificationId,
+      recipientId: req.user._id,
+    });
+
+    if (!notification) {
+      return res.status(404).json({
+        error: {
+          code: "NOT_FOUND",
+          message: "Notification not found.",
+        },
+      });
+    }
+
+    res.json({
+      data: {
+        id: notification._id.toString(),
+        deleted: true,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================================
 // MARK ALL NOTIFICATIONS AS READ
 // ============================================================
 router.post("/notifications/read-all", async (req, res, next) => {

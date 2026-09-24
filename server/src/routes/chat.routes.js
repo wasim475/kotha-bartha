@@ -588,7 +588,7 @@ router.get("/conversations", async (req, res, next) => {
         updatedAt: -1,
       })
       .limit(50)
-      .populate("lastMessageId", "encrypted encryptedBody encryptedPayloads senderPublicKey body");
+      .populate("lastMessageId", "senderId status encrypted encryptedBody encryptedPayloads senderPublicKey body");
 
     const visibleConversations = conversations.filter((conversation) => {
       const isArchived = conversation.archivedFor?.some((id) => id.toString() === userId);
@@ -622,6 +622,14 @@ router.get("/conversations", async (req, res, next) => {
     // way it already decrypts messages inside an open thread.
     const lastMessageContentFields = (conversation) =>
       conversation.lastMessageId ? contentFields(conversation.lastMessageId) : {};
+    // Who sent it and its sent/delivered/read status — lets the client show
+    // a sent/read tick next to the preview for the viewer's own last
+    // message, exactly like the tick already shown on that same message's
+    // bubble inside the open thread (see MessageBubble.jsx).
+    const lastMessageStatusFields = (conversation) => ({
+      lastMessageSenderId: conversation.lastMessageId?.senderId?.toString() || null,
+      lastMessageStatus: conversation.lastMessageId?.status || null,
+    });
 
     res.json({
       data: visibleConversations.map((conversation) => {
@@ -632,6 +640,7 @@ router.get("/conversations", async (req, res, next) => {
             theme: conversation.theme || "default",
         likeEmoji: conversation.likeEmoji || "👍",
             group: groupSummary(conversation),
+            ...lastMessageStatusFields(conversation),
             lastMessage: conversation.lastMessage,
             lastMessageAt: conversation.lastMessageAt,
             unreadCount: conversation.unreadCounts?.get?.(userId) || 0,
@@ -647,6 +656,7 @@ router.get("/conversations", async (req, res, next) => {
         likeEmoji: conversation.likeEmoji || "👍",
           user: other ? otherParticipantView(conversation, other, userId, blocks) : null,
           ...lastMessageContentFields(conversation),
+          ...lastMessageStatusFields(conversation),
           lastMessage: conversation.lastMessage,
           lastMessageAt: conversation.lastMessageAt,
           unreadCount: conversation.unreadCounts?.get?.(userId) || 0,
