@@ -124,22 +124,31 @@ const ChatHeader = ({
         </Link>
       )}
 
-      <IconButton
-        label={searchOpen ? "Close search" : "Search messages"}
-        icon={searchOpen ? <Close fontSize="small" /> : <Search fontSize="small" />}
-        size="sm"
-        active={searchOpen}
-        disabled={!selected}
-        onClick={onToggleSearch}
-      />
-
       {isGroup ? (
-        <IconButton
-          label="Group info"
-          icon={<Info fontSize="small" />}
-          size="sm"
-          onClick={onOpenGroupInfo}
-        />
+        <>
+          <IconButton
+            label="Group info"
+            icon={<Info fontSize="small" />}
+            size="sm"
+            onClick={onOpenGroupInfo}
+          />
+          {selected && (
+            <Menu
+              align="end"
+              trigger={
+                <IconButton label="Conversation options" icon={<MoreHoriz fontSize="small" />} size="sm" />
+              }
+              items={[
+                {
+                  key: "search",
+                  label: "Search Message",
+                  icon: <Search fontSize="small" />,
+                  onClick: onToggleSearch,
+                },
+              ]}
+            />
+          )}
+        </>
       ) : (
         <>
           <IconButton
@@ -157,6 +166,12 @@ const ChatHeader = ({
                 <IconButton label="Conversation options" icon={<MoreHoriz fontSize="small" />} size="sm" />
               }
               items={[
+                {
+                  key: "search",
+                  label: "Search Message",
+                  icon: <Search fontSize="small" />,
+                  onClick: onToggleSearch,
+                },
                 {
                   key: "nickname",
                   label: "Set nickname",

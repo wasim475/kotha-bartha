@@ -30,6 +30,13 @@ const conversationSchema = new mongoose.Schema(
     },
     lastMessage: { type: String, default: "" },
     lastMessageAt: Date,
+    // Ref to the actual last Message doc, alongside the plaintext-or-
+    // placeholder `lastMessage` string above. Needed so the conversation
+    // list can be populated with an encrypted message's ciphertext fields
+    // (see contentFields in chat.routes.js) and decrypted client-side for
+    // the preview — `lastMessage` alone is just "🔒 Encrypted message" for
+    // an encrypted conversation, since the server never has the plaintext.
+    lastMessageId: { type: mongoose.Schema.Types.ObjectId, ref: "Message" },
     unreadCounts: { type: Map, of: Number, default: {} },
     // Per-user last-read timestamp, used to compute the "first unread"
     // message for the jump-to-unread affordance. Parallel to unreadCounts.

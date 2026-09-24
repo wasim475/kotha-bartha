@@ -5,6 +5,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import { cx } from "../../utility/cx";
 import { themeCssVars } from "./utility/conversationThemes";
+import useConversationListDecryption from "./hooks/useConversationListDecryption";
 import useDeleteMessage from "./hooks/useDeleteMessage";
 import useE2EDecryption from "./hooks/useE2EDecryption";
 import useEditMessage from "./hooks/useEditMessage";
@@ -52,6 +53,8 @@ const Message = ({ user }) => {
   } = useMessageResources(conversationId);
   const isGroup = Boolean(selected?.isGroup);
   useE2EDecryption({ conversationId, selected, userId: user.id, thread });
+  useConversationListDecryption({ resource: conversations, userId: user.id });
+  useConversationListDecryption({ resource: archived, userId: user.id });
   const search = useMessageSearch({ conversationId, selected, thread });
   const [searchOpen, setSearchOpen] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState(null);

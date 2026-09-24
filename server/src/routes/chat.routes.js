@@ -587,7 +587,8 @@ router.get("/conversations", async (req, res, next) => {
       .sort({
         updatedAt: -1,
       })
-      .limit(50);
+      .limit(50)
+      .populate("lastMessageId", "encrypted encryptedBody encryptedPayloads senderPublicKey body");
 
     const visibleConversations = conversations.filter((conversation) => {
       const isArchived = conversation.archivedFor?.some((id) => id.toString() === userId);
@@ -614,6 +615,14 @@ router.get("/conversations", async (req, res, next) => {
     const byId = new Map(users.map((user) => [user._id.toString(), user]));
     const blocks = await blockSets(req.user._id);
 
+    // For an encrypted last message, `conversation.lastMessage` is just the
+    // "🔒 Encrypted message" placeholder (the server never has the
+    // plaintext) — the populated `lastMessageId` carries the actual
+    // ciphertext fields so the client can decrypt a real preview the same
+    // way it already decrypts messages inside an open thread.
+    const lastMessageContentFields = (conversation) =>
+      conversation.lastMessageId ? contentFields(conversation.lastMessageId) : {};
+
     res.json({
       data: visibleConversations.map((conversation) => {
         if (conversation.isGroup) {
@@ -637,6 +646,7 @@ router.get("/conversations", async (req, res, next) => {
           theme: conversation.theme || "default",
         likeEmoji: conversation.likeEmoji || "👍",
           user: other ? otherParticipantView(conversation, other, userId, blocks) : null,
+          ...lastMessageContentFields(conversation),
           lastMessage: conversation.lastMessage,
           lastMessageAt: conversation.lastMessageAt,
           unreadCount: conversation.unreadCounts?.get?.(userId) || 0,
@@ -1099,6 +1109,7 @@ router.post(
 
       conversation.lastMessage = body;
       conversation.lastMessageAt = message.createdAt;
+      conversation.lastMessageId = message._id;
       bumpUnreadFor(conversation, others);
       await conversation.save();
 
@@ -1209,6 +1220,7 @@ router.post("/conversations/:conversationId/calls", async (req, res, next) => {
 
     conversation.lastMessage = body;
     conversation.lastMessageAt = message.createdAt;
+    conversation.lastMessageId = message._id;
     bumpUnreadFor(conversation, [recipientId]);
     await conversation.save();
 
@@ -1341,6 +1353,7 @@ router.post(
 
       conversation.lastMessage = body;
       conversation.lastMessageAt = message.createdAt;
+      conversation.lastMessageId = message._id;
       bumpUnreadFor(conversation, others);
       await conversation.save();
 
@@ -1532,6 +1545,7 @@ router.patch(
           new Date(message.createdAt).getTime()
       ) {
         conversation.lastMessage = body;
+        conversation.lastMessageId = message._id;
 
         await conversation.save();
       }
@@ -1641,6 +1655,7 @@ router.delete(
         conversation.lastMessage = lastMessage?.body || "";
 
         conversation.lastMessageAt = lastMessage?.createdAt || null;
+        conversation.lastMessageId = lastMessage?._id || null;
 
         await conversation.save();
       }
@@ -1836,6 +1851,7 @@ router.post(
 
         target.lastMessage = forwarded.body;
         target.lastMessageAt = forwarded.createdAt;
+        target.lastMessageId = forwarded._id;
         bumpUnreadFor(target, targetOthers);
         await target.save();
 
