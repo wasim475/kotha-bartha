@@ -4,6 +4,7 @@ import "./App.css";
 import "./CSS/feed.css";
 import "./CSS/navbar.css";
 import "./CSS/study.css";
+import "./CSS/games.css";
 import "./index.css";
 import "./message.css";
 import "./CSS/comment.css";

@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const User = require("../models/User");
 const Friendship = require("../models/Friendship");
 const FriendRequest = require("../models/FriendRequest");
@@ -194,6 +195,15 @@ router.post("/notifications/:notificationId/read", async (req, res, next) => {
 // ============================================================
 router.delete("/notifications/:notificationId", async (req, res, next) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.notificationId)) {
+      return res.status(404).json({
+        error: {
+          code: "NOT_FOUND",
+          message: "Notification not found.",
+        },
+      });
+    }
+
     const notification = await Notification.findOneAndDelete({
       _id: req.params.notificationId,
       recipientId: req.user._id,

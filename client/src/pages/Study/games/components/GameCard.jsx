@@ -1,0 +1,41 @@
+import { motion as Motion } from "framer-motion";
+
+/**
+ * A game on the Games landing page. Everything shown comes from the server's
+ * catalog entry, so a new game type needs no change here. Unavailable games
+ * (e.g. an English game whose question bank is still empty) render disabled
+ * with a "Coming soon" chip.
+ */
+export default function GameCard({ game, onPlay }) {
+  return (
+    <Motion.button
+      type="button"
+      className="game-launch"
+      disabled={!game.available}
+      onClick={() => onPlay(game)}
+      whileHover={game.available ? { y: -2 } : undefined}
+      whileTap={game.available ? { scale: 0.985 } : undefined}
+      aria-label={game.available ? `Play ${game.name}` : `${game.name} — coming soon`}
+    >
+      <span className="game-tile" aria-hidden="true">
+        {game.icon}
+      </span>
+
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="font-display text-base leading-tight font-semibold text-ink">{game.name}</span>
+        <span className="text-xs leading-snug text-muted">{game.description}</span>
+      </span>
+
+      <span className="game-launch-meta">
+        {game.available ? (
+          <>
+            <span className="game-chip game-chip--tone">Play</span>
+            <span className="game-chip">{game.questionCount} questions</span>
+          </>
+        ) : (
+          <span className="game-chip">Coming soon</span>
+        )}
+      </span>
+    </Motion.button>
+  );
+}

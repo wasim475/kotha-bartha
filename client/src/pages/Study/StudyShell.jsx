@@ -7,6 +7,8 @@ import StudyNavbar from "./StudyNavbar";
 import StudyPlaceholder from "./StudyPlaceholder";
 import StudyTopbar from "./StudyTopbar";
 import { studyNavItems } from "./studyNavItems";
+import GamePlayer from "./games/GamePlayer";
+import Games from "./games/Games";
 import Leaderboard from "./leaderboard/Leaderboard";
 import PreviousLeaderboards from "./leaderboard/PreviousLeaderboards";
 import QuizAdmin from "./quiz/QuizAdmin";
@@ -16,7 +18,6 @@ const descriptions = {
   blogs: "Study notes, guides and articles from the কথা-বার্তা community.",
   quiz: "Test what you know with quick, bite-sized quizzes.",
   "class-study": "Class-wise study material and structured resources.",
-  games: "Learn while you play — study games are on the way.",
 };
 
 export default function StudyShell({ user }) {
@@ -40,6 +41,9 @@ export default function StudyShell({ user }) {
               if (item.key === "leaderboard") {
                 return <Route key={item.path} path={item.key} element={<Leaderboard />} />;
               }
+              if (item.key === "games") {
+                return <Route key={item.path} path={item.key} element={<Games />} />;
+              }
               return (
                 <Route
                   key={item.path}
@@ -59,6 +63,7 @@ export default function StudyShell({ user }) {
               element={canManageQuiz ? <QuizAdmin user={user} /> : <Navigate to="quiz" replace />}
             />
             <Route path="leaderboard/history" element={<PreviousLeaderboards />} />
+            <Route path="games/play/:gameType" element={<GamePlayer />} />
             <Route path="*" element={<Navigate to="blogs" replace />} />
           </Routes>
         </main>

@@ -403,6 +403,10 @@ button {
   position: sticky;
   top: var(--topbar-h);
   z-index: 3;
+  /* .app-body is a grid whose items stretch to the full row height by
+     default — a stretched item has no room to move within its own grid
+     area, so sticky would silently do nothing. */
+  align-self: start;
 }
 .nav-label {
   margin: 5px 0 19px;
