@@ -1,4 +1,5 @@
 import { ArrowBackRounded, PlayArrowRounded } from "@mui/icons-material";
+import { AnimatePresence, motion as Motion, useReducedMotion } from "framer-motion";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -73,13 +74,29 @@ function GameRequestsSetting() {
   );
 }
 
+const byName = (a, b) => a.fullName.localeCompare(b.fullName);
+
 function FriendRow({ friend, outgoing, onInvite, onCancel, busy }) {
+  const reduced = useReducedMotion();
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-line bg-panel p-2.5">
+    <Motion.div
+      layout={!reduced}
+      initial={reduced ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={reduced ? { opacity: 0 } : { opacity: 0, x: -12 }}
+      transition={{ duration: 0.2 }}
+      className="flex items-center gap-3 rounded-xl border border-line bg-panel p-2.5"
+    >
       <Avatar person={friend} size="md" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-ink">{friend.fullName}</p>
-        {outgoing && <p className="text-[11px] text-muted">Invitation sent — waiting…</p>}
+        {outgoing ? (
+          <p className="text-[11px] text-muted">Invitation sent — waiting…</p>
+        ) : (
+          <p className="flex items-center gap-1.5 text-[11px] font-medium text-muted">
+            <span className="size-2 shrink-0 rounded-full bg-green-500" aria-hidden="true" /> Online
+          </p>
+        )}
       </div>
       {outgoing ? (
         <FixedButton variant="outline" size="sm" className="shrink-0" loading={busy} onClick={() => onCancel(outgoing)}>
@@ -90,7 +107,7 @@ function FriendRow({ friend, outgoing, onInvite, onCancel, busy }) {
           <PlayArrowRounded fontSize="small" /> Invite
         </FixedButton>
       )}
-    </div>
+    </Motion.div>
   );
 }
 
@@ -103,7 +120,8 @@ function FriendRow({ friend, outgoing, onInvite, onCancel, busy }) {
 export default function TicTacToeLobby({ user }) {
   const navigate = useNavigate();
   const stats = useResource("/games/tic-tac-toe/stats");
-  const friends = useResource("/friends");
+  // Only friends who are online right now — kept current by presence events.
+  const friends = useResource("/games/tic-tac-toe/friends/online");
   const pending = useResource("/games/tic-tac-toe/invites/pending");
   const active = useResource("/games/tic-tac-toe/active");
   const [busyId, setBusyId] = useState(null);
@@ -121,12 +139,27 @@ export default function TicTacToeLobby({ user }) {
   useRealtime("ticTacToe:finished", refresh);
   useRealtime("ticTacToe:player:left", refresh);
 
+  // A friend coming online / going offline updates the list in place — no
+  // polling. (After a reconnect events may have been missed, so it re-fetches.)
+  useRealtime("ticTacToe:presence", (event) => {
+    const { userId, isOnline, user: friend } = event.detail || {};
+    if (!userId) return;
+    friends.setData((current) => {
+      const list = current || [];
+      if (!isOnline) return list.filter((item) => item.id !== userId);
+      if (!friend || list.some((item) => item.id === userId)) return list;
+      return [...list, friend].sort(byName);
+    });
+  });
+  useRealtime("realtime:connected", friends.reload);
+
   const outgoingFor = (friendId) => (pending.data?.outgoing || []).find((invite) => invite.to.id === friendId);
 
   const invite = async (friend) => {
     setBusyId(friend.id);
     const sent = await inviteFriend(friend, { navigate });
     if (sent) pending.reload();
+    else friends.reload(); // e.g. they just went offline — show the truth
     setBusyId(null);
   };
 
@@ -195,23 +228,26 @@ export default function TicTacToeLobby({ user }) {
       )}
 
       <section className="flex flex-col gap-2" aria-label="Friends">
-        <h2 className="text-xs font-bold tracking-wide text-muted uppercase">Invite a friend</h2>
-        <ResourceState
-          loading={friends.loading}
-          error={friends.error}
-          empty={!(friends.data || []).length ? "Add some friends to play with them." : ""}
-        >
+        <h2 className="text-xs font-bold tracking-wide text-muted uppercase">Invite an online friend</h2>
+        <ResourceState loading={friends.loading} error={friends.error}>
+          {!(friends.data || []).length && (
+            <p className="rounded-xl border border-dashed border-line px-3 py-5 text-center text-sm text-muted">
+              No friends are online right now.
+            </p>
+          )}
           <div className="flex flex-col gap-2">
-            {(friends.data || []).map((friend) => (
-              <FriendRow
-                key={friend.id}
-                friend={friend}
-                outgoing={outgoingFor(friend.id)}
-                busy={busyId === friend.id}
-                onInvite={invite}
-                onCancel={cancel}
-              />
-            ))}
+            <AnimatePresence initial={false}>
+              {(friends.data || []).map((friend) => (
+                <FriendRow
+                  key={friend.id}
+                  friend={friend}
+                  outgoing={outgoingFor(friend.id)}
+                  busy={busyId === friend.id}
+                  onInvite={invite}
+                  onCancel={cancel}
+                />
+              ))}
+            </AnimatePresence>
           </div>
         </ResourceState>
       </section>

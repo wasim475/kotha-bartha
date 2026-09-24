@@ -277,3 +277,112 @@
     transition: none;
   }
 }
+
+/* ---------- Reactions ---------- */
+.ttt-versus {
+  position: relative;
+}
+/* Temporary reactions float beside the two player cards, over the free space
+   next to the turn pill — never over the board, never catching taps. */
+.ttt-bursts {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+.ttt-burst {
+  position: absolute;
+  top: calc(100% - 4px);
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  will-change: transform, opacity;
+}
+.ttt-burst[data-side="me"] {
+  left: calc(4px + var(--slot, 0) * 24px);
+}
+.ttt-burst[data-side="them"] {
+  right: calc(4px + var(--slot, 0) * 24px);
+}
+.ttt-burst-face {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+}
+.ttt-poke {
+  display: block;
+  line-height: 1;
+}
+.ttt-reactions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+.ttt-react-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 4px 6px;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    transform 0.12s ease,
+    opacity 0.2s ease;
+}
+@media (hover: hover) {
+  .ttt-react-btn:not(:disabled):hover {
+    border-color: var(--tone);
+    background: var(--tone-soft);
+  }
+}
+.ttt-react-btn:not(:disabled):active {
+  transform: scale(0.94);
+}
+.ttt-react-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.ttt-react-btn:focus-visible {
+  outline: 2px solid var(--tone);
+  outline-offset: 2px;
+}
+.ttt-react-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+}
+.ttt-react-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ttt-react-btn {
+    transition: none;
+  }
+  .ttt-react-btn:not(:disabled):active {
+    transform: none;
+  }
+}

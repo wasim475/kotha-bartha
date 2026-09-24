@@ -11,6 +11,7 @@ const { isBlockedEitherWay } = require("./utils/blocks");
 const { addConnection, removeConnection, isOnline } = require("./utils/presence");
 const { startLeaderboardArchiveScheduler } = require("./services/leaderboardArchive.service");
 const { registerTicTacToeSocket } = require("./sockets/ticTacToe.socket");
+const { announcePresence } = require("./services/ticTacToe.service");
 
 const port = process.env.PORT || 5000;
 const httpServer = http.createServer(app);
@@ -61,6 +62,8 @@ io.on("connection", (socket) => {
   socket.join(`user:${socket.userId}`);
 
   if (addConnection(socket.userId)) {
+    // Friends' Tic-Tac-Toe invite lists (reuses the same presence tracker).
+    announcePresence(io, socket.userId, true).catch((error) => console.error("presence announce failed:", error));
     notifyPartners(socket.userId, { userId: socket.userId, isOnline: true }).catch(
       (error) => console.error("presence broadcast failed:", error),
     );
@@ -101,6 +104,7 @@ io.on("connection", (socket) => {
   });
   socket.on("disconnect", async () => {
     if (!removeConnection(socket.userId)) return;
+    announcePresence(io, socket.userId, false).catch((error) => console.error("presence announce failed:", error));
 
     try {
       const user = await User.findByIdAndUpdate(

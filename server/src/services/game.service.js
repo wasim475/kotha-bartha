@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const Game = require("../models/Game");
 const GameAttempt = require("../models/GameAttempt");
-const { GAME_CATEGORIES, GAME_TYPES, getGameType, pointsFor } = require("./games/gameTypes");
+const { GAME_CATEGORIES, GAME_TYPES, EXTERNAL_GAMES, getGameType, pointsFor } = require("./games/gameTypes");
 const { OPTION_COUNT } = require("./games/questionBuilder");
 const { GameError } = require("./games/GameError");
 
@@ -88,7 +88,8 @@ async function listGames() {
         questionCount: game.questionCount,
         timeLimitSec: definition.timeLimitSec,
         available: isPlayable(game, definition),
-      })),
+      }))
+      .concat(EXTERNAL_GAMES.map(({ sortOrder, ...game }) => ({ ...game, available: true }))),
     categories: GAME_CATEGORIES,
   };
 }

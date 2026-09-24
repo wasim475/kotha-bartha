@@ -9,7 +9,9 @@ import { ResourceState } from "../../../../utility/helpers";
 import { TIC_TAC_TOE_LOBBY, WIN_POINTS } from "../../../../utility/ticTacToe";
 import FixedButton from "../components/FixedButton";
 import Board, { Mark } from "./Board";
+import { ReactionBar, ReactionBursts } from "./Reactions";
 import StatsCard from "./StatsCard";
+import useGameReactions from "./useGameReactions";
 import useTicTacToeGame from "./useTicTacToeGame";
 
 function PlayerBadge({ person, symbol, label, active, align }) {
@@ -53,6 +55,7 @@ export default function TicTacToeGame({ user }) {
   const reduced = useReducedMotion();
   const ttt = useTicTacToeGame(gameId, user.id);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const reactions = useGameReactions(gameId, user.id);
   const { game, me, opponent, mySymbol, myTurn } = ttt;
 
   const toLobby = () => navigate(TIC_TAC_TOE_LOBBY);
@@ -94,6 +97,7 @@ export default function TicTacToeGame({ user }) {
                 active={active && !myTurn}
                 align="end"
               />
+              <ReactionBursts items={reactions.items} meId={user.id} />
             </div>
 
             <div className="flex min-h-9 justify-center" aria-live="polite">
@@ -126,6 +130,8 @@ export default function TicTacToeGame({ user }) {
               outcome={outcome}
               onPlay={ttt.play}
             />
+
+            <ReactionBar enabled={active} cooling={reactions.cooling} error={reactions.error} onSend={reactions.send} />
 
             {ttt.moveError && (
               <p role="alert" className="text-center text-xs font-medium text-danger">

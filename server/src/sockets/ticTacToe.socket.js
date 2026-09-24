@@ -10,6 +10,8 @@ const service = require("../services/ticTacToe.service");
 //   ticTacToe:join  { gameId }             -> ack { ok, game }
 //   ticTacToe:leave { gameId }             -> stop receiving that game's events (NOT leaving the game)
 //   ticTacToe:move  { gameId, cellIndex }  -> ack { ok, game } | { ok:false, error }
+//   ticTacToe:reaction { gameId, type }    -> ack { ok } | { ok:false, error }; relayed to the OTHER
+//                                             socket(s) in the game room as { gameId, from, type, at }
 //
 // Server -> client events (invite, accepted, declined, move, state, finished,
 // rematch, player:left, …) are emitted by ticTacToe.service.js.
@@ -37,6 +39,18 @@ function registerTicTacToeSocket(io, socket) {
 
   socket.on("ticTacToe:leave", (payload) => {
     if (typeof payload?.gameId === "string") socket.leave(service.gameRoom(payload.gameId));
+  });
+
+  socket.on("ticTacToe:reaction", async (payload, ack) => {
+    try {
+      const { room, payload: relayed } = await service.prepareReaction(socket.userId, payload?.gameId, payload?.type);
+      // socket.to() never includes the sender's own socket, so the sender is
+      // not sent its own reaction back.
+      socket.to(room).emit("ticTacToe:reaction", relayed);
+      reply(ack, { ok: true });
+    } catch (error) {
+      reply(ack, toError(error));
+    }
   });
 
   socket.on("ticTacToe:move", async (payload, ack) => {

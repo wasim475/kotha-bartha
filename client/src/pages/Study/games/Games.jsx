@@ -105,29 +105,12 @@ export default function Games({ canManage = false }) {
               transition={{ duration: 0.18, ease: "easeOut" }}
             >
               {activeSection.games.map((game) => (
-                <GameCard key={game.type} game={game} onPlay={() => navigate(`/study/games/play/${game.type}`)} />
+                <GameCard key={game.type} game={game} onPlay={() => navigate(game.route || `/study/games/play/${game.type}`)} />
               ))}
             </Motion.div>
           </div>
         )}
       </ResourceState>
-
-      {/* Below the game cards so the category tabs and cards keep their place. */}
-      <button
-        type="button"
-        className="game-last"
-        data-tone="math"
-        onClick={() => navigate("/study/games/tic-tac-toe")}
-      >
-        <span className="game-tile" aria-hidden="true">
-          ✕○
-        </span>
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
-          <span className="font-display text-base leading-tight font-semibold text-ink">Tic-Tac-Toe</span>
-          <span className="text-xs text-muted">Challenge a friend · +20 points for a win</span>
-        </span>
-        <ChevronRight className="shrink-0 text-muted" />
-      </button>
     </div>
   );
 }

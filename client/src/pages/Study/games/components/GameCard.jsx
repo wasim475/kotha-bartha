@@ -3,7 +3,8 @@ import { motion as Motion } from "framer-motion";
 
 /**
  * A game on the Games landing page. Everything shown comes from the server's
- * catalog entry, so a new game type needs no change here. Unavailable games
+ * catalog entry, so a new game type needs no change here (a game that isn't a
+ * question quiz supplies `chips` instead of a question count / timer). Unavailable games
  * (e.g. an English game whose question bank is still empty) render disabled
  * with a "Coming soon" chip.
  */
@@ -31,11 +32,21 @@ export default function GameCard({ game, onPlay }) {
         {game.available ? (
           <>
             <span className="game-chip game-chip--tone">Play</span>
-            <span className="game-chip">{game.questionCount} questions</span>
-            {game.timeLimitSec && (
-              <span className="game-chip">
-                <Timer style={{ fontSize: 13 }} /> {game.timeLimitSec}s each
-              </span>
+            {game.chips ? (
+              game.chips.map((chip) => (
+                <span key={chip} className="game-chip">
+                  {chip}
+                </span>
+              ))
+            ) : (
+              <>
+                <span className="game-chip">{game.questionCount} questions</span>
+                {game.timeLimitSec && (
+                  <span className="game-chip">
+                    <Timer style={{ fontSize: 13 }} /> {game.timeLimitSec}s each
+                  </span>
+                )}
+              </>
             )}
           </>
         ) : (

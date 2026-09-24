@@ -16,6 +16,9 @@ router.patch("/games/tic-tac-toe/settings", respond(async (req) => ({ data: awai
 // ---- statistics
 router.get("/games/tic-tac-toe/stats", respond(async (req) => ({ data: await service.getStats(req.user._id) })));
 
+// ---- friends who are online right now (the only people who can be invited)
+router.get("/games/tic-tac-toe/friends/online", respond(async (req) => ({ data: await service.listOnlineFriends(req.user) })));
+
 // ---- games I can resume
 router.get("/games/tic-tac-toe/active", respond(async (req) => ({ data: await service.listActive(req.user._id) })));
 

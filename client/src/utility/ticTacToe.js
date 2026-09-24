@@ -21,7 +21,19 @@ export const TTT_EVENTS = [
   "ticTacToe:move",
   "ticTacToe:finished",
   "ticTacToe:player:left",
+  "ticTacToe:presence",
+  "ticTacToe:reaction",
 ];
+
+// The in-game reactions — a small fixed set (the server rejects anything else).
+// haha / sad / angry reuse the app's shared reaction faces (components/ui/reactions).
+export const GAME_REACTIONS = [
+  { type: "poke", label: "Poke", text: "খোঁচা" },
+  { type: "haha", label: "Haha" },
+  { type: "sad", label: "Sad" },
+  { type: "angry", label: "Angry" },
+];
+export const isGameReaction = (type) => GAME_REACTIONS.some((reaction) => reaction.type === type);
 
 export const WIN_POINTS = 20;
 export const ticTacToeGamePath = (gameId) => `/study/games/tic-tac-toe/${gameId}`;

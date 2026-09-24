@@ -37,6 +37,23 @@ const ENGLISH_SCORING = { correct: 1, wrong: 0, timeout: -1 };
 const GAME_CATEGORIES = [
   { key: "math", label: "Math Games", icon: "🧮" },
   { key: "english", label: "English Games", icon: "🇬🇧" },
+  { key: "other", label: "Other", icon: "🎲" },
+];
+
+// Games that are NOT question attempts (so they are not in GAME_TYPES and are
+// never started through /games/:type/start). They only appear in the catalog,
+// under their category, and open their own screen at `route`.
+const EXTERNAL_GAMES = [
+  {
+    type: "tic-tac-toe",
+    category: "other",
+    name: "Tic-Tac-Toe",
+    description: "Challenge an online friend.",
+    icon: "✕○",
+    sortOrder: 210,
+    route: "/study/games/tic-tac-toe",
+    chips: ["With a friend", "+20 points for a win"],
+  },
 ];
 
 const mathGame = (operation, sortOrder, name, description, icon) => ({
@@ -102,4 +119,4 @@ const getGameType = (type) => GAME_TYPES_BY_KEY.get(type) || null;
 // outcome: "correct" | "wrong" | "timeout"
 const pointsFor = (definition, outcome) => definition.scoring[outcome] ?? 0;
 
-module.exports = { GAME_CATEGORIES, GAME_TYPES, getGameType, pointsFor, DEFAULT_QUESTION_COUNT };
+module.exports = { GAME_CATEGORIES, GAME_TYPES, EXTERNAL_GAMES, getGameType, pointsFor, DEFAULT_QUESTION_COUNT };

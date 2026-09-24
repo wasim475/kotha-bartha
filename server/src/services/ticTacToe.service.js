@@ -5,7 +5,9 @@ const TicTacToeGame = require("../models/TicTacToeGame");
 const TicTacToeInvite = require("../models/TicTacToeInvite");
 const { GameError } = require("./games/GameError");
 const { pairKey } = require("../utils/ids");
-const { isBlockedEitherWay } = require("../utils/blocks");
+const { isBlockedEitherWay, blockedPairIds } = require("../utils/blocks");
+const { isOnline } = require("../utils/presence");
+const { REACTION_TYPES } = require("../utils/reactionTypes");
 const { safeUser } = require("../utils/serializers");
 const { evaluateBoard, otherSymbol, isValidCell } = require("./ticTacToe/logic");
 
@@ -92,13 +94,18 @@ const serializeInvite = (invite, users) => ({
 // setting — checked on the server for every new invitation and rematch
 // request. `checkSetting: false` is used when ACCEPTING something already
 // sent, where only friendship and blocks matter.
-async function assertCanPlay(inviterId, target, { checkSetting = true } = {}) {
+async function assertCanPlay(inviterId, target, { checkSetting = true, requireOnline = false } = {}) {
   const key = pairKey(inviterId, target._id);
   if (!(await Friendship.exists({ pairKey: key }))) {
     throw new GameError(403, "NOT_FRIENDS", "You can only play Tic-Tac-Toe with your friends.");
   }
   if (await isBlockedEitherWay(inviterId, target._id)) {
     throw new GameError(403, "BLOCKED", "You can't play with this user.");
+  }
+  // Presence comes from the server's own connection tracker (utils/presence),
+  // never from anything the client says.
+  if (requireOnline && !isOnline(target._id)) {
+    throw new GameError(409, "TARGET_OFFLINE", `${target.fullName} isn't online right now.`);
   }
   if (checkSetting && (target.settings?.gameRequests ?? "friends") === "off") {
     throw new GameError(403, "GAME_REQUESTS_OFF", `${target.fullName} isn't accepting game requests right now.`);
@@ -237,7 +244,7 @@ async function createInvite(user, targetId, io) {
 
   const target = await User.findById(targetId).select("fullName avatar settings");
   if (!target) throw new GameError(404, "NOT_FOUND", "User not found.");
-  await assertCanPlay(user._id, target);
+  await assertCanPlay(user._id, target, { requireOnline: true });
 
   return createRequest(io, { kind: "invite", inviter: user, target });
 }
@@ -529,6 +536,88 @@ async function requestRematch(user, gameId, io) {
 
 // Called when a socket joins a game's room — the ONLY way into the room, and
 // only for the game's two players.
+// ------------------------------------------------------------
+// Online friends (who can be invited right now)
+// ------------------------------------------------------------
+
+async function friendIdsOf(userId) {
+  const friendships = await Friendship.find({ userIds: userId }).select("userIds").lean();
+  return friendships.map((friendship) => friendship.userIds.map(String).find((id) => id !== userId.toString())).filter(Boolean);
+}
+
+// Only friends who are online right now (per the existing presence tracker),
+// not blocked either way. Offline friends are never returned, so this endpoint
+// can't be used to read anyone's offline state.
+async function listOnlineFriends(user) {
+  const [friendIds, blocked] = await Promise.all([friendIdsOf(user._id), blockedPairIds(user._id)]);
+  const onlineIds = friendIds.filter((id) => !blocked.has(id) && isOnline(id));
+  if (!onlineIds.length) return [];
+  const users = await User.find({ _id: { $in: onlineIds } }).select("fullName avatar");
+  return users.map(publicUser).sort((a, b) => a.fullName.localeCompare(b.fullName));
+}
+
+// Tells a user's friends (only) that they came online / went offline, over the
+// existing Socket.IO server, so an open invite list updates without polling.
+// The "offline" side waits a couple of seconds: moving between the main app
+// and Study swaps one socket for another and must not flash the friend away.
+const OFFLINE_GRACE_MS = 2500;
+const offlineTimers = new Map();
+
+async function announcePresence(io, userId, online) {
+  const id = userId.toString();
+  clearTimeout(offlineTimers.get(id));
+  offlineTimers.delete(id);
+
+  const send = async () => {
+    const [friendIds, blocked, user] = await Promise.all([
+      friendIdsOf(id),
+      blockedPairIds(id),
+      online ? User.findById(id).select("fullName avatar") : null,
+    ]);
+    const payload = online ? { userId: id, isOnline: true, user: publicUser(user) } : { userId: id, isOnline: false };
+    friendIds.filter((friendId) => !blocked.has(friendId)).forEach((friendId) => emit(io, userRoom(friendId), "ticTacToe:presence", payload));
+  };
+
+  if (online) return send();
+  offlineTimers.set(
+    id,
+    setTimeout(() => {
+      offlineTimers.delete(id);
+      if (!isOnline(id)) send().catch((error) => console.error("tic-tac-toe presence broadcast failed:", error));
+    }, OFFLINE_GRACE_MS),
+  );
+}
+
+// ------------------------------------------------------------
+// Reactions (purely visual — they never touch the game document)
+// ------------------------------------------------------------
+
+const GAME_REACTIONS = ["poke", ...REACTION_TYPES.filter((type) => ["haha", "sad", "angry"].includes(type))];
+const REACTION_COOLDOWN_MS = 350;
+const lastReactionAt = new Map();
+
+// Validates a reaction and returns the room + payload to relay. Reads the game
+// only to check membership and that it's still active; writes nothing.
+async function prepareReaction(userId, gameId, type) {
+  if (typeof type !== "string" || !GAME_REACTIONS.includes(type)) {
+    throw new GameError(400, "INVALID_REACTION", "That reaction isn't available.");
+  }
+  if (!mongoose.isValidObjectId(gameId)) throw invalidId();
+  const game = await TicTacToeGame.findOne({ _id: gameId, $or: [{ playerX: userId }, { playerO: userId }] }).select("status");
+  if (!game) throw invalidId();
+  if (game.status !== "active") throw new GameError(409, "GAME_NOT_ACTIVE", "This game has ended.");
+
+  const now = Date.now();
+  const key = `${userId}:${game._id}`;
+  if (now - (lastReactionAt.get(key) || 0) < REACTION_COOLDOWN_MS) {
+    throw new GameError(429, "RATE_LIMITED", "Slow down a little.");
+  }
+  lastReactionAt.set(key, now);
+  if (lastReactionAt.size > 500) lastReactionAt.delete(lastReactionAt.keys().next().value);
+
+  return { room: gameRoom(game._id), payload: { gameId: game._id.toString(), from: userId.toString(), type, at: now } };
+}
+
 async function joinGameRoom(userId, gameId, socket, io) {
   const game = await findParticipantGame(userId, gameId);
   await socket.join(gameRoom(game._id));
@@ -557,4 +646,8 @@ module.exports = {
   leaveGame,
   requestRematch,
   joinGameRoom,
+  listOnlineFriends,
+  announcePresence,
+  prepareReaction,
+  GAME_REACTIONS,
 };
