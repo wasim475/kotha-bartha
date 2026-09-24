@@ -15,6 +15,7 @@ export default function CategoryTabs({ categories, activeKey, onSelect }) {
       className="game-tabs"
       role="tablist"
       aria-label="Game category"
+      data-dense={categories.length > 2 ? "true" : "false"}
       style={{ gridTemplateColumns: `repeat(${categories.length}, minmax(0, 1fr))` }}
     >
       {categories.map((category) => {

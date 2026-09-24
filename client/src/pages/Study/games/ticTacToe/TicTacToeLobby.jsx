@@ -99,11 +99,11 @@ function FriendRow({ friend, outgoing, onInvite, onCancel, busy }) {
         )}
       </div>
       {outgoing ? (
-        <FixedButton variant="outline" size="sm" className="shrink-0" loading={busy} onClick={() => onCancel(outgoing)}>
+        <FixedButton variant="outline" size="sm" className="min-h-11 shrink-0" loading={busy} onClick={() => onCancel(outgoing)}>
           Cancel
         </FixedButton>
       ) : (
-        <FixedButton variant="primary" size="sm" className="shrink-0" loading={busy} onClick={() => onInvite(friend)}>
+        <FixedButton variant="primary" size="sm" className="min-h-11 shrink-0" loading={busy} onClick={() => onInvite(friend)}>
           <PlayArrowRounded fontSize="small" /> Invite
         </FixedButton>
       )}

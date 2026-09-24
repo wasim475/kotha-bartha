@@ -675,3 +675,20 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* With more than two categories the tabs would clip on a phone, so the small
+   icons give way to the labels there (two-category layouts are unchanged). */
+@media (max-width: 419px) {
+  .game-tabs[data-dense="true"] {
+    grid-template-columns: none !important;
+    grid-auto-flow: column;
+    grid-auto-columns: auto;
+    justify-content: stretch;
+  }
+  .game-tabs[data-dense="true"] .game-tab {
+    padding: 0 8px;
+  }
+  .game-tabs[data-dense="true"] .game-tab-icon {
+    display: none;
+  }
+}

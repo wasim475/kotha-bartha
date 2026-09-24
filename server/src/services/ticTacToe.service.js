@@ -25,6 +25,14 @@ const userRoom = (userId) => `user:${userId}`;
 const gameRoom = (gameId) => `tic-tac-toe:${gameId}`;
 const emit = (io, room, event, payload) => io?.to(room).emit(event, payload);
 
+// A friend whose socket dropped a moment ago (a page refresh, or the app
+// swapping its main-shell socket for the Study one) still counts as online for
+// this long, so the invite list, the "went offline" broadcast and the server's
+// own check all agree. A reconnect cancels the pending timer.
+const OFFLINE_GRACE_MS = 2500;
+const offlineTimers = new Map();
+const isReachable = (userId) => isOnline(userId) || offlineTimers.has(userId.toString());
+
 const idOf = (value) => (value?._id ?? value).toString();
 const isDuplicateKey = (error) => error?.code === 11000;
 const invalidId = () => new GameError(404, "NOT_FOUND", "Not found.");
@@ -104,7 +112,7 @@ async function assertCanPlay(inviterId, target, { checkSetting = true, requireOn
   }
   // Presence comes from the server's own connection tracker (utils/presence),
   // never from anything the client says.
-  if (requireOnline && !isOnline(target._id)) {
+  if (requireOnline && !isReachable(target._id)) {
     throw new GameError(409, "TARGET_OFFLINE", `${target.fullName} isn't online right now.`);
   }
   if (checkSetting && (target.settings?.gameRequests ?? "friends") === "off") {
@@ -550,7 +558,7 @@ async function friendIdsOf(userId) {
 // can't be used to read anyone's offline state.
 async function listOnlineFriends(user) {
   const [friendIds, blocked] = await Promise.all([friendIdsOf(user._id), blockedPairIds(user._id)]);
-  const onlineIds = friendIds.filter((id) => !blocked.has(id) && isOnline(id));
+  const onlineIds = friendIds.filter((id) => !blocked.has(id) && isReachable(id));
   if (!onlineIds.length) return [];
   const users = await User.find({ _id: { $in: onlineIds } }).select("fullName avatar");
   return users.map(publicUser).sort((a, b) => a.fullName.localeCompare(b.fullName));
@@ -558,10 +566,7 @@ async function listOnlineFriends(user) {
 
 // Tells a user's friends (only) that they came online / went offline, over the
 // existing Socket.IO server, so an open invite list updates without polling.
-// The "offline" side waits a couple of seconds: moving between the main app
-// and Study swaps one socket for another and must not flash the friend away.
-const OFFLINE_GRACE_MS = 2500;
-const offlineTimers = new Map();
+// The "offline" side waits OFFLINE_GRACE_MS (see above).
 
 async function announcePresence(io, userId, online) {
   const id = userId.toString();
