@@ -1,4 +1,4 @@
-import { ArrowBackRounded, ErrorOutlined } from "@mui/icons-material";
+import { ArrowBackRounded, ErrorOutlined, MenuBook } from "@mui/icons-material";
 import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -101,7 +101,27 @@ function GamePlayerScreen({ gameType }) {
 
       {phase === "loading" && <PlayerSkeleton />}
 
-      {phase === "error" && (
+      {phase === "error" && game.loadErrorCode === "NOT_ENOUGH_QUESTIONS" && (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-line bg-panel px-6 py-14 text-center shadow-soft">
+          <div className="flex size-12 items-center justify-center rounded-full bg-soft text-muted">
+            <MenuBook />
+          </div>
+          <h2 className="font-display text-lg font-semibold text-ink">You've seen every new question</h2>
+          <p className="max-w-xs text-sm text-muted">{game.loadError}</p>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={backToGames}
+            style={primaryFix.style}
+            onMouseEnter={primaryFix.onMouseEnter}
+            onMouseLeave={primaryFix.onMouseLeave}
+          >
+            Back to Games
+          </Button>
+        </div>
+      )}
+
+      {phase === "error" && game.loadErrorCode !== "NOT_ENOUGH_QUESTIONS" && (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-line bg-panel px-6 py-14 text-center shadow-soft">
           <div className="flex size-11 items-center justify-center rounded-full bg-danger-soft text-danger">
             <ErrorOutlined fontSize="small" />

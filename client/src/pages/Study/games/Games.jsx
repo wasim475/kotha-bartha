@@ -1,7 +1,8 @@
-import { ChevronRight } from "@mui/icons-material";
+import { ChevronRight, ManageAccounts } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 
 import { ResourceState, formatTime, useResource } from "../../../utility/helpers";
+import FixedButton from "./components/FixedButton";
 import GameCard from "./components/GameCard";
 import { toneFor } from "./utility/gameTypes";
 
@@ -37,7 +38,7 @@ function LastGameCard({ last, onOpen }) {
  * Games landing page: every game from the server's catalog, grouped by
  * category. Route: /study/games
  */
-export default function Games() {
+export default function Games({ canManage = false }) {
   const navigate = useNavigate();
   const catalog = useResource("/games");
   const last = useResource("/games/last");
@@ -56,9 +57,16 @@ export default function Games() {
 
   return (
     <div className="games-scope flex min-w-0 flex-col gap-7">
-      <header className="flex flex-col gap-1">
-        <h1 className="font-display text-3xl font-semibold text-ink">Games</h1>
-        <p className="text-sm text-muted">Learn while you play — ten quick questions per game.</p>
+      <header className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h1 className="font-display text-3xl font-semibold text-ink">Games</h1>
+          <p className="text-sm text-muted">Learn while you play — ten quick questions per game.</p>
+        </div>
+        {canManage && (
+          <FixedButton variant="outline" size="sm" className="shrink-0" onClick={() => navigate("/study/games/manage")}>
+            <ManageAccounts fontSize="small" /> English Questions
+          </FixedButton>
+        )}
       </header>
 
       {last.data && (

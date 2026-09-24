@@ -13,6 +13,7 @@ const notesRoutes = require("./notes.routes");
 const quizRoutes = require("./quiz.routes");
 const leaderboardRoutes = require("./leaderboard.routes");
 const gameRoutes = require("./game.routes");
+const englishQuestionRoutes = require("./englishQuestions.routes");
 
 const router = express.Router();
 
@@ -29,6 +30,7 @@ router.use(storiesRoutes);
 router.use(notesRoutes);
 router.use(quizRoutes);
 router.use(leaderboardRoutes);
+router.use(englishQuestionRoutes);
 router.use(gameRoutes);
 
 module.exports = router;

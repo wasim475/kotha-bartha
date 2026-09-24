@@ -3,16 +3,7 @@ const Game = require("../models/Game");
 const GameAttempt = require("../models/GameAttempt");
 const { GAME_CATEGORIES, GAME_TYPES, getGameType, pointsFor } = require("./games/gameTypes");
 const { OPTION_COUNT } = require("./games/questionBuilder");
-
-class GameError extends Error {
-  constructor(status, code, message, extra = {}) {
-    super(message);
-    this.name = "GameError";
-    this.status = status;
-    this.code = code;
-    this.extra = extra;
-  }
-}
+const { GameError } = require("./games/GameError");
 
 // ------------------------------------------------------------
 // Question timing (timed games only — see timeLimitSec in gameTypes.js)
@@ -194,7 +185,10 @@ async function startAttempt(userId, gameType) {
   let attempt = await findPlayingAttempt(userId, gameType);
 
   if (!attempt) {
-    const questions = definition.generate(game.questionCount);
+    // Selection happens here, on the server, for THIS user — for English it
+    // excludes every question the user has been given before and throws
+    // NOT_ENOUGH_QUESTIONS rather than ever repeating one.
+    const generated = await definition.generate({ count: game.questionCount, userId });
     const timeLimitMs = definition.timeLimitSec ? definition.timeLimitSec * 1000 : null;
     try {
       attempt = await GameAttempt.create({
@@ -202,7 +196,8 @@ async function startAttempt(userId, gameType) {
         gameId: game._id,
         gameType,
         category: game.category,
-        questions,
+        questions: generated.questions,
+        questionIds: generated.questionIds || [],
         timeLimitMs,
         // The first question's window opens the moment the attempt exists.
         questionStartedAt: timeLimitMs ? new Date() : null,

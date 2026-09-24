@@ -1,6 +1,5 @@
 const express = require("express");
 const {
-  GameError,
   listGames,
   startAttempt,
   getAttempt,
@@ -9,23 +8,9 @@ const {
   getReview,
 } = require("../services/game.service");
 
-const router = express.Router();
+const { respond } = require("../utils/gameRespond");
 
-// Runs a service call and maps its GameError to the project's standard
-// { error: { code, message } } response; anything unexpected goes to the
-// shared error handler. `req.user` is guaranteed by the global requireAuth.
-const respond = (handler) => async (req, res, next) => {
-  try {
-    res.json(await handler(req));
-  } catch (error) {
-    if (error instanceof GameError) {
-      return res
-        .status(error.status)
-        .json({ error: { code: error.code, message: error.message, ...error.extra } });
-    }
-    next(error);
-  }
-};
+const router = express.Router();
 
 // Catalog: every game plus its category, time limit, and whether it's playable yet.
 router.get(

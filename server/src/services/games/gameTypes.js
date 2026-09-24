@@ -1,6 +1,5 @@
 const { generateMathQuestions } = require("./mathGenerator");
-const { generateFromBank } = require("./questionBuilder");
-const { englishWordBank, englishConversionBank } = require("./englishBanks");
+const { selectEnglishQuestions } = require("../englishQuestion.service");
 
 // THE registry of playable game types. Everything type-specific — how its
 // questions are produced, how it scores, how many questions it asks, whether
@@ -17,14 +16,20 @@ const { englishWordBank, englishConversionBank } = require("./englishBanks");
 //                   the client only so it can draw the countdown.
 //   scoring       — points per outcome { correct, wrong, timeout }; the
 //                   server applies it, never the client
-//   generate(n)   — returns n questions shaped { prompt, options[4], correctIndex }
-//   isAvailable(n)— whether n questions can currently be produced
+//   generate({ count, userId }) — async; returns { questions, questionIds? } where
+//                   each question is { prompt, options[4], correctIndex }.
+//                   questionIds (English) records which stored questions the
+//                   user was given, for the no-repeat history.
+//   isAvailable(n)— whether the game can be offered at all
 
 const DEFAULT_QUESTION_COUNT = 10;
 const MATH_TIME_LIMIT_SEC = 10;
 // Math is a speed game: a wrong answer AND a timeout each cost a point.
 const MATH_SCORING = { correct: 1, wrong: -1, timeout: -1 };
-const ENGLISH_SCORING = { correct: 1, wrong: 0, timeout: 0 };
+// English keeps its existing scoring — a wrong pick costs nothing — and a
+// question left to time out costs a point, exactly like Math.
+const ENGLISH_TIME_LIMIT_SEC = 15;
+const ENGLISH_SCORING = { correct: 1, wrong: 0, timeout: -1 };
 
 const GAME_CATEGORIES = [
   { key: "math", label: "Math Games", icon: "🧮" },
@@ -41,11 +46,15 @@ const mathGame = (operation, sortOrder, name, description, icon) => ({
   questionCount: DEFAULT_QUESTION_COUNT,
   timeLimitSec: MATH_TIME_LIMIT_SEC,
   scoring: MATH_SCORING,
-  generate: (count) => generateMathQuestions(operation, count),
+  generate: async ({ count }) => ({ questions: generateMathQuestions(operation, count) }),
   isAvailable: () => true,
 });
 
-const bankGame = ({ type, sortOrder, name, description, icon, bank }) => ({
+// English games draw from the database (models/EnglishQuestion.js) — unlimited,
+// admin-managed, and never repeated for the same user. Whether a particular
+// user still has enough NEW questions is checked when they start (see
+// selectEnglishQuestions), not here.
+const englishGame = ({ type, sortOrder, name, description, icon }) => ({
   type,
   category: "english",
   name,
@@ -53,10 +62,10 @@ const bankGame = ({ type, sortOrder, name, description, icon, bank }) => ({
   icon,
   sortOrder,
   questionCount: DEFAULT_QUESTION_COUNT,
-  timeLimitSec: null,
+  timeLimitSec: ENGLISH_TIME_LIMIT_SEC,
   scoring: ENGLISH_SCORING,
-  generate: (count) => generateFromBank(bank, count),
-  isAvailable: (count) => bank.length >= count,
+  generate: ({ count, userId }) => selectEnglishQuestions({ gameType: type, count, userId }),
+  isAvailable: () => true,
 });
 
 const GAME_TYPES = [
@@ -64,21 +73,19 @@ const GAME_TYPES = [
   mathGame("subtraction", 20, "Subtraction", "Subtract two-digit numbers.", "−"),
   mathGame("multiplication", 30, "Multiplication", "Times tables from 2 to 12.", "×"),
   mathGame("division", 40, "Division", "Clean division, no decimals.", "÷"),
-  bankGame({
+  englishGame({
     type: "english-word",
     sortOrder: 110,
     name: "English Word Game",
     description: "Meanings, synonyms and antonyms.",
     icon: "Aa",
-    bank: englishWordBank,
   }),
-  bankGame({
+  englishGame({
     type: "english-conversion",
     sortOrder: 120,
     name: "English Conversion Game",
     description: "Bengali to English sentences.",
     icon: "⇄",
-    bank: englishConversionBank,
   }),
 ];
 

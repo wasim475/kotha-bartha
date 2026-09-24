@@ -1,24 +1,27 @@
-// Question banks for the English games. They live ONLY on the server: a
-// question's correct answer is never sent to a client until that question
-// has been answered (see game.service.js). A fresh random sample of 10 is
-// drawn per attempt and each drawn question gets its own option shuffle
-// (see questionBuilder.generateFromBank), so the order here is irrelevant
-// and nothing in this file is ever mutated.
+// SEED DATA for the English games — no longer the source of questions.
+//
+// English questions live in MongoDB (models/EnglishQuestion.js), where
+// admins and moderators add unlimited more through the management screen.
+// This file is only the default set that englishQuestion.service.js's
+// seedEnglishQuestions() copies into the database, once and idempotently
+// (keyed on seedKey, so re-running never duplicates, and never overwrites or
+// re-enables a seeded question an admin has since edited or disabled). Nothing
+// at play time, and nothing in the client, reads this file.
 //
 // Item shape — the correct answer is stored separately from the three
-// distractors, so option order is decided per attempt, never authored:
+// distractors:
 //
-//   { prompt, answer, wrong: [three distinct wrong options] }
+//   { type, prompt, answer, wrong: [three distinct wrong options] }
 //
 // Rules every item follows (checked by the bank validator test):
 //   - exactly four distinct options in total, `answer` not among `wrong`
 //   - exactly ONE option is correct — no distractor is also a valid answer
 //   - beginner-friendly, age-appropriate vocabulary and sentences
 
-const meaning = (word, answer, wrong) => ({ prompt: `"${word}" means—`, answer, wrong });
-const synonym = (word, answer, wrong) => ({ prompt: `Choose the synonym of "${word}":`, answer, wrong });
-const antonym = (word, answer, wrong) => ({ prompt: `Choose the antonym of "${word}":`, answer, wrong });
-const kindOf = (word, answer, wrong) => ({ prompt: `"${word}" is a—`, answer, wrong });
+const meaning = (word, answer, wrong) => ({ type: "word_meaning", prompt: `"${word}" means—`, answer, wrong });
+const synonym = (word, answer, wrong) => ({ type: "synonym", prompt: `Choose the synonym of "${word}":`, answer, wrong });
+const antonym = (word, answer, wrong) => ({ type: "antonym", prompt: `Choose the antonym of "${word}":`, answer, wrong });
+const kindOf = (word, answer, wrong) => ({ type: "vocabulary", prompt: `"${word}" is a—`, answer, wrong });
 
 const englishWordBank = [
   // ---------- Word meaning (English → Bengali) ----------
@@ -123,6 +126,7 @@ const englishWordBank = [
 // (wrong tense, subject–verb agreement, missing article, wrong meaning) so
 // there is only ever one acceptable English sentence among the four.
 const conversion = (bengali, answer, wrong) => ({
+  type: "conversion",
   prompt: `"${bengali}" এর ইংরেজি কোনটি?`,
   answer,
   wrong,

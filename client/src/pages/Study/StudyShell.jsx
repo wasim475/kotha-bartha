@@ -7,6 +7,7 @@ import StudyNavbar from "./StudyNavbar";
 import StudyPlaceholder from "./StudyPlaceholder";
 import StudyTopbar from "./StudyTopbar";
 import { studyNavItems } from "./studyNavItems";
+import EnglishQuestionAdmin from "./games/admin/EnglishQuestionAdmin";
 import GamePlayer from "./games/GamePlayer";
 import GameReview from "./games/GameReview";
 import Games from "./games/Games";
@@ -43,7 +44,7 @@ export default function StudyShell({ user }) {
                 return <Route key={item.path} path={item.key} element={<Leaderboard />} />;
               }
               if (item.key === "games") {
-                return <Route key={item.path} path={item.key} element={<Games />} />;
+                return <Route key={item.path} path={item.key} element={<Games canManage={canManageQuiz} />} />;
               }
               return (
                 <Route
@@ -64,6 +65,10 @@ export default function StudyShell({ user }) {
               element={canManageQuiz ? <QuizAdmin user={user} /> : <Navigate to="quiz" replace />}
             />
             <Route path="leaderboard/history" element={<PreviousLeaderboards />} />
+            <Route
+              path="games/manage"
+              element={canManageQuiz ? <EnglishQuestionAdmin /> : <Navigate to="/study/games" replace />}
+            />
             <Route path="games/play/:gameType" element={<GamePlayer />} />
             <Route path="games/review/:attemptId" element={<GameReview />} />
             <Route path="*" element={<Navigate to="blogs" replace />} />

@@ -27,6 +27,11 @@ const gameAttemptSchema = new mongoose.Schema(
         correctIndex: { type: Number, required: true },
       },
     ],
+    // The stored English questions this attempt was given (parallel to
+    // `questions`). This — not anything in the browser — is the per-user
+    // no-repeat history: a question is "used" once it appears here, on any
+    // attempt, completed or not. Empty for Math games.
+    questionIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "EnglishQuestion" }],
     answers: [
       {
         _id: false,
@@ -69,6 +74,8 @@ gameAttemptSchema.index(
 // "Last completed game" lookups and Leaderboard aggregation over completed
 // attempts within a date window.
 gameAttemptSchema.index({ userId: 1, status: 1, completedAt: -1 });
+// The no-repeat history lookup: everything one user was given in one game.
+gameAttemptSchema.index({ userId: 1, gameType: 1, startedAt: -1 });
 gameAttemptSchema.index({ status: 1, completedAt: -1 });
 
 module.exports = mongoose.model("GameAttempt", gameAttemptSchema);

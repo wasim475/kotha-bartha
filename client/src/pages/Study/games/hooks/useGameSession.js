@@ -30,6 +30,7 @@ const errorMessage = (error, fallback) => error.response?.data?.error?.message |
 export default function useGameSession(gameType) {
   const [phase, setPhase] = useState("loading"); // loading | error | playing | complete
   const [loadError, setLoadError] = useState("");
+  const [loadErrorCode, setLoadErrorCode] = useState("");
   const [session, setSession] = useState(null);
   const [index, setIndex] = useState(0);
   const [answerState, setAnswerState] = useState(ANSWER_STATE.PLAYING);
@@ -120,6 +121,7 @@ export default function useGameSession(gameType) {
     } catch (error) {
       if (run !== runRef.current) return;
       setLoadError(errorMessage(error, "Couldn't start this game."));
+      setLoadErrorCode(error.response?.data?.error?.code || "");
       setPhase("error");
     }
   }, [gameType, resetQuestionUi, armCountdown]);
@@ -137,6 +139,7 @@ export default function useGameSession(gameType) {
     clearTimers();
     lockedRef.current = false;
     setLoadError("");
+    setLoadErrorCode("");
     setPhase("loading");
     load();
   };
@@ -299,6 +302,7 @@ export default function useGameSession(gameType) {
   return {
     phase,
     loadError,
+    loadErrorCode,
     session,
     question: session?.questions?.[index] || null,
     questionNumber: Math.min(index + 1, total || 1),
