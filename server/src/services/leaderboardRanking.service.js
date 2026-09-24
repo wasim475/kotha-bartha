@@ -5,6 +5,7 @@
 const mongoose = require("mongoose");
 const QuizAttempt = require("../models/QuizAttempt");
 const GameAttempt = require("../models/GameAttempt");
+const TicTacToeGame = require("../models/TicTacToeGame");
 const Friendship = require("../models/Friendship");
 const { blockedPairIds } = require("../utils/blocks");
 const { getCycleStatus, cycleStartInstant, previousMonthOf } = require("./leaderboardCycle.service");
@@ -149,6 +150,53 @@ async function sourceRows(Model, baseFilter, dateMatch, scopeIds) {
   ]);
 }
 
+// Tic-Tac-Toe wins are Games points too: every WON game carries the +20 that was
+// written atomically when it was won (see TicTacToeGame / ticTacToe.service.js),
+// so summing them can never count a win twice. Draws, losses and abandoned
+// games carry 0 and are excluded. `dateMatch` is the shared period filter
+// (keyed on `completedAt`); here the same window applies to `finishedAt`.
+async function ticTacToeRows(dateMatch, scopeIds) {
+  const match = { status: "won", rewardPoints: { $gt: 0 } };
+  if (dateMatch.completedAt) match.finishedAt = dateMatch.completedAt;
+  if (scopeIds) match.winnerId = { $in: scopeIds };
+
+  return TicTacToeGame.aggregate([
+    { $match: match },
+    { $group: { _id: "$winnerId", points: { $sum: "$rewardPoints" }, wins: { $sum: 1 } } },
+    { $lookup: { from: "users", localField: "_id", foreignField: "_id", as: "user" } },
+    { $unwind: "$user" },
+    { $match: { "user.role": "user" } },
+    {
+      $project: {
+        userId: "$_id",
+        fullName: "$user.fullName",
+        avatar: "$user.avatar",
+        currentCity: "$user.currentCity",
+        points: 1,
+        correctCount: { $literal: 0 },
+        wrongCount: { $literal: 0 },
+        attempted: "$wins",
+      },
+    },
+  ]);
+}
+
+// Adds Tic-Tac-Toe rows into the Games rows, per user.
+function mergeGameRows(gameRows, tttRows) {
+  const byUser = new Map(gameRows.map((row) => [row.userId.toString(), { ...row }]));
+  for (const row of tttRows) {
+    const key = row.userId.toString();
+    const existing = byUser.get(key);
+    if (existing) {
+      existing.points += row.points;
+      existing.attempted += row.attempted;
+    } else {
+      byUser.set(key, { ...row });
+    }
+  }
+  return [...byUser.values()];
+}
+
 const EMPTY_PART = { points: 0, correctCount: 0, wrongCount: 0, attempted: 0 };
 const partOf = (row) => ({
   points: row.points,
@@ -179,10 +227,12 @@ async function rankedParticipants({ category, dateMatch, audience, requesterId }
 
   const wantsQuiz = category !== "games";
   const wantsGames = category !== "quiz";
-  const [quizRows, gameRows] = await Promise.all([
+  const [quizRows, attemptRows, tttRows] = await Promise.all([
     wantsQuiz ? sourceRows(QuizAttempt, BASE_ATTEMPT_FILTER, dateMatch, scopeIds) : [],
     wantsGames ? sourceRows(GameAttempt, GAME_ATTEMPT_FILTER, dateMatch, scopeIds) : [],
+    wantsGames ? ticTacToeRows(dateMatch, scopeIds) : [],
   ]);
+  const gameRows = mergeGameRows(attemptRows, tttRows);
 
   const byUser = new Map();
   const entryFor = (row) => {

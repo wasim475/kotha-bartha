@@ -1,5 +1,6 @@
 import {
   Block,
+  GridOn,
   Check,
   ChatBubbleOutlineRounded,
   Close,
@@ -12,7 +13,9 @@ import Button from "../../../components/ui/Button";
 import Card from "../../../components/ui/Card";
 import IconButton from "../../../components/ui/IconButton";
 import Menu from "../../../components/ui/Menu";
+import { inviteFriend } from "../../../utility/ticTacToe";
 import useButtonColorFix from "../../../utility/useButtonColorFix";
+import { useNavigate } from "react-router-dom";
 
 const subtitleFor = (tab, person) => {
   if (tab === "requests") return "Sent you a friend request";
@@ -35,6 +38,7 @@ const FriendCard = ({
   onProfileClick,
 }) => {
   const person = entry.user || entry;
+  const navigate = useNavigate();
 
   const acceptFix = useButtonColorFix("primary");
   const outlineFix = useButtonColorFix("outline");
@@ -139,6 +143,12 @@ const FriendCard = ({
                 />
               }
               items={[
+                {
+                  key: "tic-tac-toe",
+                  label: "Play Tic-Tac-Toe",
+                  icon: <GridOn fontSize="small" />,
+                  onClick: () => inviteFriend(person, { navigate }),
+                },
                 {
                   key: "unfriend",
                   label: "Unfriend",

@@ -1,0 +1,279 @@
+/*
+  Tic-Tac-Toe. Built on the same tokens as the rest of Study Games (see
+  games.css): --tone / --tone-soft, --game-correct / --game-wrong, --panel,
+  --line, --soft, --shadow — so light and dark both follow the normal theme
+  toggle. X uses the Study accent, O the app accent.
+*/
+.games-scope {
+  --ttt-x: var(--study-accent, var(--accent));
+  --ttt-o: var(--accent);
+}
+
+/* ---------- Players + turn ---------- */
+.ttt-versus {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+.ttt-vs {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+.ttt-player {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  border: 1.5px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.25s ease;
+}
+.ttt-player[data-align="end"] {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+.ttt-player[data-active="true"] {
+  border-color: var(--tone);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 18%, transparent);
+}
+.ttt-symbol {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+}
+.ttt-symbol .ttt-mark {
+  width: 100%;
+  height: 100%;
+}
+.ttt-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  margin: 0;
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.ttt-status[data-mine="true"] {
+  border-color: color-mix(in srgb, var(--tone) 45%, var(--line));
+  background: var(--tone-soft);
+  color: var(--tone);
+}
+.ttt-status-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: ttt-pulse 1.4s ease-in-out infinite;
+}
+@keyframes ttt-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.7);
+  }
+}
+
+/* ---------- Board ---------- */
+.ttt-board {
+  position: relative;
+  width: min(100%, 26rem);
+  aspect-ratio: 1;
+  margin-inline: auto;
+  padding: clamp(8px, 2.6vw, 14px);
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tone) 7%, var(--panel)), var(--panel) 65%);
+  box-shadow: var(--shadow);
+  transition:
+    box-shadow 0.3s ease,
+    border-color 0.3s ease;
+}
+/* A soft glow on the board while it is YOUR turn. */
+.ttt-board[data-turn="mine"] {
+  border-color: color-mix(in srgb, var(--tone) 50%, var(--line));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--tone) 30%, transparent),
+    0 18px 60px -18px color-mix(in srgb, var(--tone) 60%, transparent);
+}
+.ttt-board[data-outcome="won"] {
+  border-color: var(--game-correct);
+  box-shadow: 0 18px 60px -14px color-mix(in srgb, var(--game-correct) 65%, transparent);
+}
+.ttt-board[data-outcome="lost"] {
+  border-color: var(--game-wrong);
+  box-shadow: 0 18px 60px -14px color-mix(in srgb, var(--game-wrong) 55%, transparent);
+}
+.ttt-board[data-outcome="draw"] {
+  border-color: color-mix(in srgb, var(--muted) 55%, var(--line));
+}
+.ttt-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: clamp(6px, 2vw, 10px);
+  width: 100%;
+  height: 100%;
+}
+.ttt-cell {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 1.5px solid var(--line);
+  border-radius: clamp(14px, 4vw, 20px);
+  background: var(--panel);
+  cursor: default;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    border-color 0.15s ease,
+    background 0.2s ease;
+}
+.ttt-cell[data-playable="true"] {
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .ttt-cell[data-playable="true"]:hover {
+    border-color: var(--tone);
+    background: var(--tone-soft);
+  }
+}
+.ttt-cell:focus-visible {
+  outline: 2px solid var(--tone);
+  outline-offset: 2px;
+}
+.ttt-cell[data-pending="true"] {
+  border-color: var(--tone);
+  background: var(--tone-soft);
+}
+.ttt-mark {
+  width: 62%;
+  height: 62%;
+  overflow: visible;
+}
+.ttt-mark--x {
+  color: var(--ttt-x);
+}
+.ttt-mark--o {
+  color: var(--ttt-o);
+}
+/* The faint preview of your own mark on a cell you can play. */
+.ttt-ghost {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.ttt-cell[data-pending="true"] .ttt-ghost {
+  opacity: 0.6;
+}
+@media (hover: hover) {
+  .ttt-cell[data-playable="true"]:hover .ttt-ghost {
+    opacity: 0.28;
+  }
+}
+.ttt-board[data-outcome="won"] .ttt-cell[data-win="true"] {
+  border-color: var(--game-correct);
+  background: color-mix(in srgb, var(--game-correct) 16%, var(--panel));
+}
+.ttt-board[data-outcome="lost"] .ttt-cell[data-win="true"] {
+  border-color: var(--game-wrong);
+  background: color-mix(in srgb, var(--game-wrong) 14%, var(--panel));
+}
+.ttt-winline {
+  position: absolute;
+  inset: clamp(8px, 2.6vw, 14px);
+  width: calc(100% - 2 * clamp(8px, 2.6vw, 14px));
+  height: calc(100% - 2 * clamp(8px, 2.6vw, 14px));
+  pointer-events: none;
+  color: var(--game-correct);
+}
+.ttt-board[data-outcome="lost"] .ttt-winline {
+  color: var(--game-wrong);
+}
+.ttt-sparks {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.ttt-spark {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: var(--game-correct);
+}
+.ttt-spark[data-tone="1"] {
+  background: var(--tone);
+}
+
+/* ---------- Result ---------- */
+.ttt-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.ttt-result[data-kind="won"] {
+  border-color: var(--game-correct);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--game-correct) 12%, var(--panel)), var(--panel));
+}
+.ttt-result[data-kind="lost"] {
+  border-color: color-mix(in srgb, var(--game-wrong) 60%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--game-wrong) 9%, var(--panel)), var(--panel));
+}
+.ttt-points {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 2px;
+  padding: 6px 16px;
+  border: 1px solid var(--game-correct);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--game-correct) 20%, var(--panel));
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ttt-status-dot {
+    animation: none;
+  }
+  .ttt-board,
+  .ttt-player,
+  .ttt-cell {
+    transition: none;
+  }
+}

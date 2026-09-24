@@ -7,8 +7,11 @@ import StudyNavbar from "./StudyNavbar";
 import StudyPlaceholder from "./StudyPlaceholder";
 import StudyTopbar from "./StudyTopbar";
 import { studyNavItems } from "./studyNavItems";
+import useStudySocket from "./hooks/useStudySocket";
 import EnglishQuestionAdmin from "./games/admin/EnglishQuestionAdmin";
 import GamePlayer from "./games/GamePlayer";
+import TicTacToeGame from "./games/ticTacToe/TicTacToeGame";
+import TicTacToeLobby from "./games/ticTacToe/TicTacToeLobby";
 import GameReview from "./games/GameReview";
 import Games from "./games/Games";
 import Leaderboard from "./leaderboard/Leaderboard";
@@ -26,6 +29,7 @@ export default function StudyShell({ user }) {
   const navigate = useNavigate();
   const { theme, setTheme } = useContext(Utility);
   const canManageQuiz = user?.role === "admin" || user?.role === "moderator";
+  useStudySocket(user.id);
 
   return (
     <div className="app-shell study-shell">
@@ -69,6 +73,8 @@ export default function StudyShell({ user }) {
               path="games/manage"
               element={canManageQuiz ? <EnglishQuestionAdmin /> : <Navigate to="/study/games" replace />}
             />
+            <Route path="games/tic-tac-toe" element={<TicTacToeLobby user={user} />} />
+            <Route path="games/tic-tac-toe/:gameId" element={<TicTacToeGame user={user} />} />
             <Route path="games/play/:gameType" element={<GamePlayer />} />
             <Route path="games/review/:attemptId" element={<GameReview />} />
             <Route path="*" element={<Navigate to="blogs" replace />} />

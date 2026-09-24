@@ -2,6 +2,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const QuizAttempt = require("../models/QuizAttempt");
 const GameAttempt = require("../models/GameAttempt");
+const TicTacToeGame = require("../models/TicTacToeGame");
 const User = require("../models/User");
 const LeaderboardArchive = require("../models/LeaderboardArchive");
 const { isBlockedEitherWay } = require("../utils/blocks");
@@ -165,7 +166,18 @@ router.get("/leaderboard/users/:userId/stats", async (req, res, next) => {
     const gameAttempts = dateMatch
       ? await GameAttempt.find({ userId: user._id, ...GAME_ATTEMPT_FILTER, ...dateMatch }).select("score").lean()
       : [];
-    const gamePoints = gameAttempts.reduce((sum, attempt) => sum + attempt.score, 0);
+    const tttWins = dateMatch
+      ? await TicTacToeGame.find({
+          status: "won",
+          winnerId: user._id,
+          ...(dateMatch.completedAt ? { finishedAt: dateMatch.completedAt } : {}),
+        })
+          .select("rewardPoints")
+          .lean()
+      : [];
+    const gamePoints =
+      gameAttempts.reduce((sum, attempt) => sum + attempt.score, 0) +
+      tttWins.reduce((sum, game) => sum + (game.rewardPoints || 0), 0);
 
     const totalAnswered = correct + wrong;
     // wrongPercent derived as the remainder (not rounded independently) so

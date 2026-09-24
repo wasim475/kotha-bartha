@@ -4,6 +4,7 @@ import { api } from "../../../utility/api";
 import { isConversationMuted } from "../../../utility/conversationPreferences";
 import { realtime, setActiveSocket } from "../../../utility/helpers";
 import { playIncomingMessageSound, playSoftMessageSound } from "../../../utility/sound";
+import { TTT_EVENTS } from "../../../utility/ticTacToe";
 
 const socketUrl = api.defaults.baseURL.replace(/\/api\/v1$/, "");
 const forwardedMessageIds = new Set();
@@ -87,6 +88,8 @@ export default function useSocket(userId) {
     socket.on("conversation:updated", forward("conversation:updated"));
     socket.on("conversation:theme", forward("conversation:theme"));
     socket.on("conversation:likeEmoji", forward("conversation:likeEmoji"));
+    // Tic-Tac-Toe invitations, moves and results (see utility/ticTacToe.js).
+    TTT_EVENTS.forEach((name) => socket.on(name, forward(name)));
 
     return () => {
       setActiveSocket(undefined);

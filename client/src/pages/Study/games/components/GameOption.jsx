@@ -11,7 +11,7 @@ import { motion as Motion } from "framer-motion";
  */
 // How big to set the label: short numbers get the large "answer" look, words
 // a medium size, and full sentences (English conversion) a compact wrapped one.
-const kindOf = (label) => (/^-?d{1,6}$/.test(label) ? "number" : label.length > 14 ? "sentence" : "word");
+const kindOf = (label) => (/^-?\d{1,6}$/.test(label) ? "number" : label.length > 14 ? "sentence" : "word");
 
 export default function GameOption({ letter, label, state, disabled, onSelect, tap }) {
   return (

@@ -1,5 +1,6 @@
 import {
   Block,
+  GridOn,
   Check,
   ChatBubbleOutlineRounded,
   MoreHoriz,
@@ -14,7 +15,9 @@ import Button from "../../../components/ui/Button";
 import IconButton from "../../../components/ui/IconButton";
 import Menu from "../../../components/ui/Menu";
 import RichText from "../../../components/ui/RichText";
+import { inviteFriend } from "../../../utility/ticTacToe";
 import useButtonColorFix from "../../../utility/useButtonColorFix";
+import { useNavigate } from "react-router-dom";
 
 function ProfileHeaderSkeleton() {
   return (
@@ -49,6 +52,7 @@ export default function ProfileHeader({
   uploadError,
   loading,
 }) {
+  const navigate = useNavigate();
   const avatarInputRef = useRef(null);
   const coverInputRef = useRef(null);
   const primaryFix = useButtonColorFix("primary");
@@ -205,6 +209,19 @@ export default function ProfileHeader({
                 >
                   <ChatBubbleOutlineRounded fontSize="small" /> Message
                 </Button>
+
+                {person.isFriend && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => inviteFriend(person, { navigate })}
+                    style={outlineFix.style}
+                    onMouseEnter={outlineFix.onMouseEnter}
+                    onMouseLeave={outlineFix.onMouseLeave}
+                  >
+                    <GridOn fontSize="small" /> Play Tic-Tac-Toe
+                  </Button>
+                )}
 
                 {person.isFriend ? (
                   <Menu

@@ -10,6 +10,7 @@ const { pairKey } = require("./utils/ids");
 const { isBlockedEitherWay } = require("./utils/blocks");
 const { addConnection, removeConnection, isOnline } = require("./utils/presence");
 const { startLeaderboardArchiveScheduler } = require("./services/leaderboardArchive.service");
+const { registerTicTacToeSocket } = require("./sockets/ticTacToe.socket");
 
 const port = process.env.PORT || 5000;
 const httpServer = http.createServer(app);
@@ -76,6 +77,9 @@ io.on("connection", (socket) => {
         senderId: socket.userId.toString(),
       });
     };
+
+  // Tic-Tac-Toe (join a game room, play moves) — see sockets/ticTacToe.socket.js.
+  registerTicTacToeSocket(io, socket);
 
   socket.on("typing:start", forwardTyping("typing:start"));
   socket.on("typing:stop", forwardTyping("typing:stop"));

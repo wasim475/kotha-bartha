@@ -14,6 +14,7 @@ const quizRoutes = require("./quiz.routes");
 const leaderboardRoutes = require("./leaderboard.routes");
 const gameRoutes = require("./game.routes");
 const englishQuestionRoutes = require("./englishQuestions.routes");
+const ticTacToeRoutes = require("./ticTacToe.routes");
 
 const router = express.Router();
 
@@ -31,6 +32,7 @@ router.use(notesRoutes);
 router.use(quizRoutes);
 router.use(leaderboardRoutes);
 router.use(englishQuestionRoutes);
+router.use(ticTacToeRoutes);
 router.use(gameRoutes);
 
 module.exports = router;

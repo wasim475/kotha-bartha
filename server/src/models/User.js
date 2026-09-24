@@ -46,6 +46,10 @@ const userSchema = new mongoose.Schema(
     settings: {
       theme: { type: String, enum: ["light", "dark"], default: "light" },
       rememberLogin: { type: Boolean, default: true },
+      // Who may send this user a Tic-Tac-Toe invitation: "friends" (default)
+      // or "off". Enforced by the server when an invitation is created — see
+      // services/ticTacToe.service.js.
+      gameRequests: { type: String, enum: ["friends", "off"], default: "friends" },
     },
     lastSeenAt: Date,
     // Legacy E2E encryption public key (JWK JSON string) — pre-multi-device,
