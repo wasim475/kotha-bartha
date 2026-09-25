@@ -8,6 +8,7 @@ const QuizAttempt = require("../models/QuizAttempt");
 const GameAttempt = require("../models/GameAttempt");
 const TicTacToeGame = require("../models/TicTacToeGame");
 const GameChallengeMatch = require("../models/GameChallengeMatch");
+const PageView = require("../models/PageView");
 const { GameError } = require("./games/GameError");
 const { logAdminAction } = require("./adminAudit.service");
 const { hideContentForBan, restoreContentAfterUnban, deleteUserAccount } = require("./contentModeration.service");
@@ -195,7 +196,10 @@ async function listUserComments(id, { page, type }) {
 async function getUserActivity(id) {
   const user = await loadUser(id);
   const userId = user._id;
-  const [quiz, games, ttt, challenges] = await Promise.all([
+  // Page time over the last 30 days: per page, and the most recent visits. Only the
+  // page name, start and active time — never anything the person did on the page.
+  const since = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+  const [quiz, games, ttt, challenges, pageTotals, recentViews] = await Promise.all([
     QuizAttempt.aggregate([
       { $match: { userId, status: "completed" } },
       { $group: { _id: null, attempts: { $sum: 1 }, points: { $sum: { $cond: ["$isFirstAttempt", "$score", 0] } }, lastAt: { $max: "$completedAt" } } },
@@ -212,6 +216,14 @@ async function getUserActivity(id) {
       { $match: { status: "completed", playerIds: userId } },
       { $group: { _id: null, played: { $sum: 1 }, wins: { $sum: { $cond: [{ $eq: ["$winnerId", userId] }, 1, 0] } }, points: { $sum: { $cond: [{ $eq: ["$winnerId", userId] }, "$rewardPoints", 0] } } } },
     ]),
+    PageView.aggregate([
+      { $match: { userId, createdAt: { $gte: since } } },
+      { $group: { _id: "$page", visits: { $sum: 1 }, totalSeconds: { $sum: { $ifNull: ["$durationSeconds", 0] } }, lastAt: { $max: "$createdAt" } } },
+      { $project: { _id: 0, page: "$_id", visits: 1, totalSeconds: 1, lastAt: 1 } },
+      { $sort: { totalSeconds: -1, visits: -1 } },
+      { $limit: 20 },
+    ]),
+    PageView.find({ userId, createdAt: { $gte: since } }).sort({ createdAt: -1 }).limit(15).select("page createdAt durationSeconds").lean(),
   ]);
   const q = quiz[0] || {};
   const g = games[0] || {};
@@ -229,6 +241,11 @@ async function getUserActivity(id) {
       challenges: { played: c.played || 0, wins: c.wins || 0, points: c.points || 0 },
     },
     leaderboard: { quizPoints, gamePoints, totalPoints: quizPoints + gamePoints, ranked: user.role === "user" && user.accountStatus === "active" },
+    pageTime: {
+      days: 30,
+      pages: pageTotals,
+      recent: recentViews.map((view) => ({ page: view.page, startedAt: view.createdAt, durationSeconds: typeof view.durationSeconds === "number" ? view.durationSeconds : null })),
+    },
   };
 }
 

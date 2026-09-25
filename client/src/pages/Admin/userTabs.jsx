@@ -8,6 +8,7 @@ import AdminPagination from "../../components/admin/AdminPagination";
 import AdminStatCard from "../../components/admin/AdminStatCard";
 import { Pill } from "../../components/admin/AdminUserStatus";
 import { SkeletonLines } from "../../components/admin/AdminLoadingSkeleton";
+import { formatDuration, pageLabel } from "../../components/admin/analyticsFormat";
 import Card from "../../components/ui/Card";
 import useAdminAction from "../../hooks/admin/useAdminAction";
 import { useAdminUserTab } from "../../hooks/admin/useAdminUsers";
@@ -101,6 +102,65 @@ export function ActivityTab({ userId, active }) {
         <AdminStatCard label="Friend challenges" loading={query.loading} value={d?.games.challenges.played} hint={`${d?.games.challenges.wins ?? 0} wins · ${d?.games.challenges.points ?? 0} points`} />
         <AdminStatCard label="Leaderboard points" loading={query.loading} value={d?.leaderboard.totalPoints} hint={d ? (d.leaderboard.ranked ? "Ranked" : "Not ranked (banned, staff or deleted)") : ""} />
       </div>
+
+      <Card className="flex min-w-0 flex-col gap-3" data-testid="admin-user-page-time">
+        <div>
+          <h3 className="font-display text-base font-semibold text-ink">Time on pages</h3>
+          <p className="text-xs text-muted">Active time over the last {d?.pageTime.days ?? 30} days. Only page names and durations are kept.</p>
+        </div>
+        {query.loading ? (
+          <SkeletonLines rows={4} />
+        ) : !d?.pageTime.pages.length ? (
+          <p className="py-4 text-center text-sm text-muted">No page activity recorded yet.</p>
+        ) : (
+          <table className="w-full border-collapse text-left text-sm">
+            <thead>
+              <tr className="border-b border-line text-[11px] font-bold tracking-wide text-muted uppercase">
+                <th scope="col" className="py-2 pr-3">Page</th>
+                <th scope="col" className="py-2 pr-3 text-right">Visits</th>
+                <th scope="col" className="py-2 text-right">Active time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {d.pageTime.pages.map((row) => (
+                <tr key={row.page} className="border-b border-line last:border-b-0" data-testid="admin-user-page-row">
+                  <td className="py-2 pr-3 font-semibold text-ink">{pageLabel(row.page)}</td>
+                  <td className="py-2 pr-3 text-right tabular-nums">{row.visits.toLocaleString()}</td>
+                  <td className="py-2 text-right tabular-nums">{formatDuration(row.totalSeconds)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+
+      <Card className="flex min-w-0 flex-col gap-3" data-testid="admin-user-recent-pages">
+        <h3 className="font-display text-base font-semibold text-ink">Recent activity</h3>
+        {query.loading ? (
+          <SkeletonLines rows={4} />
+        ) : !d?.pageTime.recent.length ? (
+          <p className="py-4 text-center text-sm text-muted">Nothing yet.</p>
+        ) : (
+          <table className="w-full border-collapse text-left text-sm">
+            <thead>
+              <tr className="border-b border-line text-[11px] font-bold tracking-wide text-muted uppercase">
+                <th scope="col" className="py-2 pr-3">Page</th>
+                <th scope="col" className="py-2 pr-3">Started</th>
+                <th scope="col" className="py-2 text-right">Duration</th>
+              </tr>
+            </thead>
+            <tbody>
+              {d.pageTime.recent.map((row, index) => (
+                <tr key={`${row.startedAt}-${index}`} className="border-b border-line last:border-b-0">
+                  <td className="py-2 pr-3 font-semibold text-ink">{pageLabel(row.page)}</td>
+                  <td className="py-2 pr-3 text-xs text-muted">{formatTime(row.startedAt)}</td>
+                  <td className="py-2 text-right tabular-nums">{formatDuration(row.durationSeconds)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
     </div>
   );
 }

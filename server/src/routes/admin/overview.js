@@ -13,6 +13,9 @@ const analyticsRouter = express.Router();
 // Query: range (today | week | month)
 analyticsRouter.get("/", respond(async (req) => ({ data: await analytics.getAnalytics(req.query.range) })));
 
+// One page's Today / This Week / This Month numbers, e.g. /admin/analytics/pages/study%2Fquiz
+analyticsRouter.get("/pages/:page", respond(async (req) => ({ data: await analytics.getPageAnalytics(req.params.page) })));
+
 // The audit trail. Read-only over HTTP: there is no way to change or remove an entry.
 const LOG_PAGE_SIZE = 50;
 const logs = express.Router();
