@@ -225,20 +225,27 @@ async function assertCanChallenge(inviterId, target, { checkSetting = true, requ
 // server time, never handed a fresh timer.
 // ------------------------------------------------------------
 
-const ticks = new Map();
+const ticks = new Map(); // matchId -> { timer, at }
 
 // Best-effort wake-up for the next transition. The database is authoritative:
 // every read, join and answer settles the match first, so a lost timer (server
 // restart) only means the next access catches the match up.
+//
+// The EARLIEST pending wake-up is kept: a settle that ran against a slightly
+// stale copy of the match may ask for a later time (e.g. the old question's
+// deadline) and must never push back a sooner one (the end of a result hold).
+// Whenever a tick fires it re-reads the match and schedules what is due next.
 function scheduleTick(io, matchId, atMs) {
   const key = matchId.toString();
-  clearTimeout(ticks.get(key));
+  const pending = ticks.get(key);
+  if (pending && pending.at <= atMs && pending.at > Date.now() - 1000) return;
+  if (pending) clearTimeout(pending.timer);
   const timer = setTimeout(() => {
     ticks.delete(key);
     settleMatch(io, key).catch((error) => console.error("game challenge tick failed:", error));
   }, Math.max(0, atMs - Date.now()) + 40);
   timer.unref?.();
-  ticks.set(key, timer);
+  ticks.set(key, { timer, at: atMs });
 }
 
 const playerFilter = (userId, questionIndex) => ({
@@ -759,7 +766,7 @@ async function leaveMatch(userId, matchId, io) {
     { $set: { status: "abandoned", abandonedBy: userId, finishedAt: new Date() } },
     { returnDocument: "after" },
   );
-  clearTimeout(ticks.get(matchId.toString()));
+  clearTimeout(ticks.get(matchId.toString())?.timer);
   ticks.delete(matchId.toString());
   if (left) await emitState(io, left, "gameChallenge:player:left");
   const match = left || (await GameChallengeMatch.findById(matchId));
