@@ -13,7 +13,7 @@ import { motion as Motion } from "framer-motion";
 // a medium size, and full sentences (English conversion) a compact wrapped one.
 const kindOf = (label) => (/^-?\d{1,6}$/.test(label) ? "number" : label.length > 14 ? "sentence" : "word");
 
-export default function GameOption({ letter, label, state, disabled, onSelect, tap }) {
+export default function GameOption({ letter, label, state, disabled, onSelect, tap, badge = null }) {
   return (
     <Motion.button
       type="button"
@@ -29,6 +29,7 @@ export default function GameOption({ letter, label, state, disabled, onSelect, t
         {letter}
       </span>
       <span className="game-option-text">{label}</span>
+      {badge}
       {(state === "correct" || state === "wrong") && (
         <span className="game-option-mark" aria-hidden="true">
           {state === "correct" ? <Check fontSize="small" /> : <Close fontSize="small" />}

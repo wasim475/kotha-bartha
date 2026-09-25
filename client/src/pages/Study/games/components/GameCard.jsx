@@ -1,15 +1,18 @@
-import { Timer } from "@mui/icons-material";
+import { PeopleAlt, Timer } from "@mui/icons-material";
 import { motion as Motion } from "framer-motion";
+
+import FixedButton from "./FixedButton";
 
 /**
  * A game on the Games landing page. Everything shown comes from the server's
  * catalog entry, so a new game type needs no change here (a game that isn't a
  * question quiz supplies `chips` instead of a question count / timer). Unavailable games
  * (e.g. an English game whose question bank is still empty) render disabled
- * with a "Coming soon" chip.
+ * with a "Coming soon" chip. Games that support it also get "Play with Friend".
  */
-export default function GameCard({ game, onPlay }) {
+export default function GameCard({ game, onPlay, onChallenge }) {
   return (
+    <div className="game-launch-group">
     <Motion.button
       type="button"
       className="game-launch"
@@ -54,5 +57,16 @@ export default function GameCard({ game, onPlay }) {
         )}
       </span>
     </Motion.button>
+    {game.supportsChallenge && game.available && onChallenge && (
+      <FixedButton
+        variant="outline"
+        className="game-friend-btn"
+        onClick={() => onChallenge(game)}
+        aria-label={`Play ${game.name} with a friend`}
+      >
+        <PeopleAlt fontSize="small" /> Play with Friend
+      </FixedButton>
+    )}
+    </div>
   );
 }

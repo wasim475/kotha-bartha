@@ -4,6 +4,7 @@ import { api } from "../../../utility/api";
 import { isConversationMuted } from "../../../utility/conversationPreferences";
 import { realtime, setActiveSocket } from "../../../utility/helpers";
 import { playIncomingMessageSound, playSoftMessageSound } from "../../../utility/sound";
+import { GC_EVENTS } from "../../../utility/gameChallenge";
 import { TTT_EVENTS } from "../../../utility/ticTacToe";
 
 const socketUrl = api.defaults.baseURL.replace(/\/api\/v1$/, "");
@@ -90,6 +91,8 @@ export default function useSocket(userId) {
     socket.on("conversation:likeEmoji", forward("conversation:likeEmoji"));
     // Tic-Tac-Toe invitations, moves and results (see utility/ticTacToe.js).
     TTT_EVENTS.forEach((name) => socket.on(name, forward(name)));
+    // Friend quiz challenges (see utility/gameChallenge.js).
+    GC_EVENTS.forEach((name) => socket.on(name, forward(name)));
 
     return () => {
       setActiveSocket(undefined);

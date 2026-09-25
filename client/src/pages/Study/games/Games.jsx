@@ -1,11 +1,13 @@
 import { ChevronRight, ManageAccounts } from "@mui/icons-material";
 import { motion as Motion } from "framer-motion";
+import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { ResourceState, formatTime, useResource } from "../../../utility/helpers";
 import CategoryTabs from "./components/CategoryTabs";
 import FixedButton from "./components/FixedButton";
 import GameCard from "./components/GameCard";
+import ChallengeFriendPicker from "./challenge/ChallengeFriendPicker";
 import { toneFor } from "./utility/gameTypes";
 
 /**
@@ -45,6 +47,9 @@ export default function Games({ canManage = false }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const catalog = useResource("/games");
   const last = useResource("/games/last");
+  // A friend challenge still in progress (e.g. after closing the tab) can be resumed.
+  const activeChallenges = useResource("/games/challenges/active");
+  const [challengeGame, setChallengeGame] = useState(null);
 
   const categories = catalog.meta?.categories || [];
   const games = catalog.data || [];
@@ -81,6 +86,30 @@ export default function Games({ canManage = false }) {
         )}
       </header>
 
+      {(activeChallenges.data || []).map((match) => (
+        <button
+          key={match.id}
+          type="button"
+          className="game-last"
+          data-tone={toneFor(match.category)}
+          onClick={() => navigate(`/study/games/challenge/${match.id}`)}
+        >
+          <span className="game-tile" aria-hidden="true">
+            {match.gameIcon}
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
+            <span className="text-[11px] font-bold tracking-wide text-muted uppercase">Challenge in progress</span>
+            <span className="truncate font-display text-base leading-tight font-semibold text-ink">
+              {match.gameName} vs {match.opponent.fullName}
+            </span>
+            <span className="truncate text-xs text-muted">
+              Question {Math.min(match.currentIndex + 1, match.total)} of {match.total} · Resume
+            </span>
+          </span>
+          <ChevronRight className="shrink-0 text-muted" />
+        </button>
+      ))}
+
       {last.data && (
         <LastGameCard last={last.data} onOpen={() => navigate(`/study/games/review/${last.data.attemptId}`)} />
       )}
@@ -105,12 +134,19 @@ export default function Games({ canManage = false }) {
               transition={{ duration: 0.18, ease: "easeOut" }}
             >
               {activeSection.games.map((game) => (
-                <GameCard key={game.type} game={game} onPlay={() => navigate(game.route || `/study/games/play/${game.type}`)} />
+                <GameCard
+                  key={game.type}
+                  game={game}
+                  onPlay={() => navigate(game.route || `/study/games/play/${game.type}`)}
+                  onChallenge={setChallengeGame}
+                />
               ))}
             </Motion.div>
           </div>
         )}
       </ResourceState>
+
+      {challengeGame && <ChallengeFriendPicker game={challengeGame} onClose={() => setChallengeGame(null)} />}
     </div>
   );
 }

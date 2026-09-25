@@ -6,6 +6,7 @@ import "./CSS/navbar.css";
 import "./CSS/study.css";
 import "./CSS/games.css";
 import "./CSS/ttt.css";
+import "./CSS/challenge.css";
 import "./index.css";
 import "./message.css";
 import "./CSS/comment.css";

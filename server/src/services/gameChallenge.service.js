@@ -27,7 +27,8 @@ const { safeUser } = require("../utils/serializers");
 const INVITE_TTL_MS = 60 * 1000;
 // After a question resolves both players see the result (their answers, the
 // opponent's, the correct one) for this long, then everyone moves on together.
-const RESULT_HOLD_MS = 2600;
+// (Overridable through the environment only so automated tests can hold it steady.)
+const RESULT_HOLD_MS = Number(process.env.GAME_CHALLENGE_RESULT_HOLD_MS) || 2600;
 // The next question's clock opens slightly after it is announced, so the entrance
 // animation isn't taken out of the player's time.
 const ACTIVATION_MS = 500;

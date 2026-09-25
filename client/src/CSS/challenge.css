@@ -1,0 +1,335 @@
+/*
+  Friend quiz challenges. Built on the same tokens as the rest of Study Games
+  (games.css): --tone / --tone-soft, --game-correct / --game-wrong, --panel,
+  --line, --soft, --shadow — so light and dark both follow the normal theme
+  toggle. The question card, options, timer and progress bar are the shared
+  Games components; only the challenge-specific pieces are styled here.
+*/
+
+/* ---------- "Play with Friend" under a game card ---------- */
+.game-launch-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.game-launch-group > .game-launch {
+  flex: 1 1 auto;
+}
+.game-friend-btn {
+  width: 100%;
+  min-height: 44px;
+  justify-content: center;
+}
+
+/* ---------- Scoreboard ---------- */
+.ch-versus {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+.ch-vs {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+.ch-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  border: 1.5px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.25s ease;
+}
+.ch-side[data-align="end"] {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+.ch-side[data-answered="true"] {
+  border-color: color-mix(in srgb, var(--game-correct) 55%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--game-correct) 14%, transparent);
+}
+.ch-avatar {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+.ch-avatar-tick {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--game-correct);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+.ch-score {
+  margin: 0;
+  color: var(--tone);
+  font-family: var(--font-display, inherit);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.ch-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  margin: 0;
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.ch-status[data-tone="answered"],
+.ch-status[data-tone="ready"] {
+  border-color: color-mix(in srgb, var(--game-correct) 45%, var(--line));
+  background: color-mix(in srgb, var(--game-correct) 12%, var(--panel));
+  color: var(--ink);
+}
+.ch-status-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: ch-pulse 1.4s ease-in-out infinite;
+}
+@keyframes ch-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.7);
+  }
+}
+
+/* ---------- Question extras ---------- */
+.ch-opt-badge {
+  position: absolute;
+  top: -8px;
+  right: -6px;
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border: 2px solid var(--panel);
+  border-radius: 999px;
+  background: var(--tone);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.ch-picks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 14px;
+  margin: 12px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.ch-picks span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ch-picks [data-outcome="correct"] {
+  color: var(--game-correct);
+}
+.ch-picks [data-outcome="wrong"],
+.ch-picks [data-outcome="timeout"] {
+  color: var(--game-wrong);
+}
+
+/* ---------- Result ---------- */
+.ch-hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 0 0;
+}
+.ch-confetti {
+  position: absolute;
+  top: 34px;
+  left: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.ch-confetto {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--game-correct);
+}
+.ch-confetto[data-tone="1"] {
+  background: var(--tone);
+}
+.ch-confetto[data-tone="2"] {
+  background: var(--accent);
+}
+.ch-scores {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+.ch-bigscore {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 14px 8px;
+  border: 1.5px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+}
+.ch-bigscore[data-strong="true"] {
+  border-color: var(--game-correct);
+  background: color-mix(in srgb, var(--game-correct) 14%, var(--panel));
+  box-shadow: 0 14px 40px -16px color-mix(in srgb, var(--game-correct) 70%, transparent);
+}
+.ch-bigscore-value {
+  color: var(--ink);
+  font-family: var(--font-display, inherit);
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+.ch-reward {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 16px;
+  border: 1px solid var(--game-correct);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--game-correct) 20%, var(--panel));
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+/* ---------- Review ---------- */
+.ch-review {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ch-review[data-outcome="correct"] {
+  border-color: color-mix(in srgb, var(--game-correct) 45%, var(--line));
+}
+.ch-review-correct,
+.ch-review-row {
+  display: grid;
+  grid-template-columns: minmax(0, 5.5rem) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--soft);
+}
+.ch-review-correct {
+  grid-template-columns: minmax(0, 5.5rem) minmax(0, 1fr);
+  border-color: color-mix(in srgb, var(--game-correct) 45%, var(--line));
+  background: color-mix(in srgb, var(--game-correct) 10%, var(--panel));
+}
+.ch-review-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+.ch-review-row .game-answer-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ch-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.ch-pill[data-outcome="correct"] {
+  background: color-mix(in srgb, var(--game-correct) 20%, var(--panel));
+  color: var(--game-correct);
+}
+.ch-pill[data-outcome="wrong"],
+.ch-pill[data-outcome="timeout"] {
+  background: color-mix(in srgb, var(--game-wrong) 18%, var(--panel));
+  color: var(--game-wrong);
+}
+
+/* ---------- Challenge popup ---------- */
+.ch-request-avatar {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+.ch-request-ring {
+  position: absolute;
+  inset: -4px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  opacity: 0;
+  animation: ch-ring 1.6s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes ch-ring {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ch-status-dot,
+  .ch-request-ring {
+    animation: none;
+  }
+  .ch-side {
+    transition: none;
+  }
+}

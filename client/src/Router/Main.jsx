@@ -7,13 +7,14 @@ import StudyShell from "../pages/Study/StudyShell";
 import PrivacyPolicy from '../pages/privacyPolicy/PrivacyPolicy';
 import DataDeletion from '../pages/privacyPolicy/DataDeletation';
 import TicTacToeGlobalHost from "../components/ticTacToe/TicTacToeGlobalHost";
+import GameChallengeGlobalHost from "../components/gameChallenge/GameChallengeGlobalHost";
 
 export default function MainRouter() {
   const { user, setUser, checking, logout } = useContext(Auth);
 
   if (checking) return <div className="loading-screen"><span className="brand-mark">ক</span><p>Preparing your space...</p></div>;
 
-  return <BrowserRouter>{user && <TicTacToeGlobalHost key={user.id} user={user} />}<Routes>
+  return <BrowserRouter>{user && <TicTacToeGlobalHost key={user.id} user={user} />}{user && <GameChallengeGlobalHost key={user.id} user={user} />}<Routes>
     <Route path="privacy-policy" element={<PrivacyPolicy/>} />
     <Route path="data-deletion" element={<DataDeletion/>} />
     <Route path="/login" element={user ? <Navigate to="/app/feed" replace /> : <AuthPage mode="login" onAuth={setUser} />} />
