@@ -24,7 +24,7 @@ const label = (value) => value.charAt(0).toUpperCase() + value.slice(1);
 export default function AdminUserStatus({ user, showRole = true }) {
   return (
     <span className="inline-flex flex-wrap items-center gap-1">
-      {showRole && <Pill tone={user.role}>{label(user.role)}</Pill>}
+      {showRole && <Pill tone={user.role || "user"}>{label(user.role || "user")}</Pill>}
       {user.accountStatus === "banned" ? <Pill tone="banned">Banned</Pill> : user.accountStatus === "deleted" ? <Pill tone="deleted">Deleted</Pill> : <Pill tone="active">Active</Pill>}
       {user.isMuted && <Pill tone="muted">Muted</Pill>}
     </span>

@@ -41,7 +41,7 @@ function serializeRow(user) {
     fullName: user.fullName,
     email: user.email,
     currentCity: user.currentCity || "",
-    role: user.role,
+    role: user.role || "user", // older accounts predate the role field
     accountStatus: user.accountStatus || "active",
     isMuted: Boolean(user.isMuted),
     createdAt: user.createdAt,
@@ -61,7 +61,8 @@ async function listUsers({ page, q, filter }) {
     query.$or = [{ fullName: pattern }, { email: pattern }];
   }
   const chosen = FILTERS.includes(filter) ? filter : "all";
-  if (chosen === "admin" || chosen === "moderator" || chosen === "user") query.role = chosen;
+  if (chosen === "admin" || chosen === "moderator") query.role = chosen;
+  if (chosen === "user") query.role = { $in: ["user", null] }; // null also matches accounts with no stored role
   if (chosen === "banned") query.accountStatus = "banned";
   if (chosen === "muted") query.isMuted = true;
 
