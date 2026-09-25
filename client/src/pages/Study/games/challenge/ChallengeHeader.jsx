@@ -55,7 +55,7 @@ export default function ChallengeHeader({ match, timer, status }) {
         <div className="min-w-0 flex-1">
           <h1 className="truncate font-display text-lg leading-tight font-semibold text-ink">{match.gameName}</h1>
           <p className="text-xs font-semibold text-muted">
-            Friend challenge · Question {Math.min(match.currentIndex + 1, match.total)} / {match.total}
+            Challenge · Question {Math.min(match.currentIndex + 1, match.total)} / {match.total}
           </p>
         </div>
         {timer}

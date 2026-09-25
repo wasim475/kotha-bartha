@@ -14,7 +14,7 @@ export default function MainRouter() {
 
   if (checking) return <div className="loading-screen"><span className="brand-mark">ক</span><p>Preparing your space...</p></div>;
 
-  return <BrowserRouter>{user && <TicTacToeGlobalHost key={user.id} user={user} />}{user && <GameChallengeGlobalHost key={user.id} user={user} />}<Routes>
+  return <BrowserRouter>{user && <TicTacToeGlobalHost key={`ttt-${user.id}`} user={user} />}{user && <GameChallengeGlobalHost key={`challenge-${user.id}`} user={user} />}<Routes>
     <Route path="privacy-policy" element={<PrivacyPolicy/>} />
     <Route path="data-deletion" element={<DataDeletion/>} />
     <Route path="/login" element={user ? <Navigate to="/app/feed" replace /> : <AuthPage mode="login" onAuth={setUser} />} />

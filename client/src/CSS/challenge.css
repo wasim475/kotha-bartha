@@ -333,3 +333,24 @@
     transition: none;
   }
 }
+
+/* On a phone the review row stacks: name + result on one line, the answer under it. */
+@media (max-width: 419px) {
+  .ch-review-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .ch-review-row .game-answer-label {
+    order: 1;
+  }
+  .ch-review-row .ch-pill {
+    order: 2;
+  }
+  .ch-review-row .ch-review-value {
+    order: 3;
+    grid-column: 1 / -1;
+  }
+  .ch-review-correct {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+}

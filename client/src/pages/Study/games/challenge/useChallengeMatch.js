@@ -14,7 +14,19 @@ function mergeMatch(current, incoming) {
   if (!incoming) return current;
   if (!current || current.id !== incoming.id) return incoming;
   if (incoming.version < current.version) return current;
-  return { ...incoming, rematch: incoming.rematch !== undefined ? incoming.rematch : current.rematch };
+  const merged = { ...incoming, rematch: incoming.rematch !== undefined ? incoming.rematch : current.rematch };
+  // Two views of the SAME open question can cross (a reply that was in flight
+  // while the opponent's "answered" ping arrived): within one question those
+  // flags only ever turn on, so combine them rather than let the older view undo one.
+  if (incoming.version === current.version && incoming.current && current.current && incoming.current.index === current.current.index) {
+    merged.current = {
+      ...incoming.current,
+      answered: incoming.current.answered || current.current.answered,
+      opponentAnswered: incoming.current.opponentAnswered || current.current.opponentAnswered,
+      selectedPosition: incoming.current.selectedPosition ?? current.current.selectedPosition,
+    };
+  }
+  return merged;
 }
 
 /**
