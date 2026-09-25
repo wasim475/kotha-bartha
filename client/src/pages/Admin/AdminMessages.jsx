@@ -2,6 +2,7 @@ import { Create } from "@mui/icons-material";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import AdminChip from "../../components/admin/AdminChip";
 import AdminButton from "../../components/admin/AdminButton";
 import AdminComposeDialog from "../../components/admin/AdminComposeDialog";
 import AdminPage from "../../components/admin/AdminPage";
@@ -106,20 +107,18 @@ export default function AdminMessages() {
       <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0" role="tablist" aria-label="Inbox tabs">
         <div className="flex w-max gap-1.5">
           {TABS.map(([key, label]) => (
-            <button
+            <AdminChip
               key={key}
-              type="button"
               role="tab"
-              aria-selected={tab === key}
+              active={tab === key}
               onClick={() => {
                 setTab(key);
                 setPage(1);
                 setSelected(null);
               }}
-              className={cx("min-h-10 rounded-full border px-3.5 text-xs font-semibold whitespace-nowrap transition-colors", tab === key ? "border-accent bg-accent/12 text-accent" : "border-line bg-panel text-muted hover:text-ink")}
             >
               {label}
-            </button>
+            </AdminChip>
           ))}
         </div>
       </div>

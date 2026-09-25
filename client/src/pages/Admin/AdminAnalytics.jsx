@@ -1,11 +1,11 @@
 import { useState } from "react";
 
+import AdminChip from "../../components/admin/AdminChip";
 import AdminBarChart from "../../components/admin/AdminBarChart";
 import AdminPage from "../../components/admin/AdminPage";
 import AdminStatCard from "../../components/admin/AdminStatCard";
 import Card from "../../components/ui/Card";
 import useAdminAnalytics from "../../hooks/admin/useAdminAnalytics";
-import { cx } from "../../utility/cx";
 
 const RANGES = [
   ["today", "Today"],
@@ -45,9 +45,9 @@ export default function AdminAnalytics() {
       actions={
         <div className="flex gap-1.5" role="group" aria-label="Time range">
           {RANGES.map(([key, label]) => (
-            <button key={key} type="button" aria-pressed={range === key} onClick={() => setRange(key)} className={cx("min-h-10 rounded-full border px-3.5 text-xs font-semibold transition-colors", range === key ? "border-accent bg-accent/12 text-accent" : "border-line bg-panel text-muted hover:text-ink")}>
+            <AdminChip key={key} active={range === key} onClick={() => setRange(key)}>
               {label}
-            </button>
+            </AdminChip>
           ))}
         </div>
       }

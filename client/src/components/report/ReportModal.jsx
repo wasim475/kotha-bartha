@@ -66,7 +66,8 @@ function Body({ targetType, targetId, onClose }) {
                 role="radio"
                 aria-checked={reason === key}
                 onClick={() => setReason(key)}
-                className={cx("flex min-h-11 items-center gap-2.5 rounded-lg border px-3 text-left text-sm font-medium transition-colors", reason === key ? "border-accent bg-accent/10 text-ink" : "border-line bg-panel text-ink hover:bg-soft")}
+                className="flex min-h-11 items-center gap-2.5 rounded-lg px-3 text-left text-sm font-medium text-ink transition-colors"
+                style={{ borderWidth: "1px", borderStyle: "solid", borderColor: reason === key ? "var(--accent)" : "var(--line)", backgroundColor: reason === key ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "var(--panel)" }}
               >
                 <span className={cx("grid size-4 shrink-0 place-items-center rounded-full border-2", reason === key ? "border-accent" : "border-line")} aria-hidden="true">
                   {reason === key && <span className="size-2 rounded-full bg-accent" />}

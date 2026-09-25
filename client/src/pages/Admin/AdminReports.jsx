@@ -1,12 +1,12 @@
 import { useState } from "react";
 
+import AdminChip from "../../components/admin/AdminChip";
 import AdminPage from "../../components/admin/AdminPage";
 import AdminPagination from "../../components/admin/AdminPagination";
 import AdminReportCard from "../../components/admin/AdminReportCard";
 import { SkeletonLines } from "../../components/admin/AdminLoadingSkeleton";
 import Card from "../../components/ui/Card";
 import { useAdminReports } from "../../hooks/admin/useAdminReports";
-import { cx } from "../../utility/cx";
 
 const STATUSES = [
   ["pending", "Pending"],
@@ -36,20 +36,18 @@ export default function AdminReports() {
         <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0" role="tablist" aria-label="Report status">
           <div className="flex w-max gap-1.5">
             {STATUSES.map(([key, label]) => (
-              <button
+              <AdminChip
                 key={key}
-                type="button"
                 role="tab"
-                aria-selected={status === key}
+                active={status === key}
                 onClick={() => {
                   setStatus(key);
                   setPage(1);
                 }}
-                className={cx("min-h-10 rounded-full border px-3.5 text-xs font-semibold whitespace-nowrap transition-colors", status === key ? "border-accent bg-accent/12 text-accent" : "border-line bg-panel text-muted hover:text-ink")}
               >
                 {label}
                 {counts ? ` (${counts[key]})` : ""}
-              </button>
+              </AdminChip>
             ))}
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
+import AdminChip from "../../components/admin/AdminChip";
 import AdminButton from "../../components/admin/AdminButton";
 import AdminConfirmDialog from "../../components/admin/AdminConfirmDialog";
 import AdminPagination from "../../components/admin/AdminPagination";
@@ -114,9 +115,9 @@ export function ReportsTab({ userId, active }) {
     <div className="flex flex-col gap-3">
       <div className="flex gap-2" role="group" aria-label="Report direction">
         {[["against", "About this user"], ["by", "Filed by this user"]].map(([key, label]) => (
-          <button key={key} type="button" aria-pressed={direction === key} onClick={() => { setDirection(key); setPage(1); }} className={`min-h-10 rounded-full border px-3.5 text-xs font-semibold ${direction === key ? "border-accent bg-accent/12 text-accent" : "border-line bg-panel text-muted"}`}>
+          <AdminChip key={key} active={direction === key} onClick={() => { setDirection(key); setPage(1); }}>
             {label}
-          </button>
+          </AdminChip>
         ))}
       </div>
       <TabState query={query} empty="No reports.">

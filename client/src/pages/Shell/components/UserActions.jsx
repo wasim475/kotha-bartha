@@ -1,5 +1,7 @@
 import { AutoStories, DarkMode, WbSunny } from "@mui/icons-material";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import ContactAdminModal from "../../../components/account/ContactAdminModal";
 import ProfileMenu from "../../SharePage/Navbar/components/ProfileMenu";
 
 export default function UserActions({
@@ -14,6 +16,7 @@ export default function UserActions({
   profileRef,
 }) {
   const navigate = useNavigate();
+  const [contactOpen, setContactOpen] = useState(false);
   const isStaff = user.role === "admin" || user.role === "moderator";
   return (
     <div className="top-actions">
@@ -56,8 +59,14 @@ export default function UserActions({
             onProfile={onProfile}
             onLogout={onLogout}
             onAdmin={isStaff ? () => navigate("/admin") : undefined}
+            onContact={() => {
+              setContactOpen(true);
+              onToggleProfile();
+            }}
           />
         )}
+
+        <ContactAdminModal open={contactOpen} onClose={() => setContactOpen(false)} />
 
       </div>
 

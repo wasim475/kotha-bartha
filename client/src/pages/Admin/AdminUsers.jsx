@@ -2,6 +2,7 @@ import { Search } from "@mui/icons-material";
 import { useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 
+import AdminChip from "../../components/admin/AdminChip";
 import AdminActionMenu from "../../components/admin/AdminActionMenu";
 import AdminComposeDialog from "../../components/admin/AdminComposeDialog";
 import AdminDataTable from "../../components/admin/AdminDataTable";
@@ -14,7 +15,6 @@ import Avatar from "../../components/ui/Avatar";
 import useDebounced from "../../hooks/admin/useDebounced";
 import { useAdminUsers } from "../../hooks/admin/useAdminUsers";
 import { formatTime } from "../../utility/helpers";
-import { cx } from "../../utility/cx";
 
 const FILTERS = [
   ["all", "All"],
@@ -95,18 +95,16 @@ export default function AdminUsers() {
         </label>
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter users">
           {FILTERS.map(([key, label]) => (
-            <button
+            <AdminChip
               key={key}
-              type="button"
-              aria-pressed={filter === key}
+              active={filter === key}
               onClick={() => {
                 setFilter(key);
                 setPage(1);
               }}
-              className={cx("min-h-10 rounded-full border px-3.5 text-xs font-semibold transition-colors", filter === key ? "border-accent bg-accent/12 text-accent" : "border-line bg-panel text-muted hover:text-ink")}
             >
               {label}
-            </button>
+            </AdminChip>
           ))}
         </div>
       </div>

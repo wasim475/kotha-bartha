@@ -2,6 +2,7 @@ import { ArrowBack } from "@mui/icons-material";
 import { useState } from "react";
 import { useNavigate, useOutletContext, useParams } from "react-router-dom";
 
+import AdminChip from "../../components/admin/AdminChip";
 import AdminActionMenu from "../../components/admin/AdminActionMenu";
 import AdminButton from "../../components/admin/AdminButton";
 import AdminComposeDialog from "../../components/admin/AdminComposeDialog";
@@ -15,7 +16,6 @@ import Avatar from "../../components/ui/Avatar";
 import Card from "../../components/ui/Card";
 import { useAdminUser } from "../../hooks/admin/useAdminUsers";
 import { formatTime } from "../../utility/helpers";
-import { cx } from "../../utility/cx";
 import { ActivityTab, ContentTab, ReportsTab } from "./userTabs";
 
 const TABS = [
@@ -124,16 +124,9 @@ export default function AdminUserDetails() {
           <div className="-mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0" role="tablist" aria-label="User sections">
             <div className="flex w-max gap-1.5">
               {TABS.map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === key}
-                  onClick={() => setTab(key)}
-                  className={cx("min-h-10 rounded-full border px-3.5 text-xs font-semibold whitespace-nowrap transition-colors", tab === key ? "border-accent bg-accent/12 text-accent" : "border-line bg-panel text-muted hover:text-ink")}
-                >
+                <AdminChip key={key} role="tab" active={tab === key} onClick={() => setTab(key)}>
                   {label}
-                </button>
+                </AdminChip>
               ))}
             </div>
           </div>

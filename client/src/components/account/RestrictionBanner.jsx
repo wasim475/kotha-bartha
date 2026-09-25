@@ -39,7 +39,12 @@ export default function RestrictionBanner({ user }) {
           {banned ? "Your account is currently restricted." : "Your account is currently muted."}
           <span className="block font-normal text-muted">{banned ? "You can browse, but can't post, comment, react, message or play." : "You can browse, but can't post, comment or message."}</span>
         </p>
-        <button type="button" onClick={() => setContact(true)} className="min-h-10 shrink-0 rounded-md border border-line px-3 text-xs font-semibold text-accent hover:bg-soft">
+        <button
+          type="button"
+          onClick={() => setContact(true)}
+          className="min-h-10 shrink-0 rounded-md px-3 text-xs font-semibold text-accent hover:bg-soft"
+          style={{ borderWidth: "1px", borderStyle: "solid", borderColor: "var(--line)" }}
+        >
           Contact admin
         </button>
       </div>
