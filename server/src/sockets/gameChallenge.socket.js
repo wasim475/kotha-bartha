@@ -1,6 +1,7 @@
 const { GameError } = require("../services/games/GameError");
 const service = require("../services/gameChallenge.service");
 const User = require("../models/User");
+const { ACTIONS, assertUserCan } = require("../utils/moderation");
 
 // Client -> server friend-challenge events, registered on the EXISTING Socket.IO
 // server for every authenticated socket (see server.js — no second server).
@@ -36,9 +37,14 @@ function registerGameChallengeSocket(io, socket) {
   // Acting user as a full document (the service reads settings/name from it).
   const actor = () => User.findById(socket.userId).select("fullName avatar settings");
 
+  // Events that play or start a game are refused for banned / muted accounts
+  // (the same GAME_PLAY policy the REST routes use).
+  const PLAYING = new Set(["gameChallenge:send", "gameChallenge:accept", "gameChallenge:answer", "gameChallenge:rematch"]);
+
   const handle = (event, fn) =>
     socket.on(event, async (payload, ack) => {
       try {
+        if (PLAYING.has(event)) await assertUserCan(socket.userId, ACTIONS.GAME_PLAY);
         reply(ack, { ok: true, ...(await fn(payload || {})) });
       } catch (error) {
         reply(ack, toError(error));

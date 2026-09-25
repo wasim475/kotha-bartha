@@ -6,6 +6,7 @@ import { cx } from "../../../../utility/cx";
 import CommentActions from "./CommentActions";
 import CommentEditForm from "./CommentEditForm";
 import CommentMenu from "./CommentMenu";
+import ReportMenu from "../../../../components/report/ReportMenu";
 import CommentReply from "./CommentReply";
 import RepliesList from "./RepliesList";
 
@@ -60,7 +61,7 @@ const CommentItem = ({
               {entry.author.fullName}
             </p>
           </Link>
-          {entry.editable && <CommentMenu onEdit={onEdit} onDelete={onDelete} />}
+          {entry.editable ? <CommentMenu onEdit={onEdit} onDelete={onDelete} /> : <ReportMenu targetType="comment" targetId={entry.id} />}
         </div>
 
         {editing ? (

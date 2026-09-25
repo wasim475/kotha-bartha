@@ -16,10 +16,16 @@ const gameRoutes = require("./game.routes");
 const englishQuestionRoutes = require("./englishQuestions.routes");
 const ticTacToeRoutes = require("./ticTacToe.routes");
 const gameChallengeRoutes = require("./gameChallenge.routes");
+const reportsRoutes = require("./reports.routes");
+const adminRoutes = require("./admin");
+const { auditStaffContent } = require("../services/adminAudit.service");
 
 const router = express.Router();
 
 router.use(requireAuth);
+// Admin Panel API — every route inside re-checks role and account status.
+router.use("/admin", adminRoutes);
+router.use(reportsRoutes);
 router.use(usersRoutes);
 router.use(postsRoutes);
 router.use(commentsRoutes);
@@ -30,6 +36,8 @@ router.use(blocksRoutes);
 router.use(linkPreviewRoutes);
 router.use(storiesRoutes);
 router.use(notesRoutes);
+// Staff authoring of Quiz / English-question content is written to the audit log.
+router.use(auditStaffContent);
 router.use(quizRoutes);
 router.use(leaderboardRoutes);
 router.use(englishQuestionRoutes);

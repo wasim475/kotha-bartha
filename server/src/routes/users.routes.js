@@ -9,6 +9,7 @@ const { safeUser, serializePost } = require("../utils/serializers");
 const { blockedPairIds } = require("../utils/blocks");
 const { upload } = require("../middleware/upload");
 const { uploadBuffer, destroyAsset } = require("../utils/cloudinary");
+const { ACTIONS, requireAction, VISIBLE_CONTENT } = require("../utils/moderation");
 
 const router = express.Router();
 
@@ -31,6 +32,7 @@ router.get("/users", async (req, res, next) => {
         $ne: req.user._id,
         $nin: [...excludedIds],
       },
+      accountStatus: { $ne: "deleted" },
     }).sort({
       fullName: 1,
     });
@@ -69,6 +71,7 @@ router.get("/users/search", async (req, res, next) => {
         $ne: req.user._id,
         $nin: [...excludedIds],
       },
+      accountStatus: { $ne: "deleted" },
       fullName: {
         $regex: query,
         $options: "i",
@@ -93,7 +96,7 @@ router.get("/users/search", async (req, res, next) => {
 // ============================================================
 // UPDATE MY PROFILE
 // ============================================================
-router.patch("/users/me", async (req, res, next) => {
+router.patch("/users/me", requireAction(ACTIONS.EDIT_PROFILE), async (req, res, next) => {
   try {
     const updates = {};
 
@@ -245,11 +248,13 @@ router.patch("/users/me/public-key", async (req, res, next) => {
 
 router.patch(
   "/users/me/avatar",
+  requireAction(ACTIONS.EDIT_PROFILE),
   ...uploadProfileImage("avatar", "kotha-bartha/avatars"),
 );
 
 router.patch(
   "/users/me/cover",
+  requireAction(ACTIONS.EDIT_PROFILE),
   ...uploadProfileImage("cover", "kotha-bartha/covers"),
 );
 
@@ -269,7 +274,7 @@ router.get("/users/:userId", async (req, res, next) => {
 
     const user = await User.findById(req.params.userId);
 
-    if (!user) {
+    if (!user || user.accountStatus === "deleted") {
       return res.status(404).json({
         error: {
           code: "NOT_FOUND",
@@ -350,6 +355,7 @@ router.get("/users/:userId/posts", async (req, res, next) => {
     const posts = await Post.find({
       authorId: req.params.userId,
       deletedAt: null,
+      ...VISIBLE_CONTENT,
     })
       .populate("authorId")
       .sort({
@@ -386,6 +392,7 @@ router.get("/users/:userId/photos", async (req, res, next) => {
     const posts = await Post.find({
       authorId: req.params.userId,
       deletedAt: null,
+      ...VISIBLE_CONTENT,
       "media.0": { $exists: true },
     })
       .select("media createdAt")

@@ -71,6 +71,9 @@ const messageSchema = new mongoose.Schema(
       default: "sent",
     },
     editedAt: Date,
+    // Sent by an administrator through the Admin Panel (plaintext, delivered
+    // through the normal conversation like any other message).
+    adminMessage: { type: Boolean, default: false },
     // Global "deleted for everyone" marker (sender-only, time-limited).
     deletedAt: Date,
     // Per-user "deleted for me" list — hides the message for these users

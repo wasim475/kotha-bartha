@@ -1,5 +1,6 @@
 const Comment = require("../models/Comment");
 const Reaction = require("../models/Reaction");
+const { VISIBLE_CONTENT } = require("./moderation");
 
 function initials(name = "") {
   return name
@@ -60,6 +61,7 @@ async function serializePost(post, viewerId) {
     liked: Boolean(mine),
     comments: await Comment.countDocuments({
       postId: post._id,
+      ...VISIBLE_CONTENT,
     }),
   };
 }

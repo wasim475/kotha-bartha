@@ -8,6 +8,7 @@ import Button from "../../../components/ui/Button";
 import Card from "../../../components/ui/Card";
 import IconButton from "../../../components/ui/IconButton";
 import Menu from "../../../components/ui/Menu";
+import ReportMenu from "../../../components/report/ReportMenu";
 import ProfileAvatarLink from "../../../components/ui/ProfileAvatarLink";
 import RichText from "../../../components/ui/RichText";
 import ReactionButton from "../../../components/ui/reactions/ReactionButton";
@@ -90,6 +91,8 @@ export default function PostCard({
           </p>
           <p className="text-xs text-muted">{formatTime(post.createdAt)}</p>
         </Link>
+
+        {!post.editable && <ReportMenu targetType="post" targetId={post.id} />}
 
         {post.editable && (
           <Menu

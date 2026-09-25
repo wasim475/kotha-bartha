@@ -139,7 +139,7 @@ router.get("/leaderboard/users/:userId/stats", async (req, res, next) => {
     }
 
     const user = await User.findById(req.params.userId).select("fullName avatar currentCity role");
-    if (!user || user.role !== "user") {
+    if (!user || user.role !== "user" || user.accountStatus === "deleted") {
       return res.status(404).json({
         error: { code: "NOT_FOUND", message: "This user isn't on the leaderboard." },
       });

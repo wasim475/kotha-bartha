@@ -2,10 +2,11 @@ const express = require("express");
 const Post = require("../models/Post");
 const Comment = require("../models/Comment");
 const Reaction = require("../models/Reaction");
-const Notification = require("../models/Notification");
 const { serializeComment } = require("../utils/serializers");
 const { createNotification } = require("../services/notification.service");
 const { REACTION_TYPES } = require("../utils/reactionTypes");
+const { ACTIONS, requireAction, VISIBLE_CONTENT } = require("../utils/moderation");
+const { deleteCommentThread } = require("../services/contentModeration.service");
 
 const router = express.Router();
 
@@ -24,27 +25,11 @@ async function resolveTopLevelId(startId) {
   return id;
 }
 
-// All descendant comment ids (replies, and replies-to-replies) under a
-// given comment, any depth. Used to cascade notification cleanup when a
-// reply is deleted, without touching sibling replies in the same thread.
-async function collectDescendantIds(rootId) {
-  const ids = [];
-  let frontier = [rootId];
-  while (frontier.length) {
-    const children = await Comment.find({ parentId: { $in: frontier } })
-      .select("_id")
-      .lean();
-    const childIds = children.map((child) => child._id);
-    ids.push(...childIds);
-    frontier = childIds;
-  }
-  return ids;
-}
-
 router.get("/posts/:postId/comments", async (req, res, next) => {
   try {
     const comments = await Comment.find({
       postId: req.params.postId,
+      ...VISIBLE_CONTENT,
     })
       .populate("authorId")
       .sort({
@@ -65,7 +50,11 @@ router.get("/posts/:postId/comments", async (req, res, next) => {
 // CREATE COMMENT
 // ============================================================
 
-router.post("/posts/:postId/comments", async (req, res, next) => {
+// A reply is a comment with a parentId, so the moderation action depends on the body.
+router.post(
+  "/posts/:postId/comments",
+  requireAction((req) => (req.body?.parentId ? ACTIONS.REPLY : ACTIONS.COMMENT)),
+  async (req, res, next) => {
   try {
     const body = String(req.body.body || "").trim();
     const parentId = req.body.parentId || null;
@@ -73,6 +62,7 @@ router.post("/posts/:postId/comments", async (req, res, next) => {
     const post = await Post.findOne({
       _id: req.params.postId,
       deletedAt: null,
+      ...VISIBLE_CONTENT,
     });
 
     if (!post || !body) {
@@ -88,6 +78,7 @@ router.post("/posts/:postId/comments", async (req, res, next) => {
       const parent = await Comment.findOne({
         _id: parentId,
         postId: post._id,
+        ...VISIBLE_CONTENT,
       });
 
       if (!parent) {
@@ -179,7 +170,7 @@ router.post("/posts/:postId/comments", async (req, res, next) => {
   }
 });
 
-router.patch("/comments/:commentId", async (req, res, next) => {
+router.patch("/comments/:commentId", requireAction(ACTIONS.EDIT_POST), async (req, res, next) => {
   try {
     const body = String(req.body.body || "").trim();
     const comment = await Comment.findOne({
@@ -217,31 +208,9 @@ router.delete("/comments/:commentId", async (req, res, next) => {
       });
     }
 
-    // Descendant reply ids (any depth) must be gathered before the delete
-    // so the cascade below — comments, reactions, and notifications — can
-    // target the whole reply tree, not just the one comment. Deleting only
-    // the target comment and leaving its replies behind would orphan them
-    // in the database (they'd just silently stop rendering client-side,
-    // since nothing recurses to them anymore, without ever actually being
-    // removed) — this is the source of truth, not the React tree.
-    const isReply = Boolean(existing.parentId);
-    const descendantIds = await collectDescendantIds(existing._id);
-    const allIds = [existing._id, ...descendantIds];
-
-    await Comment.deleteMany({ _id: { $in: allIds } });
-    await Reaction.deleteMany({ targetType: "comment", targetId: { $in: allIds } });
-
-    if (isReply) {
-      // A reply and everything replying to it — leave sibling replies in
-      // the same thread untouched.
-      await Notification.deleteMany({
-        replyId: { $in: allIds },
-      });
-    } else {
-      // The whole thread: notifications about the comment itself all share
-      // commentId === comment._id, and so does every reply beneath it.
-      await Notification.deleteMany({ commentId: existing._id });
-    }
+    // Comment, its replies, reactions and notifications: the shared cascade
+    // (also used by the Admin Panel) — see services/contentModeration.service.js.
+    const allIds = await deleteCommentThread(existing);
 
     res.json({
       data: {
@@ -255,10 +224,10 @@ router.delete("/comments/:commentId", async (req, res, next) => {
   }
 });
 
-router.put("/comments/:commentId/reaction", async (req, res, next) => {
+router.put("/comments/:commentId/reaction", requireAction(ACTIONS.REACT), async (req, res, next) => {
   try {
     const type = req.body.type;
-    const comment = await Comment.findById(req.params.commentId);
+    const comment = await Comment.findOne({ _id: req.params.commentId, ...VISIBLE_CONTENT });
 
     if (!comment || (type && !REACTION_TYPES.includes(type))) {
       return res.status(400).json({

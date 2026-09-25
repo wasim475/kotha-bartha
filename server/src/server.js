@@ -28,7 +28,7 @@ const io = new Server(httpServer, {
 });
 app.set("io", io);
 
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   try {
     const cookie = socket.handshake.headers.cookie || "";
     const token = cookie
@@ -37,6 +37,10 @@ io.use((socket, next) => {
       .find((part) => part.startsWith("kotha_token="))
       ?.slice("kotha_token=".length);
     socket.userId = jwt.verify(token, process.env.JWT_SECRET).sub;
+    // A permanently deleted account (see services/contentModeration.service.js) can't connect.
+    if (await User.exists({ _id: socket.userId, accountStatus: "deleted" })) {
+      return next(new Error("Unauthorized"));
+    }
     next();
   } catch {
     next(new Error("Unauthorized"));

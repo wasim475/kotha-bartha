@@ -6,6 +6,7 @@ import { cx } from "../../../../utility/cx";
 import CommentActions from "./CommentActions";
 import CommentEditForm from "./CommentEditForm";
 import CommentMenu from "./CommentMenu";
+import ReportMenu from "../../../../components/report/ReportMenu";
 
 /**
  * One reply in a flattened thread. Visually every reply sits at the same
@@ -51,7 +52,7 @@ const ReplyItem = ({
               {entry.author.fullName}
             </p>
           </Link>
-          {entry.editable && <CommentMenu onEdit={onEdit} onDelete={onDelete} />}
+          {entry.editable ? <CommentMenu onEdit={onEdit} onDelete={onDelete} /> : <ReportMenu targetType="reply" targetId={entry.id} />}
         </div>
 
         {replyingToName && (

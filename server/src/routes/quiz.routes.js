@@ -5,6 +5,7 @@ const Chapter = require("../models/Chapter");
 const QuizQuestion = require("../models/QuizQuestion");
 const QuizAttempt = require("../models/QuizAttempt");
 const { requireRole } = require("../middleware/requireRole");
+const { ACTIONS, requireAction } = require("../utils/moderation");
 const { upload } = require("../middleware/upload");
 const { uploadBuffer, destroyAsset } = require("../utils/cloudinary");
 
@@ -683,7 +684,7 @@ router.get("/quiz/chapters/:chapterId/sets", async (req, res, next) => {
 // USER: START OR RESUME AN ATTEMPT
 // ============================================================
 
-router.post("/quiz/chapters/:chapterId/sets/:setNumber/start", async (req, res, next) => {
+router.post("/quiz/chapters/:chapterId/sets/:setNumber/start", requireAction(ACTIONS.QUIZ_PLAY), async (req, res, next) => {
   try {
     const chapterId = req.params.chapterId;
     const setNumber = Number(req.params.setNumber);
@@ -757,7 +758,7 @@ router.post("/quiz/chapters/:chapterId/sets/:setNumber/start", async (req, res, 
 // USER: ANSWER THE CURRENT QUESTION
 // ============================================================
 
-router.post("/quiz/attempts/:attemptId/answer", async (req, res, next) => {
+router.post("/quiz/attempts/:attemptId/answer", requireAction(ACTIONS.QUIZ_PLAY), async (req, res, next) => {
   try {
     const attempt = await QuizAttempt.findOne({
       _id: req.params.attemptId,

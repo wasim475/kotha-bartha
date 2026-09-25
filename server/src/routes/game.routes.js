@@ -9,6 +9,7 @@ const {
 } = require("../services/game.service");
 
 const { respond } = require("../utils/gameRespond");
+const { ACTIONS, requireAction } = require("../utils/moderation");
 
 const router = express.Router();
 
@@ -31,6 +32,7 @@ router.get(
 // Start a new attempt for a game, or resume the user's unfinished one.
 router.post(
   "/games/:gameType/start",
+  requireAction(ACTIONS.GAME_PLAY),
   respond(async (req) => ({ data: await startAttempt(req.user._id, req.params.gameType) })),
 );
 
@@ -50,6 +52,7 @@ router.get(
 // completion are all decided server-side — nothing else from the client is read.
 router.post(
   "/games/attempts/:attemptId/answer",
+  requireAction(ACTIONS.GAME_PLAY),
   respond(async (req) => ({
     data: await answerAttempt(
       req.user._id,

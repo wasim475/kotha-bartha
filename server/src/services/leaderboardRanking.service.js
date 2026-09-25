@@ -135,7 +135,7 @@ async function sourceRows(Model, baseFilter, dateMatch, scopeIds) {
     },
     { $lookup: { from: "users", localField: "_id", foreignField: "_id", as: "user" } },
     { $unwind: "$user" },
-    { $match: { "user.role": "user" } },
+    { $match: { "user.role": "user", "user.accountStatus": { $nin: ["banned", "deleted"] } } },
     {
       $project: {
         userId: "$_id",
@@ -166,7 +166,7 @@ async function ticTacToeRows(dateMatch, scopeIds) {
     { $group: { _id: "$winnerId", points: { $sum: "$rewardPoints" }, wins: { $sum: 1 } } },
     { $lookup: { from: "users", localField: "_id", foreignField: "_id", as: "user" } },
     { $unwind: "$user" },
-    { $match: { "user.role": "user" } },
+    { $match: { "user.role": "user", "user.accountStatus": { $nin: ["banned", "deleted"] } } },
     {
       $project: {
         userId: "$_id",
@@ -196,7 +196,7 @@ async function challengeRows(dateMatch, scopeIds) {
     { $group: { _id: "$winnerId", points: { $sum: "$rewardPoints" }, wins: { $sum: 1 } } },
     { $lookup: { from: "users", localField: "_id", foreignField: "_id", as: "user" } },
     { $unwind: "$user" },
-    { $match: { "user.role": "user" } },
+    { $match: { "user.role": "user", "user.accountStatus": { $nin: ["banned", "deleted"] } } },
     {
       $project: {
         userId: "$_id",

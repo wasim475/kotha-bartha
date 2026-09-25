@@ -1,6 +1,6 @@
-import { Logout, Person } from "@mui/icons-material";
+import { AdminPanelSettings, Logout, Person } from "@mui/icons-material";
 
-export default function ProfileMenu({ onProfile, onLogout }) {
+export default function ProfileMenu({ onProfile, onLogout, onAdmin }) {
   return (
     <div className="profile-popup">
       <button type="button" className="profile-popup-item" onClick={onProfile}>
@@ -8,6 +8,14 @@ export default function ProfileMenu({ onProfile, onLogout }) {
 
         <span>Profile</span>
       </button>
+
+      {onAdmin && (
+        <button type="button" className="profile-popup-item" onClick={onAdmin}>
+          <AdminPanelSettings fontSize="small" />
+
+          <span>Admin Panel</span>
+        </button>
+      )}
 
       <button
         type="button"

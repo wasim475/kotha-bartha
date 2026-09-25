@@ -7,6 +7,7 @@ const Conversation = require("../models/Conversation");
 const Post = require("../models/Post");
 const Notification = require("../models/Notification");
 const { safeUser } = require("../utils/serializers");
+const { VISIBLE_CONTENT } = require("../utils/moderation");
 
 const router = express.Router();
 
@@ -84,6 +85,7 @@ router.get("/notifications/unread-counts", async (req, res, next) => {
         $gt: feedSeenAt,
       },
       deletedAt: null,
+      ...VISIBLE_CONTENT,
     });
 
     res.json({

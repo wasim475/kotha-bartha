@@ -25,6 +25,17 @@ async function requireAuth(req, res, next) {
           },
         });
 
+    // A permanently deleted account (an anonymous tombstone) can never sign in.
+    if (user.accountStatus === "deleted")
+      return res
+        .status(401)
+        .json({
+          error: {
+            code: "UNAUTHENTICATED",
+            message: "Session is no longer valid.",
+          },
+        });
+
     req.user = user;
     next();
   } catch {

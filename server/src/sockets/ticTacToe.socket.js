@@ -1,5 +1,6 @@
 const { GameError } = require("../services/games/GameError");
 const service = require("../services/ticTacToe.service");
+const { ACTIONS, assertUserCan } = require("../utils/moderation");
 
 // Client -> server Tic-Tac-Toe events, registered on the EXISTING Socket.IO
 // server for every authenticated socket (see server.js — no second server).
@@ -43,6 +44,7 @@ function registerTicTacToeSocket(io, socket) {
 
   socket.on("ticTacToe:reaction", async (payload, ack) => {
     try {
+      await assertUserCan(socket.userId, ACTIONS.GAME_PLAY);
       const { room, payload: relayed } = await service.prepareReaction(socket.userId, payload?.gameId, payload?.type);
       // socket.to() never includes the sender's own socket, so the sender is
       // not sent its own reaction back.
@@ -55,6 +57,7 @@ function registerTicTacToeSocket(io, socket) {
 
   socket.on("ticTacToe:move", async (payload, ack) => {
     try {
+      await assertUserCan(socket.userId, ACTIONS.GAME_PLAY);
       const { game } = await service.makeMove(socket.userId, payload?.gameId, payload?.cellIndex, io);
       reply(ack, { ok: true, game });
     } catch (error) {

@@ -5,6 +5,7 @@ const cookieParser = require("cookie-parser");
 const rateLimit = require("express-rate-limit");
 const authRoutes = require("./routes/auth");
 const dataRoutes = require("./routes");
+const analyticsRoutes = require("./routes/analytics.routes");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -25,6 +26,8 @@ app.use(
 );
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
+// Page-view tracking has its own limiter, so it must come before the global one.
+app.use("/api/v1/analytics", analyticsRoutes);
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,

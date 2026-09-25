@@ -52,6 +52,21 @@ const userSchema = new mongoose.Schema(
       gameRequests: { type: String, enum: ["friends", "off"], default: "friends" },
     },
     lastSeenAt: Date,
+    // ---- Admin moderation (see utils/moderation.js for what each state blocks).
+    // Reversible account state: "active" | "banned". "deleted" is a terminal
+    // tombstone left by an admin's permanent delete: credentials and personal
+    // data are scrubbed, while historical records keep a valid, anonymous author.
+    // Documents created before this field existed simply read as "active".
+    accountStatus: { type: String, enum: ["active", "banned", "deleted"], default: "active", index: true },
+    bannedAt: Date,
+    bannedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    banReason: { type: String, trim: true, maxlength: 300 },
+    // Mute is independent of a ban: it limits posting and messaging, not browsing.
+    isMuted: { type: Boolean, default: false },
+    mutedAt: Date,
+    mutedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    muteReason: { type: String, trim: true, maxlength: 300 },
+    deletedAt: Date,
     // Legacy E2E encryption public key (JWK JSON string) — pre-multi-device,
     // a single key per account regardless of how many browsers/devices used
     // it. Superseded by `publicKeys` below; kept (never deleted) so old
@@ -116,11 +131,17 @@ userSchema.methods.toSafeJSON = function toSafeJSON() {
     cover: this.cover,
     settings: this.settings,
     lastSeenAt: this.lastSeenAt,
+    accountStatus: this.accountStatus || "active",
+    isMuted: Boolean(this.isMuted),
     // Kept for any lingering consumer of the old single-key shape.
     publicKey: this.publicKey,
     publicKeys: this.getPublicKeys(),
   };
 };
+
+userSchema.index({ createdAt: -1 });
+userSchema.index({ role: 1, createdAt: -1 });
+userSchema.index({ lastSeenAt: -1 });
 
 module.exports = mongoose.model("User", userSchema);
 module.exports.LEGACY_DEVICE_ID = LEGACY_DEVICE_ID;

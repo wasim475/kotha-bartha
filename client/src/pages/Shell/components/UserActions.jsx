@@ -1,4 +1,5 @@
 import { AutoStories, DarkMode, WbSunny } from "@mui/icons-material";
+import { useNavigate } from "react-router-dom";
 import ProfileMenu from "../../SharePage/Navbar/components/ProfileMenu";
 
 export default function UserActions({
@@ -12,6 +13,8 @@ export default function UserActions({
   onStudyClick,
   profileRef,
 }) {
+  const navigate = useNavigate();
+  const isStaff = user.role === "admin" || user.role === "moderator";
   return (
     <div className="top-actions">
 
@@ -52,6 +55,7 @@ export default function UserActions({
           <ProfileMenu
             onProfile={onProfile}
             onLogout={onLogout}
+            onAdmin={isStaff ? () => navigate("/admin") : undefined}
           />
         )}
 

@@ -1,4 +1,5 @@
 const express = require("express");
+const { ACTIONS, requireAction } = require("../utils/moderation");
 const Story = require("../models/Story");
 const Friendship = require("../models/Friendship");
 const { safeUser, serializeStory } = require("../utils/serializers");
@@ -128,6 +129,8 @@ router.get("/stories", async (req, res, next) => {
 
 router.post(
   "/stories",
+  requireAction(ACTIONS.CREATE_POST),
+  requireAction(ACTIONS.UPLOAD),
   (req, res, next) => {
     upload.single("file")(req, res, (error) => {
       if (!error) return next();
@@ -258,7 +261,7 @@ router.delete("/stories/:storyId", async (req, res, next) => {
 // snapshot, so the recipient has context even after the story expires.
 // ============================================================
 
-router.post("/stories/:storyId/react", async (req, res, next) => {
+router.post("/stories/:storyId/react", requireAction(ACTIONS.REACT), async (req, res, next) => {
   try {
     const emoji = String(req.body.emoji || "").trim().slice(0, 8);
     if (!emoji) {
@@ -290,7 +293,7 @@ router.post("/stories/:storyId/react", async (req, res, next) => {
   }
 });
 
-router.post("/stories/:storyId/reply", async (req, res, next) => {
+router.post("/stories/:storyId/reply", requireAction(ACTIONS.SEND_MESSAGE), async (req, res, next) => {
   try {
     const text = String(req.body.text || "").trim().slice(0, 2000);
     if (!text) {

@@ -1,6 +1,7 @@
 const express = require("express");
 const service = require("../services/gameChallenge.service");
 const { respond } = require("../utils/gameRespond");
+const { ACTIONS, requireAction } = require("../utils/moderation");
 
 const router = express.Router();
 
@@ -20,10 +21,12 @@ router.get("/games/challenges/active", respond(async (req) => ({ data: await ser
 router.get("/games/challenges/invites/pending", respond(async (req) => ({ data: await service.listPending(req.user) })));
 router.post(
   "/games/challenges/invites",
+  requireAction(ACTIONS.GAME_PLAY),
   respond(async (req) => ({ data: await service.createInvite(req.user, req.body?.userId, req.body?.gameType, io(req)) }), 201),
 );
 router.post(
   "/games/challenges/invites/:inviteId/accept",
+  requireAction(ACTIONS.GAME_PLAY),
   respond(async (req) => ({ data: await service.acceptRequest(req.user, req.params.inviteId, io(req), "invite") })),
 );
 router.post(
@@ -38,6 +41,7 @@ router.post(
 // ---- rematch requests
 router.post(
   "/games/challenges/rematch/:requestId/accept",
+  requireAction(ACTIONS.GAME_PLAY),
   respond(async (req) => ({ data: await service.acceptRequest(req.user, req.params.requestId, io(req), "rematch") })),
 );
 router.post(
@@ -56,6 +60,7 @@ router.get("/games/challenges/:matchId", respond(async (req) => ({ data: await s
 // is down; the socket "gameChallenge:answer" event calls the same function.
 router.post(
   "/games/challenges/:matchId/answer",
+  requireAction(ACTIONS.GAME_PLAY),
   respond(async (req) => ({
     data: await service.submitAnswer(
       req.user._id,
@@ -69,6 +74,7 @@ router.post(
 router.post("/games/challenges/:matchId/leave", respond(async (req) => ({ data: await service.leaveMatch(req.user._id, req.params.matchId, io(req)) })));
 router.post(
   "/games/challenges/:matchId/rematch",
+  requireAction(ACTIONS.GAME_PLAY),
   respond(async (req) => ({ data: await service.requestRematch(req.user, req.params.matchId, io(req)) }), 201),
 );
 

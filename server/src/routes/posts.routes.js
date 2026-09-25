@@ -3,13 +3,14 @@ const User = require("../models/User");
 const Post = require("../models/Post");
 const Friendship = require("../models/Friendship");
 const Reaction = require("../models/Reaction");
-const Notification = require("../models/Notification");
 const { serializePost } = require("../utils/serializers");
 const { emitToUser } = require("../utils/realtime");
 const { createNotification } = require("../services/notification.service");
 const { REACTION_TYPES } = require("../utils/reactionTypes");
 const { upload } = require("../middleware/upload");
-const { uploadBuffer, destroyAsset } = require("../utils/cloudinary");
+const { uploadBuffer } = require("../utils/cloudinary");
+const { ACTIONS, requireAction, VISIBLE_CONTENT } = require("../utils/moderation");
+const { softDeletePost } = require("../services/contentModeration.service");
 
 const router = express.Router();
 
@@ -32,6 +33,7 @@ router.get("/posts/feed", async (req, res, next) => {
         $in: allowedAuthors,
       },
       deletedAt: null,
+      ...VISIBLE_CONTENT,
     })
       .populate("authorId")
       .sort({
@@ -57,6 +59,7 @@ router.get("/posts/:postId", async (req, res, next) => {
     const post = await Post.findOne({
       _id: req.params.postId,
       deletedAt: null,
+      ...VISIBLE_CONTENT,
     }).populate("authorId");
 
     if (!post) {
@@ -110,6 +113,7 @@ const MAX_POST_IMAGES = 6;
 
 router.post(
   "/posts",
+  requireAction(ACTIONS.CREATE_POST),
   // A plain JSON (text-only) request never has a multipart Content-Type,
   // so multer passes it straight through unchanged — this only actually
   // parses requests that include image files.
@@ -207,11 +211,12 @@ router.post(
 // LIKE POST
 // ============================================================
 
-router.put("/posts/:postId/like", async (req, res, next) => {
+router.put("/posts/:postId/like", requireAction(ACTIONS.REACT), async (req, res, next) => {
   try {
     const post = await Post.findOne({
       _id: req.params.postId,
       deletedAt: null,
+      ...VISIBLE_CONTENT,
     });
 
     if (!post) {
@@ -289,7 +294,7 @@ router.put("/posts/:postId/like", async (req, res, next) => {
 // REACT TO POST (unified 5-reaction system — like/love/haha/sad/angry)
 // ============================================================
 
-router.put("/posts/:postId/reaction", async (req, res, next) => {
+router.put("/posts/:postId/reaction", requireAction(ACTIONS.REACT), async (req, res, next) => {
   try {
     const type = req.body.type || null;
 
@@ -302,6 +307,7 @@ router.put("/posts/:postId/reaction", async (req, res, next) => {
     const post = await Post.findOne({
       _id: req.params.postId,
       deletedAt: null,
+      ...VISIBLE_CONTENT,
     });
 
     if (!post) {
@@ -373,7 +379,7 @@ router.put("/posts/:postId/reaction", async (req, res, next) => {
 // GET COMMENTS
 // ============================================================
 
-router.patch("/posts/:postId", async (req, res, next) => {
+router.patch("/posts/:postId", requireAction(ACTIONS.EDIT_POST), async (req, res, next) => {
   try {
     const body = String(req.body.body || "").trim();
     const post = await Post.findOne({
@@ -400,26 +406,14 @@ router.patch("/posts/:postId", async (req, res, next) => {
 
 router.delete("/posts/:postId", async (req, res, next) => {
   try {
-    const post = await Post.findOneAndUpdate(
-      { _id: req.params.postId, authorId: req.user._id, deletedAt: null },
-      { $set: { deletedAt: new Date() } },
-      { new: true },
-    );
+    // The shared cascade (photos, notifications) also used by the Admin Panel.
+    const post = await softDeletePost({ _id: req.params.postId, authorId: req.user._id }, { moderationStatus: "deleted" });
 
     if (!post) {
       return res.status(404).json({
         error: { code: "NOT_FOUND", message: "Post not found." },
       });
     }
-
-    if (post.media?.length) {
-      await Promise.all(post.media.map((item) => destroyAsset(item.publicId, "image")));
-    }
-
-    // Every notification about this post (post reactions, comments and
-    // replies alike) points at content that no longer exists — clean them
-    // all up in one shot rather than leaving dead links behind.
-    await Notification.deleteMany({ postId: post._id });
 
     res.json({ data: { id: post._id.toString(), deleted: true } });
   } catch (error) {

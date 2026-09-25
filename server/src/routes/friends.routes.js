@@ -1,4 +1,5 @@
 const express = require("express");
+const { ACTIONS, requireAction } = require("../utils/moderation");
 const mongoose = require("mongoose");
 const User = require("../models/User");
 const Friendship = require("../models/Friendship");
@@ -77,7 +78,7 @@ router.get("/friends", async (req, res, next) => {
 // ============================================================
 // SEND FRIEND REQUEST
 // ============================================================
-router.post("/friends/requests", async (req, res, next) => {
+router.post("/friends/requests", requireAction(ACTIONS.FRIEND_REQUEST), async (req, res, next) => {
   try {
     if (
       !mongoose.isValidObjectId(req.body.receiverId) ||
@@ -213,7 +214,7 @@ router.delete("/friends/requests/:receiverId", async (req, res, next) => {
 // ============================================================
 // ACCEPT FRIEND REQUEST
 // ============================================================
-router.post("/friends/requests/:requestId/accept", async (req, res, next) => {
+router.post("/friends/requests/:requestId/accept", requireAction(ACTIONS.FRIEND_REQUEST), async (req, res, next) => {
   try {
     const request = await FriendRequest.findOne({
       _id: req.params.requestId,

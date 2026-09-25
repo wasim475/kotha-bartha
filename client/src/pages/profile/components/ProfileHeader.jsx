@@ -3,7 +3,7 @@ import {
   GridOn,
   Check,
   ChatBubbleOutlineRounded,
-  MoreHoriz,
+
   PersonAddAlt1,
   PersonRemoveOutlined,
   PhotoCamera,
@@ -13,7 +13,7 @@ import { useRef } from "react";
 import Avatar from "../../../components/ui/Avatar";
 import Button from "../../../components/ui/Button";
 import IconButton from "../../../components/ui/IconButton";
-import Menu from "../../../components/ui/Menu";
+import ReportMenu from "../../../components/report/ReportMenu";
 import RichText from "../../../components/ui/RichText";
 import { inviteFriend } from "../../../utility/ticTacToe";
 import useButtonColorFix from "../../../utility/useButtonColorFix";
@@ -224,15 +224,11 @@ export default function ProfileHeader({
                 )}
 
                 {person.isFriend ? (
-                  <Menu
-                    align="end"
-                    trigger={
-                      <IconButton
-                        label="More profile actions"
-                        icon={<MoreHoriz fontSize="small" />}
-                      />
-                    }
-                    items={[
+                  <ReportMenu
+                    targetType="user"
+                    targetId={person.id}
+                    label="More profile actions"
+                    extraItems={[
                       {
                         key: "unfriend",
                         label: "Unfriend",
@@ -249,15 +245,18 @@ export default function ProfileHeader({
                     ]}
                   />
                 ) : (
-                  <IconButton
-                    label={`Block ${person.fullName}`}
-                    icon={<Block fontSize="small" />}
-                    variant="danger"
-                    onClick={onRequestBlock}
-                    style={dangerFix.style}
-                    onMouseEnter={dangerFix.onMouseEnter}
-                    onMouseLeave={dangerFix.onMouseLeave}
-                  />
+                  <>
+                    <IconButton
+                      label={`Block ${person.fullName}`}
+                      icon={<Block fontSize="small" />}
+                      variant="danger"
+                      onClick={onRequestBlock}
+                      style={dangerFix.style}
+                      onMouseEnter={dangerFix.onMouseEnter}
+                      onMouseLeave={dangerFix.onMouseLeave}
+                    />
+                    <ReportMenu targetType="user" targetId={person.id} />
+                  </>
                 )}
               </>
             )}

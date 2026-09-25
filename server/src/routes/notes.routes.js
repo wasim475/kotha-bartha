@@ -1,4 +1,5 @@
 const express = require("express");
+const { ACTIONS, requireAction } = require("../utils/moderation");
 const Note = require("../models/Note");
 const Friendship = require("../models/Friendship");
 const { safeUser, serializeNote } = require("../utils/serializers");
@@ -62,7 +63,7 @@ router.get("/notes", async (req, res, next) => {
 // (overwrites) the previous one rather than stacking up a history.
 // ============================================================
 
-router.post("/notes", async (req, res, next) => {
+router.post("/notes", requireAction(ACTIONS.CREATE_POST), async (req, res, next) => {
   try {
     const text = String(req.body.text || "").trim().slice(0, MAX_NOTE_LENGTH);
     if (!text) {
@@ -173,7 +174,7 @@ const noteSnapshot = (note) => ({
 // snapshot, never a new "note" of its own.
 // ============================================================
 
-router.post("/notes/:noteId/react", async (req, res, next) => {
+router.post("/notes/:noteId/react", requireAction(ACTIONS.REACT), async (req, res, next) => {
   try {
     const emoji = String(req.body.emoji || "").trim().slice(0, 8);
     if (!emoji) {
@@ -205,7 +206,7 @@ router.post("/notes/:noteId/react", async (req, res, next) => {
   }
 });
 
-router.post("/notes/:noteId/reply", async (req, res, next) => {
+router.post("/notes/:noteId/reply", requireAction(ACTIONS.SEND_MESSAGE), async (req, res, next) => {
   try {
     const text = String(req.body.text || "").trim().slice(0, 2000);
     if (!text) {

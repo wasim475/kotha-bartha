@@ -357,7 +357,14 @@ const MessageBubble = ({
         )}
 
         <div ref={messageColumnRef} className="relative flex min-w-0 flex-col">
-          {showSenderName && !isOwn && (
+          {message.adminMessage && (
+            <span className="mb-0.5 ml-1 inline-flex items-center gap-1 text-[11px] font-bold text-accent" data-testid="admin-message-label">
+              <span className="rounded bg-accent px-1.5 py-px text-[10px] tracking-wide text-white uppercase">Admin</span>
+              Kotha-Barta Administration
+            </span>
+          )}
+
+          {showSenderName && !isOwn && !message.adminMessage && (
             <span className="mb-0.5 ml-1 text-xs font-semibold text-accent">
               {message.sender?.fullName}
             </span>

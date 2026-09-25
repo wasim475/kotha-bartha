@@ -13,6 +13,7 @@ const { upload, attachmentKindFor } = require("../middleware/upload");
 const { uploadBuffer, destroyAsset } = require("../utils/cloudinary");
 const { UNSEND_WINDOW_MS } = require("../utils/config");
 const { THEME_IDS } = require("../utils/conversationThemes");
+const { ACTIONS, requireAction } = require("../utils/moderation");
 
 const router = express.Router();
 
@@ -113,7 +114,7 @@ const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 // single-shared-key format older messages were stored in — never both at
 // once on the same message, so the client can tell which one it's looking
 // at just from which field is populated.
-const contentFields = (message) =>
+const baseContentFields = (message) =>
   message.encrypted
     ? {
         encrypted: true,
@@ -134,6 +135,10 @@ const contentFields = (message) =>
         body: message.body,
       }
     : { encrypted: false, encryptedBody: null, encryptedPayloads: null, senderPublicKey: null, body: message.body };
+
+// Every message payload also says whether an administrator sent it, so the
+// client can label it (see Message.adminMessage).
+const contentFields = (message) => ({ ...baseContentFields(message), adminMessage: Boolean(message.adminMessage) });
 
 const MAX_CIPHERTEXT_LENGTH = 20000;
 const MAX_DEVICE_TARGETS = 20;
@@ -192,7 +197,7 @@ const parseIncomingContent = (payload) => {
   };
 };
 
-router.post("/conversations", async (req, res, next) => {
+router.post("/conversations", requireAction(ACTIONS.SEND_MESSAGE), async (req, res, next) => {
   try {
     if (
       !mongoose.isValidObjectId(req.body.userId) ||
@@ -258,7 +263,7 @@ router.post("/conversations", async (req, res, next) => {
 // GROUPS
 // ============================================================
 
-router.post("/conversations/group", async (req, res, next) => {
+router.post("/conversations/group", requireAction(ACTIONS.SEND_MESSAGE), async (req, res, next) => {
   try {
     const groupName = String(req.body.groupName || "").trim();
     const memberIds = Array.isArray(req.body.memberIds) ? req.body.memberIds : [];
@@ -1014,6 +1019,7 @@ router.get(
 
 router.post(
   "/conversations/:conversationId/messages",
+  requireAction(ACTIONS.SEND_MESSAGE),
   async (req, res, next) => {
     try {
       // E2E encryption is opportunistic and 1-to-1 only — a group message
@@ -1180,7 +1186,7 @@ const formatCallDuration = (totalSeconds) => {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 };
 
-router.post("/conversations/:conversationId/calls", async (req, res, next) => {
+router.post("/conversations/:conversationId/calls", requireAction(ACTIONS.SEND_MESSAGE), async (req, res, next) => {
   try {
     const outcome = String(req.body.outcome || "");
     const durationSec = Math.max(0, Math.round(Number(req.body.durationSec) || 0));
@@ -1278,6 +1284,8 @@ const attachmentLabel = (kind, fileName) => {
 
 router.post(
   "/conversations/:conversationId/attachments",
+  requireAction(ACTIONS.SEND_MESSAGE),
+  requireAction(ACTIONS.UPLOAD),
   (req, res, next) => {
     upload.single("file")(req, res, (error) => {
       if (!error) return next();
@@ -1402,6 +1410,7 @@ router.post(
 
 router.put(
   "/conversations/:conversationId/messages/:messageId/reaction",
+  requireAction(ACTIONS.REACT),
   async (req, res, next) => {
     try {
       const emoji = String(req.body.emoji || "").trim();
@@ -1788,6 +1797,7 @@ router.get(
 
 router.post(
   "/conversations/:conversationId/messages/:messageId/forward",
+  requireAction(ACTIONS.SEND_MESSAGE),
   async (req, res, next) => {
     try {
       const sourceConversation = await Conversation.findOne({

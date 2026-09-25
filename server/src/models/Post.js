@@ -18,8 +18,18 @@ const postSchema = new mongoose.Schema(
       default: [],
     },
     deletedAt: Date,
-  }, 
+    // ---- Admin moderation. "visible" (also: field absent) | "hidden_by_ban"
+    // (the author was banned; restored on unban, and ONLY this reason is ever
+    // restored) | "deleted" (removed by an admin; never restored).
+    moderationStatus: { type: String, enum: ["visible", "hidden_by_ban", "deleted"], default: "visible" },
+    hiddenReason: { type: String, default: null },
+    moderatedAt: Date,
+    moderatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  },
   { timestamps: true },
 );
+
+postSchema.index({ authorId: 1, moderationStatus: 1 });
+postSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model("Post", postSchema);
