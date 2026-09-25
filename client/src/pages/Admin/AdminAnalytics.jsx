@@ -17,6 +17,9 @@ const RANGES = [
 ];
 const RANGE_LABEL = Object.fromEntries(RANGES);
 
+// Time is shown only where at least one visit was measured — older visits have no duration, and 0s would claim otherwise.
+const activeTime = (row) => (row?.measuredViews ? formatDuration(row.totalSeconds) : "—");
+
 /** One page's numbers for all three periods side by side. */
 function PageDetail({ page, onClose }) {
   const detail = useAdminPageAnalytics(page);
@@ -43,7 +46,7 @@ function PageDetail({ page, onClose }) {
                 <dt className="text-muted">Views</dt>
                 <dd className="font-semibold text-ink tabular-nums">{d[key].views.toLocaleString()}</dd>
                 <dt className="text-muted">Total active time</dt>
-                <dd className="font-semibold text-ink tabular-nums">{formatDuration(d[key].totalSeconds)}</dd>
+                <dd className="font-semibold text-ink tabular-nums">{activeTime(d[key])}</dd>
                 <dt className="text-muted">Average session</dt>
                 <dd className="font-semibold text-ink tabular-nums">{formatDuration(d[key].avgSeconds)}</dd>
               </dl>
@@ -98,12 +101,12 @@ export default function AdminAnalytics() {
           <p className="text-xs text-muted">Active time only: the tab is open in front and the person is interacting. Visits from before time tracking began have no duration and are left out.</p>
         </div>
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <AdminStatCard label="Total active time" loading={stats.loading} display={formatDuration(d?.engagement.totalSeconds)} hint={RANGE_LABEL[range]} />
+          <AdminStatCard label="Total active time" loading={stats.loading} display={activeTime(d?.engagement)} hint={RANGE_LABEL[range]} />
           <AdminStatCard label="Avg session" loading={stats.loading} display={formatDuration(d?.engagement.avgSeconds)} hint={d ? `${d.engagement.measuredViews.toLocaleString()} measured visits` : ""} />
           <AdminStatCard label="Median session" loading={stats.loading} display={formatDuration(d?.engagement.medianSeconds)} hint="Typical visit" />
           <AdminStatCard label="Active users" loading={stats.loading} value={d?.totals.activeUsers} hint="Signed in" />
         </div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 min-[520px]:grid-cols-3">
           {RANGES.map(([key, label]) => (
             <AdminStatCard key={key} label={`Active time · ${label}`} loading={stats.loading} display={formatDuration(d?.engagement.periodTotals[key])} />
           ))}
@@ -156,7 +159,7 @@ export default function AdminAnalytics() {
             { key: "page", header: "Page", className: "font-semibold text-ink", render: (row) => pageLabel(row.page) },
             { key: "users", header: "Unique users", className: "tabular-nums", render: (row) => row.users.toLocaleString() },
             { key: "views", header: "Page views", className: "tabular-nums", render: (row) => row.views.toLocaleString() },
-            { key: "time", header: "Active time", className: "tabular-nums", render: (row) => formatDuration(row.totalSeconds) },
+            { key: "time", header: "Active time", className: "tabular-nums", render: (row) => activeTime(row) },
             { key: "avg", header: "Avg time", className: "tabular-nums", render: (row) => formatDuration(row.avgSeconds) },
             {
               key: "details",

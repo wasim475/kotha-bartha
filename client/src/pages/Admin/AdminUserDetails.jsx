@@ -23,7 +23,7 @@ const TABS = [
   ["posts", "Posts"],
   ["comments", "Comments"],
   ["replies", "Replies"],
-  ["activity", "Quiz & Games"],
+  ["activity", "Activity"],
   ["reports", "Reports"],
 ];
 
