@@ -9,10 +9,13 @@ const useMessageResources = (conversationId) => {
   // load doesn't pay for a request nobody asked for.
   const archived = useResource(archiveView ? "/conversations?archived=true" : null);
 
+  // resetOnUrlChange: switching to another conversation clears the previous
+  // one's messages at once and shows the thread loader until the new ones arrive.
   const thread = useResource(
     conversationId
       ? `/conversations/${conversationId}/messages`
       : "/conversations",
+    { resetOnUrlChange: true },
   );
 
   const selected =

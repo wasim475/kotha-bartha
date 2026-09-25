@@ -118,13 +118,23 @@ export function Avatar({ person, className = "" }) {
 
 import { api } from "./api"; // adjust path to your api.js
 
-export function useResource(url) {
+// Options: { resetOnUrlChange } — when the url changes, immediately drop the
+// previous url's data and report loading again (instead of showing the old data
+// until the new response arrives). Off by default, so every existing caller
+// behaves exactly as before.
+export function useResource(url, { resetOnUrlChange = false } = {}) {
   const [state, setState] = useState({
     data: null,
     meta: null,
     loading: true,
     error: "",
   });
+  const [trackedUrl, setTrackedUrl] = useState(url);
+  if (resetOnUrlChange && url !== trackedUrl) {
+    // Adjusted during render (not in an effect) so the stale data is never painted.
+    setTrackedUrl(url);
+    setState({ data: null, meta: null, loading: Boolean(url), error: "" });
+  }
 
   const reload = async () => {
     if (!url) return null;

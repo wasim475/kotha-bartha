@@ -107,10 +107,42 @@ const formatMessageTime = (date) => {
   if (Number.isNaN(parsedDate.getTime())) return "";
 
   return parsedDate.toLocaleTimeString([], {
-    hour: "numeric",
+    hour: "2-digit",
     minute: "2-digit",
+    hourCycle: "h23",
   });
 };
+
+// Time, "edited" flag and delivery ticks. `float` puts it at the end of the last
+// line of text (right-aligned, on the same line when it fits, on its own line
+// below when it doesn't); otherwise it is a right-aligned row of its own.
+// Colors follow the bubble (and so the conversation's chat theme).
+function MessageMeta({ message, isOwn, uploadLabel, float = false }) {
+  return (
+    <span
+      className={cx(
+        "inline-flex h-4 items-center gap-1 text-[11px] leading-none whitespace-nowrap select-none",
+        isOwn ? "text-white/75" : "text-muted",
+        float ? "float-right mt-1.5 ml-3" : "mt-1 flex w-full justify-end",
+      )}
+    >
+      {message.editedAt && <span className="italic">edited</span>}
+      <span>{message.pending ? uploadLabel || "Sending…" : formatMessageTime(message.createdAt)}</span>
+      {isOwn && !message.pending && (
+        <span className="flex items-center">
+          {message.status === "read" || message.status === "delivered" ? (
+            <DoneAll
+              fontSize="inherit"
+              className={message.status === "read" ? "text-[16px] text-sky-300" : "text-[16px]"}
+            />
+          ) : (
+            <Done fontSize="inherit" className="text-[16px]" />
+          )}
+        </span>
+      )}
+    </span>
+  );
+}
 
 const formatFullTime = (date) => {
   if (!date) return "";
@@ -313,6 +345,7 @@ const MessageBubble = ({
   const reactionUITransition = useMountedTransition(emojiOpen, 150);
 
   const isAttachment = message.type === "attachment";
+  const showLinkPreview = !message.pending && Boolean(firstUrlIn(message.body)) && !message.replyTo;
   const attachment = message.attachment || {};
 
   const myReactionEmoji = currentUserId
@@ -439,8 +472,8 @@ const MessageBubble = ({
             <div
               onClick={() => onSelectMessage(message.id)}
               className={cx(
-                "font-message min-w-0 rounded-2xl text-sm leading-relaxed shadow-sm transition-opacity",
-                attachment.kind === "image" ? "p-1" : "px-3.5 py-2",
+                "font-message min-w-0 rounded-lg text-sm leading-relaxed shadow-sm transition-opacity",
+                attachment.kind === "image" ? "p-1" : "px-2.5 pt-1.5 pb-1",
                 isOwn ? "text-white" : "text-ink",
                 message.pending && "opacity-70",
               )}
@@ -513,10 +546,7 @@ const MessageBubble = ({
                     </span>
                   )}
                   <span
-                    className={cx(
-                      "shrink-0 text-[10px]",
-                      isOwn ? "text-white/75" : "text-muted",
-                    )}
+                    className={cx("shrink-0 text-[10px]", isOwn ? "text-white/75" : "text-muted")}
                   >
                     {formatFileSize(attachment.size)}
                   </span>
@@ -532,35 +562,15 @@ const MessageBubble = ({
                 />
               )}
 
-              <span
-                className={cx(
-                  "mt-1 flex items-center justify-end gap-1 text-[10px]",
-                  attachment.kind === "image" && "px-1.5",
-                  isOwn ? "text-white/75" : "text-muted",
-                )}
-              >
-                {message.pending ? (
-                  <span>
-                    {Number.isFinite(message.uploadProgress)
-                      ? `Uploading… ${message.uploadProgress}%`
-                      : "Sending…"}
-                  </span>
-                ) : (
-                  <span>{formatMessageTime(message.createdAt)}</span>
-                )}
-                {isOwn && !message.pending && (
-                  <span className="flex items-center">
-                    {message.status === "read" || message.status === "delivered" ? (
-                      <DoneAll
-                        fontSize="inherit"
-                        className={message.status === "read" ? "text-[13px] text-sky-300" : "text-[13px]"}
-                      />
-                    ) : (
-                      <Done fontSize="inherit" className="text-[13px]" />
-                    )}
-                  </span>
-                )}
-              </span>
+              <div className={attachment.kind === "image" ? "px-1.5 pb-0.5" : undefined}>
+                <MessageMeta
+                  message={message}
+                  isOwn={isOwn}
+                  uploadLabel={
+                    Number.isFinite(message.uploadProgress) ? `Uploading… ${message.uploadProgress}%` : undefined
+                  }
+                />
+              </div>
             </div>
           ) : (
             <button
@@ -568,7 +578,7 @@ const MessageBubble = ({
               title={formatFullTime(message.createdAt)}
               onClick={() => onSelectMessage(message.id)}
               className={cx(
-                "font-message min-w-0 rounded-2xl px-3.5 py-2 text-left text-sm leading-relaxed wrap-anywhere shadow-sm transition-opacity",
+                "font-message min-w-0 rounded-lg px-2.5 pt-1.5 pb-1 text-left text-sm leading-relaxed wrap-anywhere shadow-sm transition-opacity",
                 isOwn ? "text-white" : "text-ink",
                 message.pending && "opacity-70",
               )}
@@ -629,37 +639,12 @@ const MessageBubble = ({
                 })}
               </span>
 
-              {!message.pending &&
-                firstUrlIn(message.body) &&
-                !message.replyTo && (
-                  <LinkPreviewCard url={firstUrlIn(message.body)} isOwn={isOwn} />
-                )}
+              {showLinkPreview && <LinkPreviewCard url={firstUrlIn(message.body)} isOwn={isOwn} />}
 
-              <span
-                className={cx(
-                  "mt-1 flex items-center justify-end gap-1 text-[10px]",
-                  isOwn ? "text-white/75" : "text-muted",
-                )}
-              >
-                {message.editedAt && <span className="italic">edited</span>}
-                {message.pending ? (
-                  <span>Sending…</span>
-                ) : (
-                  <span>{formatMessageTime(message.createdAt)}</span>
-                )}
-                {isOwn && !message.pending && (
-                  <span className="flex items-center">
-                    {message.status === "read" || message.status === "delivered" ? (
-                      <DoneAll
-                        fontSize="inherit"
-                        className={message.status === "read" ? "text-[13px] text-sky-300" : "text-[13px]"}
-                      />
-                    ) : (
-                      <Done fontSize="inherit" className="text-[13px]" />
-                    )}
-                  </span>
-                )}
-              </span>
+              {/* Without a link card the time sits at the end of the last line of
+                  text; with one it goes on its own row under the card. */}
+              {!showLinkPreview && <MessageMeta message={message} isOwn={isOwn} float />}
+              {showLinkPreview && <MessageMeta message={message} isOwn={isOwn} />}
             </button>
           )}
 
