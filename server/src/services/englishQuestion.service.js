@@ -323,8 +323,37 @@ async function selectEnglishQuestions({ gameType, count, userId }) {
   };
 }
 
+// A random set of ACTIVE questions for a game that two people play together
+// (friend challenges). Unlike selectEnglishQuestions this is not tied to either
+// player's single-player no-repeat history — both get the same set — but it
+// skips `excludeIds` (the previous match between them) whenever the bank has
+// enough other questions, so a rematch is a fresh set.
+async function sampleEnglishQuestions({ gameType, count, excludeIds = [] }) {
+  await ensureEnglishSeeded();
+  const base = { gameType, active: true };
+  let filter = excludeIds.length ? { ...base, _id: { $nin: excludeIds } } : base;
+  if (excludeIds.length && (await EnglishQuestion.countDocuments(filter)) < count) filter = base;
+
+  const picked = await EnglishQuestion.aggregate([{ $match: filter }, { $sample: { size: count } }]);
+  if (picked.length < count) {
+    throw new GameError(409, "NOT_ENOUGH_QUESTIONS", "This game doesn't have enough questions yet.", { available: picked.length, needed: count });
+  }
+  const ordered = shuffle(picked);
+  return {
+    questionIds: ordered.map((doc) => doc._id),
+    questions: ordered.map((doc) =>
+      buildQuestion({
+        prompt: doc.question,
+        correct: doc.options[doc.correctIndex],
+        wrong: doc.options.filter((_, index) => index !== doc.correctIndex),
+      }),
+    ),
+  };
+}
+
 module.exports = {
   QUESTION_TYPES,
+  sampleEnglishQuestions,
   NOT_ENOUGH_MESSAGE,
   seedEnglishQuestions,
   ensureEnglishSeeded,

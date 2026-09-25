@@ -6,6 +6,7 @@ const mongoose = require("mongoose");
 const QuizAttempt = require("../models/QuizAttempt");
 const GameAttempt = require("../models/GameAttempt");
 const TicTacToeGame = require("../models/TicTacToeGame");
+const GameChallengeMatch = require("../models/GameChallengeMatch");
 const Friendship = require("../models/Friendship");
 const { blockedPairIds } = require("../utils/blocks");
 const { getCycleStatus, cycleStartInstant, previousMonthOf } = require("./leaderboardCycle.service");
@@ -150,7 +151,7 @@ async function sourceRows(Model, baseFilter, dateMatch, scopeIds) {
   ]);
 }
 
-// Tic-Tac-Toe wins are Games points too: every WON game carries the +20 that was
+// Tic-Tac-Toe wins are Games points too: every WON game carries the reward that was
 // written atomically when it was won (see TicTacToeGame / ticTacToe.service.js),
 // so summing them can never count a win twice. Draws, losses and abandoned
 // games carry 0 and are excluded. `dateMatch` is the shared period filter
@@ -181,10 +182,40 @@ async function ticTacToeRows(dateMatch, scopeIds) {
   ]);
 }
 
-// Adds Tic-Tac-Toe rows into the Games rows, per user.
-function mergeGameRows(gameRows, tttRows) {
+// Friend quiz challenges: ONLY the winner of a completed match earns points —
+// their positive score, written atomically when the match finished
+// (rewardPoints). Losers, draws, abandoned matches and matches the loser never
+// played carry 0 and are excluded. Same period window as the other Games rows.
+async function challengeRows(dateMatch, scopeIds) {
+  const match = { status: "completed", winnerId: { $ne: null }, rewardPoints: { $gt: 0 } };
+  if (dateMatch.completedAt) match.finishedAt = dateMatch.completedAt;
+  if (scopeIds) match.winnerId = { $in: scopeIds };
+
+  return GameChallengeMatch.aggregate([
+    { $match: match },
+    { $group: { _id: "$winnerId", points: { $sum: "$rewardPoints" }, wins: { $sum: 1 } } },
+    { $lookup: { from: "users", localField: "_id", foreignField: "_id", as: "user" } },
+    { $unwind: "$user" },
+    { $match: { "user.role": "user" } },
+    {
+      $project: {
+        userId: "$_id",
+        fullName: "$user.fullName",
+        avatar: "$user.avatar",
+        currentCity: "$user.currentCity",
+        points: 1,
+        correctCount: { $literal: 0 },
+        wrongCount: { $literal: 0 },
+        attempted: "$wins",
+      },
+    },
+  ]);
+}
+
+// Adds the Tic-Tac-Toe and friend-challenge rows into the Games rows, per user.
+function mergeGameRows(gameRows, ...extraRowSets) {
   const byUser = new Map(gameRows.map((row) => [row.userId.toString(), { ...row }]));
-  for (const row of tttRows) {
+  for (const row of extraRowSets.flat()) {
     const key = row.userId.toString();
     const existing = byUser.get(key);
     if (existing) {
@@ -227,12 +258,13 @@ async function rankedParticipants({ category, dateMatch, audience, requesterId }
 
   const wantsQuiz = category !== "games";
   const wantsGames = category !== "quiz";
-  const [quizRows, attemptRows, tttRows] = await Promise.all([
+  const [quizRows, attemptRows, tttRows, challengeWinRows] = await Promise.all([
     wantsQuiz ? sourceRows(QuizAttempt, BASE_ATTEMPT_FILTER, dateMatch, scopeIds) : [],
     wantsGames ? sourceRows(GameAttempt, GAME_ATTEMPT_FILTER, dateMatch, scopeIds) : [],
     wantsGames ? ticTacToeRows(dateMatch, scopeIds) : [],
+    wantsGames ? challengeRows(dateMatch, scopeIds) : [],
   ]);
-  const gameRows = mergeGameRows(attemptRows, tttRows);
+  const gameRows = mergeGameRows(attemptRows, tttRows, challengeWinRows);
 
   const byUser = new Map();
   const entryFor = (row) => {

@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const QuizAttempt = require("../models/QuizAttempt");
 const GameAttempt = require("../models/GameAttempt");
 const TicTacToeGame = require("../models/TicTacToeGame");
+const GameChallengeMatch = require("../models/GameChallengeMatch");
 const User = require("../models/User");
 const LeaderboardArchive = require("../models/LeaderboardArchive");
 const { isBlockedEitherWay } = require("../utils/blocks");
@@ -175,9 +176,20 @@ router.get("/leaderboard/users/:userId/stats", async (req, res, next) => {
           .select("rewardPoints")
           .lean()
       : [];
+    // Friend quiz challenges: only matches this user WON carry points.
+    const challengeWins = dateMatch
+      ? await GameChallengeMatch.find({
+          status: "completed",
+          winnerId: user._id,
+          ...(dateMatch.completedAt ? { finishedAt: dateMatch.completedAt } : {}),
+        })
+          .select("rewardPoints")
+          .lean()
+      : [];
     const gamePoints =
       gameAttempts.reduce((sum, attempt) => sum + attempt.score, 0) +
-      tttWins.reduce((sum, game) => sum + (game.rewardPoints || 0), 0);
+      tttWins.reduce((sum, game) => sum + (game.rewardPoints || 0), 0) +
+      challengeWins.reduce((sum, match) => sum + (match.rewardPoints || 0), 0);
 
     const totalAnswered = correct + wrong;
     // wrongPercent derived as the remainder (not rounded independently) so

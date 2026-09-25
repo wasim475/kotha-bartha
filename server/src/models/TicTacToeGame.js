@@ -5,7 +5,7 @@ const { CELL_COUNT } = require("../services/ticTacToe/logic");
 // the board: a move changes exactly one cell through a conditional update (see
 // ticTacToe.service.js makeMove), never a client-supplied board.
 //
-// Reward: `rewardPoints` (20 for a win, else 0) is set in the SAME atomic
+// Reward: `rewardPoints` (the win reward, else 0) is set in the SAME atomic
 // update that moves the game from "active" to "won" — a transition that can
 // only happen once — and the Games leaderboard reads it from won games (see
 // leaderboardRanking.service.js). So a win can be rewarded exactly once,

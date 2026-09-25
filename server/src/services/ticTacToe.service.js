@@ -17,7 +17,7 @@ const { evaluateBoard, otherSymbol, isValidCell } = require("./ticTacToe/logic")
 // authenticated user's id from the server (req.user / socket.userId) — never
 // from the request body — and `io` (optional) only to broadcast the result.
 
-const WIN_REWARD_POINTS = 20;
+const WIN_REWARD_POINTS = 5;
 const INVITE_TTL_MS = 60 * 1000;
 const GAME_TYPE = "tic-tac-toe";
 
@@ -141,13 +141,16 @@ async function getStats(userId) {
   const me = new mongoose.Types.ObjectId(userId.toString());
   const groups = await TicTacToeGame.aggregate([
     { $match: { status: { $in: ["won", "draw"] }, $or: [{ playerX: me }, { playerO: me }] } },
-    { $group: { _id: { status: "$status", mine: { $eq: ["$winnerId", me] } }, count: { $sum: 1 } } },
+    { $group: { _id: { status: "$status", mine: { $eq: ["$winnerId", me] } }, count: { $sum: 1 }, points: { $sum: "$rewardPoints" } } },
   ]);
   const count = (predicate) => groups.filter(({ _id }) => predicate(_id)).reduce((sum, group) => sum + group.count, 0);
   const wins = count((g) => g.status === "won" && g.mine);
   const losses = count((g) => g.status === "won" && !g.mine);
   const draws = count((g) => g.status === "draw");
-  return { played: wins + losses + draws, wins, losses, draws, winPoints: wins * WIN_REWARD_POINTS };
+  // The points actually awarded (each won game stores its own reward), so a
+  // change to the reward value never rewrites what earlier wins were worth.
+  const winPoints = groups.filter(({ _id }) => _id.status === "won" && _id.mine).reduce((sum, group) => sum + group.points, 0);
+  return { played: wins + losses + draws, wins, losses, draws, winPoints };
 }
 
 // ------------------------------------------------------------
@@ -652,6 +655,7 @@ module.exports = {
   requestRematch,
   joinGameRoom,
   listOnlineFriends,
+  isReachable,
   announcePresence,
   prepareReaction,
   GAME_REACTIONS,

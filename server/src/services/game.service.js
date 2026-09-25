@@ -87,6 +87,7 @@ async function listGames() {
         icon: game.icon,
         questionCount: game.questionCount,
         timeLimitSec: definition.timeLimitSec,
+        supportsChallenge: Boolean(definition.supportsChallenge),
         available: isPlayable(game, definition),
       }))
       .concat(EXTERNAL_GAMES.map(({ sortOrder, ...game }) => ({ ...game, available: true }))),

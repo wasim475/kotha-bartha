@@ -11,6 +11,7 @@ const { isBlockedEitherWay } = require("./utils/blocks");
 const { addConnection, removeConnection, isOnline } = require("./utils/presence");
 const { startLeaderboardArchiveScheduler } = require("./services/leaderboardArchive.service");
 const { registerTicTacToeSocket } = require("./sockets/ticTacToe.socket");
+const { registerGameChallengeSocket } = require("./sockets/gameChallenge.socket");
 const { announcePresence } = require("./services/ticTacToe.service");
 
 const port = process.env.PORT || 5000;
@@ -83,6 +84,8 @@ io.on("connection", (socket) => {
 
   // Tic-Tac-Toe (join a game room, play moves) — see sockets/ticTacToe.socket.js.
   registerTicTacToeSocket(io, socket);
+  // Friend quiz challenges (Math / English head-to-head) — sockets/gameChallenge.socket.js.
+  registerGameChallengeSocket(io, socket);
 
   socket.on("typing:start", forwardTyping("typing:start"));
   socket.on("typing:stop", forwardTyping("typing:stop"));

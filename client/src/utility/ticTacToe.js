@@ -35,7 +35,7 @@ export const GAME_REACTIONS = [
 ];
 export const isGameReaction = (type) => GAME_REACTIONS.some((reaction) => reaction.type === type);
 
-export const WIN_POINTS = 20;
+export const WIN_POINTS = 5; // display fallback; the server's stored reward is what's shown
 export const ticTacToeGamePath = (gameId) => `/study/games/tic-tac-toe/${gameId}`;
 export const TIC_TAC_TOE_LOBBY = "/study/games/tic-tac-toe";
 

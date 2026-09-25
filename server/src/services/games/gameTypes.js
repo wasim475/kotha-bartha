@@ -1,5 +1,5 @@
 const { generateMathQuestions } = require("./mathGenerator");
-const { selectEnglishQuestions } = require("../englishQuestion.service");
+const { selectEnglishQuestions, sampleEnglishQuestions } = require("../englishQuestion.service");
 
 // THE registry of playable game types. Everything type-specific — how its
 // questions are produced, how it scores, how many questions it asks, whether
@@ -21,6 +21,9 @@ const { selectEnglishQuestions } = require("../englishQuestion.service");
 //                   questionIds (English) records which stored questions the
 //                   user was given, for the no-repeat history.
 //   isAvailable(n)— whether the game can be offered at all
+//   supportsChallenge / generateShared({ count, excludeIds }) — the game can be
+//                   played head-to-head with a friend (services/gameChallenge.service.js);
+//                   generateShared returns ONE question set both players get.
 
 const DEFAULT_QUESTION_COUNT = 10;
 const MATH_TIME_LIMIT_SEC = 15;
@@ -52,7 +55,7 @@ const EXTERNAL_GAMES = [
     icon: "✕○",
     sortOrder: 210,
     route: "/study/games/tic-tac-toe",
-    chips: ["With a friend", "+20 points for a win"],
+    chips: ["With a friend", "+5 points for a win"],
   },
 ];
 
@@ -67,6 +70,8 @@ const mathGame = (operation, sortOrder, name, description, icon) => ({
   timeLimitSec: MATH_TIME_LIMIT_SEC,
   scoring: MATH_SCORING,
   generate: async ({ count }) => ({ questions: generateMathQuestions(operation, count) }),
+  supportsChallenge: true,
+  generateShared: async ({ count }) => ({ questions: generateMathQuestions(operation, count) }),
   isAvailable: () => true,
 });
 
@@ -85,6 +90,8 @@ const englishGame = ({ type, sortOrder, name, description, icon, timeLimitSec })
   timeLimitSec,
   scoring: ENGLISH_SCORING,
   generate: ({ count, userId }) => selectEnglishQuestions({ gameType: type, count, userId }),
+  supportsChallenge: true,
+  generateShared: ({ count, excludeIds }) => sampleEnglishQuestions({ gameType: type, count, excludeIds }),
   isAvailable: () => true,
 });
 
