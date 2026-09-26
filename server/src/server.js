@@ -12,6 +12,8 @@ const { addConnection, removeConnection, isOnline } = require("./utils/presence"
 const { startLeaderboardArchiveScheduler } = require("./services/leaderboardArchive.service");
 const { registerTicTacToeSocket } = require("./sockets/ticTacToe.socket");
 const { registerGameChallengeSocket } = require("./sockets/gameChallenge.socket");
+const { registerLudoSocket } = require("./sockets/ludo.socket");
+const { startLudoScheduler } = require("./services/ludo.service");
 const { announcePresence } = require("./services/ticTacToe.service");
 
 const port = process.env.PORT || 5000;
@@ -90,6 +92,8 @@ io.on("connection", (socket) => {
   registerTicTacToeSocket(io, socket);
   // Friend quiz challenges (Math / English head-to-head) — sockets/gameChallenge.socket.js.
   registerGameChallengeSocket(io, socket);
+  // Ludo lobbies and matches (real-time, server-authoritative) — sockets/ludo.socket.js.
+  registerLudoSocket(io, socket);
 
   socket.on("typing:start", forwardTyping("typing:start"));
   socket.on("typing:stop", forwardTyping("typing:stop"));
@@ -137,6 +141,8 @@ async function start() {
   // next boot) and then periodically; see services/leaderboardArchive.service.js
   // for why this is safe to run repeatedly/concurrently.
   startLeaderboardArchiveScheduler();
+  // Ludo turn timeouts, reconnect windows and idle lobbies (see services/ludo.service.js).
+  startLudoScheduler(io);
   httpServer.listen(port, () => console.log(`KOTHA-BARTA Connected...`));
 }
 

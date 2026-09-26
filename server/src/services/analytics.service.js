@@ -6,6 +6,7 @@ const QuizAttempt = require("../models/QuizAttempt");
 const GameAttempt = require("../models/GameAttempt");
 const GameChallengeMatch = require("../models/GameChallengeMatch");
 const TicTacToeGame = require("../models/TicTacToeGame");
+const LudoGame = require("../models/LudoGame");
 const { GameError } = require("./games/GameError");
 const { LEADERBOARD_TIMEZONE, zonedParts, zonedTimeToUtc } = require("../utils/timezone");
 const { VISIBLE_CONTENT } = require("../utils/moderation");
@@ -318,7 +319,7 @@ async function getAnalytics(range) {
 
 async function getDashboard() {
   const today = startOfDay();
-  const [totalUsers, newToday, totalPosts, pendingReports, pageViewers, seenToday, quizPlayers, gamePlayers, tttPlayers, challengePlayers] = await Promise.all([
+  const [totalUsers, newToday, totalPosts, pendingReports, pageViewers, seenToday, quizPlayers, gamePlayers, tttPlayers, challengePlayers, ludoPlayers] = await Promise.all([
     User.countDocuments({ accountStatus: { $ne: "deleted" } }),
     User.countDocuments({ createdAt: { $gte: today }, accountStatus: { $ne: "deleted" } }),
     Post.countDocuments({ deletedAt: null, ...VISIBLE_CONTENT }),
@@ -329,6 +330,7 @@ async function getDashboard() {
     GameAttempt.distinct("userId", { startedAt: { $gte: today } }),
     TicTacToeGame.aggregate([{ $match: { createdAt: { $gte: today } } }, { $project: { p: ["$playerX", "$playerO"] } }, { $unwind: "$p" }, { $group: { _id: "$p" } }]),
     GameChallengeMatch.aggregate([{ $match: { createdAt: { $gte: today } } }, { $unwind: "$playerIds" }, { $group: { _id: "$playerIds" } }]),
+    LudoGame.aggregate([{ $match: { startedAt: { $gte: today } } }, { $unwind: "$participantIds" }, { $group: { _id: "$participantIds" } }]),
   ]);
 
   const union = (...lists) => new Set(lists.flat().map((item) => String(item?._id ?? item))).size;
@@ -338,7 +340,7 @@ async function getDashboard() {
     newToday,
     totalPosts,
     pendingReports,
-    participantsToday: union(quizPlayers, gamePlayers, tttPlayers, challengePlayers),
+    participantsToday: union(quizPlayers, gamePlayers, tttPlayers, challengePlayers, ludoPlayers),
     generatedAt: new Date(),
   };
 }

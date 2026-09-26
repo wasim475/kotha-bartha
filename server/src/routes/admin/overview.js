@@ -13,6 +13,9 @@ const analyticsRouter = express.Router();
 // Query: range (today | week | month)
 analyticsRouter.get("/", respond(async (req) => ({ data: await analytics.getAnalytics(req.query.range) })));
 
+// Ludo usage (matches, durations, abandon / timeout rates, most played mode) — raw numbers for admins.
+analyticsRouter.get("/ludo", respond(async () => ({ data: await require("../../services/ludo.service").getAnalytics() })));
+
 // One page's Today / This Week / This Month numbers, e.g. /admin/analytics/pages/study%2Fquiz
 analyticsRouter.get("/pages/:page", respond(async (req) => ({ data: await analytics.getPageAnalytics(req.params.page) })));
 

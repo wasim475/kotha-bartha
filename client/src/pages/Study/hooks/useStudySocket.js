@@ -4,6 +4,7 @@ import { io } from "socket.io-client";
 import { api } from "../../../utility/api";
 import { realtime, setActiveSocket } from "../../../utility/helpers";
 import { GC_EVENTS } from "../../../utility/gameChallenge";
+import { LUDO_EVENTS } from "../../../utility/ludo";
 import { TTT_EVENTS } from "../../../utility/ticTacToe";
 
 const socketUrl = api.defaults.baseURL.replace(/\/api\/v1$/, "");
@@ -25,6 +26,8 @@ export default function useStudySocket(userId) {
     socket.on("connect", forward("realtime:connected"));
     TTT_EVENTS.forEach((name) => socket.on(name, forward(name)));
     GC_EVENTS.forEach((name) => socket.on(name, forward(name)));
+    // Ludo lobbies, invitations and matches (see utility/ludo.js).
+    LUDO_EVENTS.forEach((name) => socket.on(name, forward(name)));
 
     return () => {
       setActiveSocket(undefined);

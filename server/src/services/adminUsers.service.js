@@ -7,6 +7,7 @@ const Report = require("../models/Report");
 const QuizAttempt = require("../models/QuizAttempt");
 const GameAttempt = require("../models/GameAttempt");
 const TicTacToeGame = require("../models/TicTacToeGame");
+const LudoGame = require("../models/LudoGame");
 const GameChallengeMatch = require("../models/GameChallengeMatch");
 const PageView = require("../models/PageView");
 const { GameError } = require("./games/GameError");
@@ -199,7 +200,7 @@ async function getUserActivity(id) {
   // Page time over the last 30 days: per page, and the most recent visits. Only the
   // page name, start and active time — never anything the person did on the page.
   const since = new Date(Date.now() - 30 * 24 * 3600 * 1000);
-  const [quiz, games, ttt, challenges, pageTotals, recentViews] = await Promise.all([
+  const [quiz, games, ttt, challenges, ludo, pageTotals, recentViews] = await Promise.all([
     QuizAttempt.aggregate([
       { $match: { userId, status: "completed" } },
       { $group: { _id: null, attempts: { $sum: 1 }, points: { $sum: { $cond: ["$isFirstAttempt", "$score", 0] } }, lastAt: { $max: "$completedAt" } } },
@@ -216,6 +217,12 @@ async function getUserActivity(id) {
       { $match: { status: "completed", playerIds: userId } },
       { $group: { _id: null, played: { $sum: 1 }, wins: { $sum: { $cond: [{ $eq: ["$winnerId", userId] }, 1, 0] } }, points: { $sum: { $cond: [{ $eq: ["$winnerId", userId] }, "$rewardPoints", 0] } } } },
     ]),
+    LudoGame.aggregate([
+      { $match: { status: "finished", participantIds: userId } },
+      { $unwind: "$rankings" },
+      { $match: { "rankings.userId": userId } },
+      { $group: { _id: null, played: { $sum: 1 }, wins: { $sum: { $cond: [{ $eq: ["$rankings.rank", 1] }, 1, 0] } }, points: { $sum: "$rankings.rewardPoints" } } },
+    ]),
     PageView.aggregate([
       { $match: { userId, createdAt: { $gte: since } } },
       { $group: { _id: "$page", visits: { $sum: 1 }, totalSeconds: { $sum: { $ifNull: ["$durationSeconds", 0] } }, lastAt: { $max: "$createdAt" } } },
@@ -229,8 +236,9 @@ async function getUserActivity(id) {
   const g = games[0] || {};
   const t = ttt[0] || {};
   const c = challenges[0] || {};
+  const l = ludo[0] || {};
   const quizPoints = q.points || 0;
-  const gamePoints = (g.points || 0) + (t.points || 0) + (c.points || 0);
+  const gamePoints = (g.points || 0) + (t.points || 0) + (c.points || 0) + (l.points || 0);
   return {
     quiz: { attempts: q.attempts || 0, points: quizPoints, lastAt: q.lastAt || null },
     games: {
@@ -239,6 +247,7 @@ async function getUserActivity(id) {
       lastAt: g.lastAt || null,
       ticTacToe: { played: t.played || 0, wins: t.wins || 0, points: t.points || 0 },
       challenges: { played: c.played || 0, wins: c.wins || 0, points: c.points || 0 },
+      ludo: { played: l.played || 0, wins: l.wins || 0, points: l.points || 0 },
     },
     leaderboard: { quizPoints, gamePoints, totalPoints: quizPoints + gamePoints, ranked: user.role === "user" && user.accountStatus === "active" },
     pageTime: {

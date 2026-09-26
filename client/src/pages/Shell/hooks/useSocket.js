@@ -5,6 +5,7 @@ import { isConversationMuted } from "../../../utility/conversationPreferences";
 import { realtime, setActiveSocket } from "../../../utility/helpers";
 import { playIncomingMessageSound, playSoftMessageSound } from "../../../utility/sound";
 import { GC_EVENTS } from "../../../utility/gameChallenge";
+import { LUDO_EVENTS } from "../../../utility/ludo";
 import { TTT_EVENTS } from "../../../utility/ticTacToe";
 
 const socketUrl = api.defaults.baseURL.replace(/\/api\/v1$/, "");
@@ -93,6 +94,8 @@ export default function useSocket(userId) {
     TTT_EVENTS.forEach((name) => socket.on(name, forward(name)));
     // Friend quiz challenges (see utility/gameChallenge.js).
     GC_EVENTS.forEach((name) => socket.on(name, forward(name)));
+    // Ludo lobbies, invitations and matches (see utility/ludo.js).
+    LUDO_EVENTS.forEach((name) => socket.on(name, forward(name)));
 
     return () => {
       setActiveSocket(undefined);

@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const QuizAttempt = require("../models/QuizAttempt");
 const GameAttempt = require("../models/GameAttempt");
 const TicTacToeGame = require("../models/TicTacToeGame");
+const LudoGame = require("../models/LudoGame");
 const GameChallengeMatch = require("../models/GameChallengeMatch");
 const User = require("../models/User");
 const LeaderboardArchive = require("../models/LeaderboardArchive");
@@ -186,7 +187,19 @@ router.get("/leaderboard/users/:userId/stats", async (req, res, next) => {
           .select("rewardPoints")
           .lean()
       : [];
+    // Ludo: the points this user earned in finished, legitimately rewarded matches.
+    const ludoPoints = dateMatch
+      ? (
+          await LudoGame.aggregate([
+            { $match: { status: "finished", rewardsGranted: true, participantIds: user._id, ...(dateMatch.completedAt ? { finishedAt: dateMatch.completedAt } : {}) } },
+            { $unwind: "$rankings" },
+            { $match: { "rankings.userId": user._id } },
+            { $group: { _id: null, points: { $sum: "$rankings.rewardPoints" } } },
+          ])
+        )[0]?.points || 0
+      : 0;
     const gamePoints =
+      ludoPoints +
       gameAttempts.reduce((sum, attempt) => sum + attempt.score, 0) +
       tttWins.reduce((sum, game) => sum + (game.rewardPoints || 0), 0) +
       challengeWins.reduce((sum, match) => sum + (match.rewardPoints || 0), 0);

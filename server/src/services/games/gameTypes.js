@@ -57,6 +57,18 @@ const EXTERNAL_GAMES = [
     route: "/study/games/tic-tac-toe",
     chips: ["With a friend", "+5 points for a win"],
   },
+  {
+    type: "ludo",
+    category: "other",
+    name: "Ludo",
+    description: "Real-time Ludo with online friends, or four players on one device.",
+    icon: "🎲",
+    sortOrder: 220,
+    route: "/study/games/ludo",
+    chips: ["2-4 players", "4 modes", "Local play"],
+    // Switched off with LUDO_ENABLED=false (individual modes: LUDO_DISABLED_VARIANTS).
+    isEnabled: () => process.env.LUDO_ENABLED !== "false",
+  },
 ];
 
 const mathGame = (operation, sortOrder, name, description, icon) => ({

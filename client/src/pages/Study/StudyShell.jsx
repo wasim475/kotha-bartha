@@ -13,6 +13,11 @@ import GamePlayer from "./games/GamePlayer";
 import ChallengeMatch from "./games/challenge/ChallengeMatch";
 import TicTacToeGame from "./games/ticTacToe/TicTacToeGame";
 import TicTacToeLobby from "./games/ticTacToe/TicTacToeLobby";
+import LudoGame from "./games/ludo/LudoGame";
+import LudoHistory from "./games/ludo/LudoHistory";
+import LudoHome from "./games/ludo/LudoHome";
+import LudoLobby from "./games/ludo/LudoLobby";
+import LudoLocal from "./games/ludo/LudoLocal";
 import GameReview from "./games/GameReview";
 import Games from "./games/Games";
 import Leaderboard from "./leaderboard/Leaderboard";
@@ -76,6 +81,11 @@ export default function StudyShell({ user }) {
             />
             <Route path="games/tic-tac-toe" element={<TicTacToeLobby user={user} />} />
             <Route path="games/tic-tac-toe/:gameId" element={<TicTacToeGame user={user} />} />
+            <Route path="games/ludo" element={<LudoHome />} />
+            <Route path="games/ludo/local" element={<LudoLocal />} />
+            <Route path="games/ludo/history" element={<LudoHistory />} />
+            <Route path="games/ludo/lobby/:gameId" element={<LudoLobby user={user} />} />
+            <Route path="games/ludo/play/:gameId" element={<LudoGame user={user} />} />
             <Route path="games/play/:gameType" element={<GamePlayer />} />
             <Route path="games/challenge/:matchId" element={<ChallengeMatch />} />
             <Route path="games/review/:attemptId" element={<GameReview />} />

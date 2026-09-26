@@ -5,12 +5,15 @@ import IconButton from "../../../components/ui/IconButton";
 import Menu from "../../../components/ui/Menu";
 import { cx } from "../../../utility/cx";
 import { formatTime } from "../../../utility/helpers";
+import LudoInviteActions from "../../../components/ludo/LudoInviteActions";
 
 export default function NotificationItem({ notification, onClick, onDelete, deleting, deleteError }) {
+  const isLudoInvite = notification.type === "ludo_invite";
   return (
     <div
       className={cx(
         "group relative flex w-full items-center gap-3 border-l-2 px-4 py-3.5 transition-colors motion-safe:duration-150",
+        isLudoInvite && "flex-wrap",
         "hover:bg-soft",
         notification.read ? "border-l-transparent" : "border-l-accent bg-accent/8",
       )}
@@ -63,6 +66,13 @@ export default function NotificationItem({ notification, onClick, onDelete, dele
           },
         ]}
       />
+
+      {/* A Ludo invitation can be answered right from the notification. */}
+      {isLudoInvite && (
+        <div className="basis-full pl-[52px]">
+          <LudoInviteActions notification={notification} />
+        </div>
+      )}
     </div>
   );
 }

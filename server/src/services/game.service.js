@@ -90,7 +90,9 @@ async function listGames() {
         supportsChallenge: Boolean(definition.supportsChallenge),
         available: isPlayable(game, definition),
       }))
-      .concat(EXTERNAL_GAMES.map(({ sortOrder, ...game }) => ({ ...game, available: true }))),
+      .concat(
+        EXTERNAL_GAMES.filter((game) => !game.isEnabled || game.isEnabled()).map(({ sortOrder, isEnabled, ...game }) => ({ ...game, available: true })), // eslint-disable-line no-unused-vars
+      ),
     categories: GAME_CATEGORIES,
   };
 }
