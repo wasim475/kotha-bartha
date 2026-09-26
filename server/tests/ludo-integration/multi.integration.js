@@ -40,7 +40,7 @@ async function main() {
     // ---------------------------------------------------------------- four-player Quick
     const g1 = await startMatch("QUICK_CAPTURE", "A", ["B", "C", "D"]);
     const d1 = await LudoGame.findById(g1);
-    check("4 players: seats 0-3, one colour each, host first; rules from the mode (20s turns)", d1.state.players.map((p) => p.seat).join() === "0,1,2,3" && d1.state.players.map((p) => p.color).join() === "red,green,yellow,blue" && d1.state.rules.turnTimeMs === 20000 && d1.state.turnSeat === 0);
+    check("4 players: seats 0-3, one colour each, host first; rules from the mode (no turn time limit)", d1.state.players.map((p) => p.seat).join() === "0,1,2,3" && d1.state.players.map((p) => p.color).join() === "red,green,yellow,blue" && d1.state.rules.turnTimeMs === 0 && d1.state.turnSeat === 0);
     // C (seat 2, abs start 26) captures D (seat 3): D token at rel 12 -> abs (39+12)=51; C at rel 24 +1 -> rel 25 = abs 51
     const cSeat = await seatOf(g1, "C"), dSeat = await seatOf(g1, "D");
     await setTurn(g1, cSeat, { [cSeat]: [24, -1, -1, -1], [dSeat]: [12, -1, -1, -1] });

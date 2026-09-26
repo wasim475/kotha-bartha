@@ -52,17 +52,17 @@ function RequestCard({ request, busy, onAccept, onDecline, onExpired }) {
       exit={reduced ? { opacity: 0 } : { opacity: 0, y: -10, scale: 0.97 }}
       transition={{ type: "spring", stiffness: 420, damping: 32 }}
       role="alertdialog"
-      aria-label={rematch ? `${name} wants to play another ${title} match` : `${name} invited you to play ${title}`}
+      aria-label={rematch ? `${name} wants to play Ludo (${title}) again` : `${name} invited you to play Ludo (${title})`}
       data-testid="ludo-request"
       className="pointer-events-auto w-full max-w-sm overflow-hidden rounded-2xl border border-line bg-panel shadow-[0_18px_50px_-12px_rgba(0,0,0,0.35)]"
     >
       <div className="flex items-center gap-3 p-3.5">
         <Avatar person={request.from} size="md" />
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-bold tracking-wide text-muted uppercase">{rematch ? "Rematch" : "Ludo Challenge"}</p>
+          <p className="text-[10px] font-bold tracking-wide text-muted uppercase">{rematch ? "Ludo rematch" : "Ludo invitation"}</p>
           <p className="truncate text-sm font-bold text-ink">{name}</p>
           <p className="text-xs leading-snug text-muted" data-testid="ludo-request-message">
-            {rematch ? `Play another ${title} match?` : `${name.split(" ")[0]} invited you to play ${title}.`}
+            {rematch ? `Play another Ludo (${title}) match?` : `invited you to play Ludo (${title}).`}
           </p>
           {players && <p className="mt-0.5 text-[11px] font-semibold text-muted">{players}</p>}
         </div>

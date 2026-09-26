@@ -64,7 +64,7 @@ export default function LudoInviteActions({ notification }) {
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2" data-testid="ludo-notification-actions">
-      <span className="rounded-full bg-soft px-2 py-0.5 text-[10px] font-bold tracking-wide text-muted uppercase">Ludo Challenge</span>
+      <span className="rounded-full bg-soft px-2 py-0.5 text-[10px] font-bold tracking-wide text-muted uppercase">Ludo invitation</span>
       {shown === "pending" ? (
         <>
           <Button variant="primary" size="sm" className="min-h-11" loading={busy === "accept"} disabled={Boolean(busy)} onClick={() => respond("accept")} style={primaryFix.style} onMouseEnter={primaryFix.onMouseEnter} onMouseLeave={primaryFix.onMouseLeave} data-testid="ludo-notification-accept">

@@ -15,8 +15,10 @@ const NOW = T0 + 10_000; // after the start countdown
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
 const players = (n) => Array.from({ length: n }, (_, i) => ({ userId: `user${i}`, name: `Player ${i}` }));
+// The online modes have NO turn time limit by default; most tests here exercise the
+// (still supported, configurable) timeout machinery, so they turn a 30s limit on.
 const make = (variantId = "CLASSIC_RANKED", n = 2, { seed = 7, rules } = {}) =>
-  engine.createGame({ variantId, players: players(n), seed, now: T0, rules });
+  engine.createGame({ variantId, players: players(n), seed, now: T0, rules: { turnTimeMs: 30000, ...rules } });
 
 // --- state builders -----------------------------------------------------------------
 const setTokens = (state, seat, positions) => {
@@ -76,6 +78,18 @@ test("variants: one central registry with all four modes and complete metadata",
   assert.equal(VARIANTS.LOCAL_CLASSIC.leaderboardEnabled, false);
   assert.equal(VARIANTS.CLASSIC_RANKED.rankingEnabled, true);
   assert.equal(VARIANTS.QUICK_CAPTURE.rankingEnabled, false);
+});
+
+test("no time limit: the online modes give every turn unlimited time (no deadline, nothing to time out)", () => {
+  for (const id of ["QUICK_CAPTURE", "CAPTURE_AND_HOME", "CLASSIC_RANKED"]) {
+    assert.equal(VARIANTS[id].timer, null, id);
+    const state = engine.createGame({ variantId: id, players: players(2), seed: 3, now: T0 });
+    assert.equal(state.rules.turnTimeMs, 0);
+    assert.equal(state.turnDeadline, null);
+    assert.equal(applyAction(state, { type: ACTION.TIMEOUT, seat: state.turnSeat }, { now: T0 + 9e9 }).error.code, "NOT_EXPIRED");
+    const rolled = ok(applyAction(state, { type: ACTION.ROLL_DICE, seat: state.turnSeat }, { now: T0 + 1e9 }));
+    assert.equal(rolled.state.turnDeadline, null, "a slow player is never timed out");
+  }
 });
 
 test("rules: defaults are configurable and validated", () => {

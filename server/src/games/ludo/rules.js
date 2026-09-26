@@ -24,7 +24,9 @@ const DEFAULT_RULES = Object.freeze({
   autoMoveSingleLegal: true,
 
   // ---- Timing (ms). The SERVER's clock is the only one that counts.
-  turnTimeMs: 30000,
+  // 0 = no time limit (the default: nobody is hurried). Set it, per variant or here,
+  // to give every turn a server-side deadline with automatic play.
+  turnTimeMs: 0,
   // Time the "3-2-1-GO" countdown takes before the first turn can start.
   countdownMs: 3600,
   // Consecutive automatic (timed-out) turns before a player is treated as away.

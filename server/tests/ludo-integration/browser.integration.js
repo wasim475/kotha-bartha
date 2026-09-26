@@ -79,7 +79,7 @@ async function main() {
     const card = tid(pB, "ludo-request");
     await card.waitFor({ timeout: 30000 });
     const msg = await tid(pB, "ludo-request-message").innerText();
-    check("popup: the invited friend gets it on whatever page they're on — inviter, mode, player count, Accept / Decline", /invited you to play Quick Ludo/.test(msg) && (await card.innerText()).includes("2–4 players") && await tid(pB, "ludo-accept").isVisible() && await tid(pB, "ludo-decline").isVisible(), msg);
+    check("popup: the invited friend gets it on whatever page they're on — inviter, mode, player count, Accept / Decline", /invited you to play Ludo \(Quick Ludo\)/.test(msg) && (await card.innerText()).includes("2–4 players") && await tid(pB, "ludo-accept").isVisible() && await tid(pB, "ludo-decline").isVisible(), msg);
     await pB.screenshot({ path: path.join(SHOTS, "invite-popup.png") });
 
     // decline then re-invite
@@ -90,11 +90,10 @@ async function main() {
     await tid(pB, "ludo-accept").click();
     await tid(pB, "ludo-lobby-title").waitFor({ timeout: 30000 });
     check("accept: B lands in the lobby; both rosters update live (2 players)", await until(async () => (await pA.locator('[data-testid="ludo-member"]').count()) === 2) && (await pB.locator('[data-testid="ludo-member"]').count()) === 2);
-    check("lobby: player cards show level / wins / win rate; host badge; B not ready yet", /Level 1/.test(await pA.locator('[data-testid="ludo-members"]').innerText()) && /Host/.test(await pA.locator('[data-testid="ludo-members"]').innerText()) && /Not ready/.test(await pA.locator('[data-testid="ludo-members"]').innerText()));
-    check("lobby: host can't start until everyone is ready", await tid(pA, "ludo-start").isDisabled() && /ready/i.test(await tid(pA, "ludo-start-hint").innerText()));
+    check("lobby: player cards show level / wins / win rate; host badge; B joined ready (they accepted)", /Level 1/.test(await pA.locator('[data-testid="ludo-members"]').innerText()) && /Host/.test(await pA.locator('[data-testid="ludo-members"]').innerText()) && /Ready/.test(await pA.locator('[data-testid="ludo-members"]').innerText()));
+    check("lobby: an invitee who accepted joins ready, so the host can start straight away", await until(async () => !(await tid(pA, "ludo-start").isDisabled())));
     await pA.screenshot({ path: path.join(SHOTS, "lobby-host.png"), fullPage: true });
-    await tid(pB, "ludo-ready").click();
-    check("ready: B's ready state reaches the host in real time and unlocks Start", await until(async () => !(await tid(pA, "ludo-start").isDisabled())));
+    check("ready: B can still un-ready and ready again; the host sees it live", await (async () => { await tid(pB, "ludo-ready").click(); const off = await until(async () => await tid(pA, "ludo-start").isDisabled()); await tid(pB, "ludo-ready").click(); return off && (await until(async () => !(await tid(pA, "ludo-start").isDisabled()))); })());
     await tid(pA, "ludo-start").click();
     await Promise.all([tid(pA, "ludo-table").waitFor({ timeout: 40000 }), tid(pB, "ludo-table").waitFor({ timeout: 40000 })]);
     check("start: 'Match found' then both land on the board", true);
@@ -105,9 +104,9 @@ async function main() {
     // ---------------------------------------------------------------------- the board
     check("board: my colour is bottom-left for each player (board rotates per seat); four tokens each", (await pA.locator(".ludo-token").count()) === 8 && (await pB.locator(".ludo-token").count()) === 8);
     check("turn: A sees 'Your Turn', B sees A's name", /Your Turn/.test(await tid(pA, "ludo-turn-text").innerText()) && /ZZ LUDUI A's Turn/.test(await tid(pB, "ludo-turn-text").innerText()));
-    check("timer: a visible countdown for the current turn (server deadline)", Number(await tid(pA, "ludo-seconds").innerText()) > 5);
-    const s1 = Number(await tid(pA, "ludo-seconds").innerText()); await sleep(2300);
-    check("timer: it counts down", Number(await tid(pA, "ludo-seconds").innerText()) < s1);
+    check("no time limit: there is no turn countdown on screen", (await pA.locator('[data-testid="ludo-seconds"]').count()) === 0 && (await pB.locator('[data-testid="ludo-seconds"]').count()) === 0);
+    await sleep(1500);
+    check("no time limit: the dice is still waiting for A after a while (nothing rolled or skipped for them)", await tid(pA, "ludo-dice").isEnabled());
     check("dice: only the player whose turn it is can roll (B's dice disabled)", (await tid(pA, "ludo-dice").isEnabled()) && (await tid(pB, "ludo-dice").isDisabled()));
     await pA.screenshot({ path: path.join(SHOTS, "game-A.png"), fullPage: true });
 
@@ -178,7 +177,7 @@ async function main() {
     await tid(pA, "ludo-play-again").click();
     const remCard = tid(pB, "ludo-request");
     await remCard.waitFor({ timeout: 30000 });
-    check("rematch: 'Play again' asks the opponent (popup 'Play another … match?') instead of starting a game", /Play another Quick Ludo match/.test(await tid(pB, "ludo-request-message").innerText()) && /lobby/.test(pA.url()));
+    check("rematch: 'Play again' asks the opponent (popup 'Play another … match?') instead of starting a game", /Play another Ludo \(Quick Ludo\) match/.test(await tid(pB, "ludo-request-message").innerText()) && /lobby/.test(pA.url()));
     await tid(pB, "ludo-accept").click();
     const onNewGame = (p) => until(() => p.url().includes("/play/") && !p.url().endsWith(gameId), 40000);
     await Promise.all([onNewGame(pA), onNewGame(pB)]);
@@ -214,7 +213,7 @@ async function main() {
     const pn = await open("B"); await pn.goto2("/app/notifications");
     await pn.locator('[data-testid="ludo-notification-accept"]').first().waitFor({ timeout: 40000 });
     const noteText = await pn.locator("main").innerText();
-    check("notifications: the invitation appears as a \"Ludo Challenge\" with the message, time and Accept / Decline", /ludo challenge/i.test(noteText) && /invited you to play Classic Ranked Ludo/.test(noteText) && await pn.locator('[data-testid="ludo-notification-accept"]').first().isVisible() && await pn.locator('[data-testid="ludo-notification-decline"]').first().isVisible());
+    check("notifications: the invitation appears as a \"Ludo invitation\" with the message, time and Accept / Decline", /ludo invitation/i.test(noteText) && /invited you to play Ludo \(Classic Ranked Ludo\)/.test(noteText) && await pn.locator('[data-testid="ludo-notification-accept"]').first().isVisible() && await pn.locator('[data-testid="ludo-notification-decline"]').first().isVisible());
     await pn.screenshot({ path: path.join(SHOTS, "notification.png"), fullPage: true });
     await pn.locator('[data-testid="ludo-notification-accept"]').first().click();
     check("notifications: Accept from the notification joins the lobby", await until(() => pn.url().includes("/lobby/" + gid2), 30000));

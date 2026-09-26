@@ -17,7 +17,7 @@ the server and the UI read it; nothing else branches on a mode id.
 | `LOCAL_CLASSIC` – Local Ludo | no (one device) | exactly 4 | all 4 tokens Home; ranked | yes | no |
 
 A variant declares: id, title, description, category, min/max players, token count,
-winning rule, online/local, ranking, leaderboard, timer, reward table and rule
+winning rule, online/local, ranking, leaderboard, reward table and rule
 overrides. A new mode is one new entry. Modes can be switched off without touching the
 frontend: `LUDO_DISABLED_VARIANTS=CLASSIC_RANKED,...`; the whole game with
 `LUDO_ENABLED=false`.
@@ -75,19 +75,20 @@ unlimited), `releaseRolls` (dice that bring a token out; default `[6]`), `safeCe
 `countdownMs`, `maxTimeoutsBeforeForfeit`, `disconnectGraceMs`, `maxTurns` (draw cap),
 `remainingRankBy`. Nothing about them is hard-coded in React.
 
-### Turn timeout (deterministic, documented)
+### Turn time limit (off by default)
 
-The server owns the turn deadline. When it passes:
+**There is no time limit on a turn**: nobody is hurried to roll or move, in any online
+mode (`turnTimeMs: 0` in the rules, no timer in the registry, no countdown on screen).
+The machinery stays, configurable, for anyone who wants a limit (set `turnTimeMs` in a
+variant's `rules`). When a limit is set the server owns the deadline and, when it
+passes:
 
 1. the player's timeout counter goes up (any manual action resets it);
-2. if the counter reaches `maxTimeoutsBeforeForfeit` (3) the player is treated as away
-   and **forfeits** (`AFK`);
-3. otherwise the server plays the turn: it rolls if the dice weren't rolled, then, if
-   several tokens can move, moves **the legal token with the lowest token id**; if there
-   is no legal move the turn passes.
+2. at `maxTimeoutsBeforeForfeit` (3) the player is treated as away and forfeits (`AFK`);
+3. otherwise the server plays the turn: it rolls if the dice weren't rolled, then moves
+   **the legal token with the lowest token id**; with no legal move the turn passes.
 
-The on-screen countdown is cosmetic (it follows the server clock offset); warnings at
-10, 5, 3, 2, 1 seconds.
+Being away is still handled: see the reconnect window below.
 
 ### Disconnect / reconnect
 

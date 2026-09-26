@@ -262,7 +262,7 @@ async function notifyInvite(io, invite, inviter, variant) {
         kind: invite.kind,
         status: "pending",
         expiresAt: invite.expiresAt,
-        message: `${inviter.fullName} invited you to play ${variant.title}.`,
+        message: `${inviter.fullName} invited you to play Ludo (${variant.title}).`,
       },
       uniqueEventId: `ludo_invite:${invite._id}`,
     });
@@ -475,7 +475,7 @@ async function acceptInvite(user, inviteId, io) {
           "members.userId": { $ne: user._id },
           $expr: { $lt: [{ $size: "$members" }, doc.settings.maxPlayers] },
         },
-        { $push: { members: { userId: user._id, ready: doc.settings.autoStart || kind === "rematch" } } },
+        { $push: { members: { userId: user._id, ready: true } } },
         { returnDocument: "after" },
       )
     : null;

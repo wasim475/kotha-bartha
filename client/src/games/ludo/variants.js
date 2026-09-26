@@ -35,8 +35,9 @@ const VARIANTS = Object.freeze({
     rankingEnabled: false,
     leaderboardEnabled: true,
     enabled: true,
-    timer: Object.freeze({ turnMs: 20000, warnAtSeconds: Object.freeze([10, 5, 3, 2, 1]) }),
-    rules: Object.freeze({ turnTimeMs: 20000 }),
+    // No turn time limit: take as long as you like to roll and move.
+    timer: null,
+    rules: Object.freeze({ turnTimeMs: 0 }),
     rewards: rewardTable({ 2: [3, 0], 3: [4, 0, 0], 4: [5, 0, 0, 0] }, { 2: [25, 8], 3: [30, 8, 8], 4: [35, 8, 8, 8] }),
   }),
 
@@ -55,8 +56,8 @@ const VARIANTS = Object.freeze({
     rankingEnabled: false,
     leaderboardEnabled: true,
     enabled: true,
-    timer: Object.freeze({ turnMs: 25000, warnAtSeconds: Object.freeze([10, 5, 3, 2, 1]) }),
-    rules: Object.freeze({ turnTimeMs: 25000 }),
+    timer: null,
+    rules: Object.freeze({ turnTimeMs: 0 }),
     rewards: rewardTable({ 2: [5, 0], 3: [6, 0, 0], 4: [8, 0, 0, 0] }, { 2: [35, 10], 3: [40, 10, 10], 4: [45, 10, 10, 10] }),
   }),
 
@@ -75,8 +76,8 @@ const VARIANTS = Object.freeze({
     rankingEnabled: true,
     leaderboardEnabled: true,
     enabled: true,
-    timer: Object.freeze({ turnMs: 30000, warnAtSeconds: Object.freeze([10, 5, 3, 2, 1]) }),
-    rules: Object.freeze({ turnTimeMs: 30000 }),
+    timer: null,
+    rules: Object.freeze({ turnTimeMs: 0 }),
     rewards: rewardTable({ 2: [6, 0], 3: [8, 4, 0], 4: [10, 6, 3, 0] }, { 2: [40, 12], 3: [45, 25, 12], 4: [50, 30, 18, 10] }),
   }),
 

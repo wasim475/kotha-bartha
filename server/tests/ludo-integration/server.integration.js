@@ -51,7 +51,7 @@ async function main() {
     check("invite: the friend gets it in real time (popup event) with inviter and mode", popup && popup.invite.from.fullName === "ZZ LUDO A" && popup.invite.variantId === "QUICK_CAPTURE");
     check("invite: a duplicate pending invitation is refused", (await api("POST", "/games/ludo/invites", "A", { gameId: g1, userId: id("B") })).code === "ALREADY_PENDING");
     const note = await until(() => Notification.findOne({ recipientId: users.B._id, type: "ludo_invite" }).lean());
-    check("invite: also appears in the existing notification system (type ludo_invite, pending, with the message)", note && note.payload.status === "pending" && note.payload.inviteId === inv.data.id && /invited you to play Quick Ludo/.test(note.payload.message));
+    check("invite: also appears in the existing notification system (type ludo_invite, pending, with the message)", note && note.payload.status === "pending" && note.payload.inviteId === inv.data.id && /invited you to play Ludo \(Quick Ludo\)/.test(note.payload.message));
     check("invite: pending list for the invitee and the inviter", (await api("GET", "/games/ludo/invites/pending", "B")).data.incoming.length === 1 && (await api("GET", "/games/ludo/invites/pending", "A")).data.outgoing.length === 1);
     check("invite: only the invitee can accept/decline; only the inviter can cancel (404 for others)", (await api("POST", `/games/ludo/invites/${inv.data.id}/accept`, "C")).status === 404 && (await api("POST", `/games/ludo/invites/${inv.data.id}/decline`, "C")).status === 404 && (await api("POST", `/games/ludo/invites/${inv.data.id}/cancel`, "B")).status === 404);
 
@@ -73,7 +73,9 @@ async function main() {
     const accepted = await api("POST", `/games/ludo/invites/${inv4.data.id}/accept`, "B");
     check("accept: joins the lobby; both sides get the accepted event and a lobby update", accepted.status === 200 && accepted.data.game.members.length === 2 && await until(() => sA.last("ludo:invite:accepted")?.gameId === g1) && await until(() => sA.events("ludo:lobby").some((p) => p.game.members.length === 2)));
     check("accept: idempotent (a second tab / retry gets the same lobby)", (await api("POST", `/games/ludo/invites/${inv4.data.id}/accept`, "B")).status === 200);
-    check("lobby: B is not ready by default; player cards data present", accepted.data.game.members.find((m) => m.user.id === id("B")).ready === false);
+    check("lobby: someone who accepted an invitation joins READY (they chose to play); player cards data present", accepted.data.game.members.find((m) => m.user.id === id("B")).ready === true && Boolean(accepted.data.game.cards));
+    const unready = await api("POST", `/games/ludo/${g1}/ready`, "B", { ready: false });
+    check("lobby: they can still un-ready", unready.status === 200 && unready.data.game.members.find((m) => m.user.id === id("B")).ready === false);
     check("busy: an invitee who is already in a lobby/game can't be invited elsewhere", (await api("POST", "/games/ludo/lobbies", "C", { variantId: "QUICK_CAPTURE" })).status === 201 && (await api("POST", "/games/ludo/invites", "C", { gameId: (await api("GET", "/games/ludo/active", "C")).data[0].id, userId: id("B") })).code === "TARGET_BUSY");
     // C's throwaway lobby: leave it (host leaving cancels it)
     const cLobby = (await api("GET", "/games/ludo/active", "C")).data[0].id;
@@ -180,7 +182,7 @@ async function main() {
     await ludo.processDeadlines(h.io, g1);
     const afterTimeout = await LudoGame.findById(g1);
     check("timeout: the server plays an idle turn automatically (TIMEOUT event, version advanced, counter incremented)", afterTimeout.stateVersion > beforeTimeout.stateVersion && afterTimeout.state.players.find((p) => p.seat === toSeat).timeoutsTotal === 1 && await until(() => sB.events("ludo:timer").length > 0));
-    check("timeout: the next turn gets a fresh server-side deadline", afterTimeout.state.turnDeadline > Date.now());
+    check("no time limit: after a (forced) timeout the next turn again has no deadline — the modes are untimed", afterTimeout.state.turnDeadline === null);
 
     // disconnect / reconnect / forfeit
     const sB1 = sB;
@@ -269,7 +271,7 @@ async function main() {
       await api("POST", `/games/ludo/${g3}/ready`, who, { ready: true });
     }
     const st3 = await api("POST", `/games/ludo/${g3}/start`, "A");
-    check("ranked: three players start with seats 0, 1, 2 and rules from the registry (30s timer)", st3.status === 200 && st3.data.game.game.players.map((p) => p.seat).join() === "0,1,2" && st3.data.game.game.rules.turnTimeMs === 30000);
+    check("ranked: three players start with seats 0, 1, 2 and rules from the registry (no time limit)", st3.status === 200 && st3.data.game.game.players.map((p) => p.seat).join() === "0,1,2" && st3.data.game.game.rules.turnTimeMs === 0 && st3.data.game.game.turnDeadline === null);
     await sA2.ask("ludo:join", { gameId: g3 }); await sB3.ask("ludo:join", { gameId: g3 }); await sC2.ask("ludo:join", { gameId: g3 });
     const finishSeat = async (seat, who, sock) => {
       await patchState(g3, (s) => { s.startsAt = Date.now() - 1000; s.moveCount = 30; s.turnSeat = seat; s.phase = "ROLL"; s.dice = null; s.legal = []; s.turnDeadline = Date.now() + 60000; const p = s.players.find((q) => q.seat === seat); p.tokens.forEach((t, i) => { t.pos = i < 3 ? 56 : 52; }); });
