@@ -170,13 +170,17 @@ const { start, check, sleep, until, done } = require("./harness");
     // TURN server) must eventually give up instead of sitting in "Connecting…" forever -----------
     res = await api("POST", "/calls", "A", { userId: idOf("B") });
     const stuckId = res.data.id;
+    const beforeStuck = new Date();
     await api("POST", `/calls/${stuckId}/accept`, "B"); // never reports connecting/connected after this
     const stuckDoc = await until(async () => {
       const doc = await Call.findById(stuckId).lean();
       return doc?.status === "failed" ? doc : false;
     }, 12000);
     check("a call that never reports 'connected' eventually fails instead of hanging forever", Boolean(stuckDoc));
-    const stuckMsg = await until(() => Message.findOne({ conversationId: res.data.conversationId, type: "call" }).sort({ createdAt: -1 }).lean());
+    // This A-B conversation already has cancel/decline/busy call-log messages
+    // from earlier scenarios above — scope to only messages this scenario
+    // itself could have created, or an old one satisfies the query first.
+    const stuckMsg = await until(() => Message.findOne({ conversationId: res.data.conversationId, type: "call", createdAt: { $gte: beforeStuck } }).sort({ createdAt: -1 }).lean());
     check("the failed attempt is still logged like a completed (if instant) call", stuckMsg?.call?.outcome === "completed", JSON.stringify(stuckMsg?.call));
 
     // ---- Missed call: nobody answers within the (shortened, for this test) ring timeout ----
