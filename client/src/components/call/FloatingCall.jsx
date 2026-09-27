@@ -25,11 +25,12 @@ export default function FloatingCall() {
   const videoRef = useRef(null);
 
   const visible = call && call.minimized && (call.status === "ringing" ? call.role === "caller" : ["accepted", "connecting", "connected", "reconnecting"].includes(call.status));
-  const pipStream = call?.layoutSwapped ? call?.localStream : call?.remoteStream;
+  const showingRemote = !call?.layoutSwapped;
+  const pipStream = showingRemote ? call?.remoteStream : call?.localStream;
 
   useEffect(() => {
-    if (visible) call.attachVideo(videoRef.current, pipStream);
-  }, [visible, call, pipStream]);
+    if (visible) call.attachVideo(videoRef.current, pipStream, { isRemote: showingRemote });
+  }, [visible, call, pipStream, showingRemote]);
 
   if (!visible) return null;
 
