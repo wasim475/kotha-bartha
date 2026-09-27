@@ -11,7 +11,7 @@ the server and the UI read it; nothing else branches on a mode id.
 
 | Mode | Online | Players | You win when… | Ranked | Leaderboard |
 |---|---|---|---|---|---|
-| `QUICK_CAPTURE` – Quick Ludo | yes | 2–4 | you capture an opponent token (match ends at once) | no | yes |
+| `QUICK_CAPTURE` – Quick Ludo | yes | 2–4 | you capture an opponent token (match ends at once); tokens can never enter Home | no | yes |
 | `CAPTURE_AND_HOME` – Capture + Home | yes | 2–4 | you have captured a token **and** brought one of yours Home | no | yes |
 | `CLASSIC_RANKED` – Classic Ranked | yes | 2–4 | all 4 tokens Home; finish order = 1st…4th | yes | yes |
 | `LOCAL_CLASSIC` – Local Ludo | no (one device) | exactly 4 | all 4 tokens Home; ranked | yes | no |
@@ -71,9 +71,18 @@ stripped from everything sent to clients (`publicState`).
 `extraTurnOnSix`, `maxConsecutiveSixes` (Nth six in a row forfeits the roll; `0` =
 unlimited), `releaseRolls` (dice that bring a token out; default `[6]`), `safeCells`,
 `safeCellsProtect`, `exactHome`, `extraTurnOnCapture`, `extraTurnOnHome`,
-`autoMoveSingleLegal` (a single legal move is made for you), `turnTimeMs`,
-`countdownMs`, `maxTimeoutsBeforeForfeit`, `disconnectGraceMs`, `maxTurns` (draw cap),
-`remainingRankBy`. Nothing about them is hard-coded in React.
+`autoMoveSingleLegal` (a single legal move is made for you), `allowHomeEntry` (see
+below), `turnTimeMs`, `countdownMs`, `maxTimeoutsBeforeForfeit`, `disconnectGraceMs`,
+`maxTurns` (draw cap), `remainingRankBy`. Nothing about them is hard-coded in React.
+
+### Home entry (on by default; off in Quick Ludo)
+
+`allowHomeEntry: false` (Quick Ludo's own rule override) means no token may ever leave
+the shared 52-cell track — the engine simply never offers a move that would cross into
+the home column, however the dice land, so it isn't a UI restriction layered on top. A
+token that reaches the last track cell just sits there, capturable, until the match ends
+by capture. The board shows this as a dim, crossed-off (✕) home column for every colour,
+computed from `state.rules.allowHomeEntry`, never a hardcoded per-mode check in the UI.
 
 ### Turn time limit (off by default)
 

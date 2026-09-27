@@ -41,6 +41,30 @@ async function main() {
     const g1 = await startMatch("QUICK_CAPTURE", "A", ["B", "C", "D"]);
     const d1 = await LudoGame.findById(g1);
     check("4 players: seats 0-3, one colour each, host first; rules from the mode (no turn time limit)", d1.state.players.map((p) => p.seat).join() === "0,1,2,3" && d1.state.players.map((p) => p.color).join() === "red,green,yellow,blue" && d1.state.rules.turnTimeMs === 0 && d1.state.turnSeat === 0);
+    check("4 players: Quick Ludo never lets a token enter the home column (allowHomeEntry is off)", d1.state.rules.allowHomeEntry === false);
+
+    // A player's tokens stuck at the last track cell (one step from the home column):
+    // no dice value ever moves them online, exactly like the pure-engine test. A six
+    // still grants its usual bonus roll (that rule is unrelated to allowHomeEntry) —
+    // a non-six dice is what actually shows the turn passing with nothing to play.
+    const aSeat0 = await seatOf(g1, "A");
+    await setTurn(g1, aSeat0, { [aSeat0]: [50, 50, 50, 50] });
+    await forceDice(g1, 6);
+    const stuckSix = await socks.A.ask("ludo:roll", { gameId: g1 });
+    check(
+      "Quick Ludo online: a 6 at the home-column edge gives no legal move but still the usual bonus roll",
+      stuckSix.ok && stuckSix.events.map((e) => e.type).join() === "DICE_ROLLED,NO_MOVES,EXTRA_TURN" && stuckSix.game.game.turnSeat === aSeat0,
+      JSON.stringify({ ok: stuckSix.ok, error: stuckSix.error, events: stuckSix.events?.map((e) => e.type) }),
+    );
+    await forceDice(g1, 3);
+    const stuckThree = await socks.A.ask("ludo:roll", { gameId: g1 });
+    const stuckDoc = await LudoGame.findById(g1);
+    check(
+      "Quick Ludo online: a non-six at the home-column edge gives no legal move and the turn passes; the tokens never moved",
+      stuckThree.ok && stuckThree.events.map((e) => e.type).join() === "DICE_ROLLED,NO_MOVES,TURN_CHANGED" && stuckDoc.state.players.find((p) => p.seat === aSeat0).tokens.every((t) => t.pos === 50),
+      JSON.stringify({ ok: stuckThree.ok, error: stuckThree.error, events: stuckThree.events?.map((e) => e.type), tokens: stuckDoc.state.players.find((p) => p.seat === aSeat0).tokens.map((t) => t.pos) }),
+    );
+
     // C (seat 2, abs start 26) captures D (seat 3): D token at rel 12 -> abs (39+12)=51; C at rel 24 +1 -> rel 25 = abs 51
     const cSeat = await seatOf(g1, "C"), dSeat = await seatOf(g1, "D");
     await setTurn(g1, cSeat, { [cSeat]: [24, -1, -1, -1], [dSeat]: [12, -1, -1, -1] });
