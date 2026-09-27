@@ -81,11 +81,17 @@ export default function ActiveCall({ userId }) {
   const visible = Boolean(call && !call.minimized && (preConnect || ["accepted", "connecting", "connected", "reconnecting"].includes(call.status)));
 
   useEffect(() => {
+    // Device labels/count are unreliable before camera permission is actually
+    // granted (on a lot of mobile browsers, `enumerateDevices()` reports only
+    // one generic "camera" entry until then) — re-check once this call's own
+    // local stream exists, not just once at page load, or the switch-camera
+    // button never appears on a device that genuinely has two cameras.
+    if (!call?.localStream) return;
     navigator.mediaDevices
       ?.enumerateDevices?.()
       .then((devices) => setCameraCount(devices.filter((device) => device.kind === "videoinput").length))
       .catch(() => {});
-  }, []);
+  }, [call?.localStream]);
 
   useEffect(() => {
     // Re-attach whenever this screen (re)appears too, not just when the

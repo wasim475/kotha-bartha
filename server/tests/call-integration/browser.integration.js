@@ -191,6 +191,12 @@ async function main() {
     // run would need before treating a slow one as a real failure.
     check("the caller actually has live, unmuted, playing remote audio (the reported 'no sound' bug)", await until(() => audioActuallyPlaying(pA2), 18000));
     check("the callee actually has live, unmuted, playing remote audio", await until(() => audioActuallyPlaying(pB2), 18000));
+    // An audio-only stream has no video frames to fire loadeddata/playing on
+    // some browsers — this is what the readiness-polling fallback in
+    // CallProvider's attachVideo exists for (the reported "stuck on
+    // Connecting/loading forever" bug).
+    check("caller's loading indicator clears for an audio-only call too", await until(async () => !(await pA2.getByText("Connecting…").isVisible().catch(() => false)), 15000));
+    check("callee's loading indicator clears for an audio-only call too", await until(async () => !(await pB2.getByText("Connecting…").isVisible().catch(() => false)), 15000));
     await tid(pA2, "call-end").click().catch(() => {});
     await ctxA2.close();
     await ctxB2.close();

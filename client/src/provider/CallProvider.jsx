@@ -67,6 +67,12 @@ export default function CallProvider({ user, children }) {
   const remoteStreamRef = useRef(null);
   const screenStreamRef = useRef(null);
   const cameraTrackRef = useRef(null);
+  // Tracked ourselves rather than read back from the live track: on a lot of
+  // mobile browsers `track.getSettings().facingMode` comes back undefined
+  // even though the constraint was actually honoured, which made every
+  // switch request "environment" fall through to the `undefined === "user"`
+  // false branch and just re-request the SAME (front) camera every time.
+  const facingModeRef = useRef("user");
   const pendingCandidatesRef = useRef([]);
   const pendingSignalsRef = useRef([]); // offers/answers that arrived before our own pc existed yet
   const connectedAtRef = useRef(null);
@@ -121,6 +127,7 @@ export default function CallProvider({ user, children }) {
     setRemote(null);
     setScreen(null);
     cameraTrackRef.current = null;
+    facingModeRef.current = "user"; // matches getLocalMedia's own initial constraint for the next call
   };
 
   const resetToIdle = useCallback(() => {
@@ -498,16 +505,18 @@ export default function CallProvider({ user, children }) {
   const switchCamera = async () => {
     const track = cameraTrackRef.current;
     if (!track) return;
-    const current = track.getSettings().facingMode;
+    const nextFacing = facingModeRef.current === "user" ? "environment" : "user";
     try {
-      const next = await navigator.mediaDevices.getUserMedia({ video: { facingMode: current === "user" ? "environment" : "user" } });
+      const next = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: nextFacing } } });
       const newTrack = next.getVideoTracks()[0];
+      if (!newTrack) throw new Error("No camera track returned");
       const sender = pcRef.current?.getSenders().find((item) => item.track?.kind === "video");
       await sender?.replaceTrack(newTrack);
       track.stop();
       localStreamRef.current?.removeTrack(track);
       localStreamRef.current?.addTrack(newTrack);
       cameraTrackRef.current = newTrack;
+      facingModeRef.current = nextFacing;
     } catch {
       setError("Couldn't switch camera.");
     }
@@ -706,14 +715,31 @@ export default function CallProvider({ user, children }) {
       });
     };
     tryPlay();
-    if (isRemote && !el.dataset.callReadyBound) {
-      el.dataset.callReadyBound = "1";
+    if (isRemote) {
       const markReady = () => {
         dlog("remote video ready", { readyState: el.readyState, videoWidth: el.videoWidth, videoHeight: el.videoHeight });
+        clearInterval(el._callReadyPoll);
+        el._callReadyPoll = null;
         setRemoteMediaReady(true);
       };
-      el.addEventListener("loadeddata", markReady);
-      el.addEventListener("playing", markReady);
+      if (!el.dataset.callReadyBound) {
+        el.dataset.callReadyBound = "1";
+        el.addEventListener("loadeddata", markReady);
+        el.addEventListener("playing", markReady);
+        el.addEventListener("canplay", markReady);
+      }
+      // Belt-and-suspenders: some browsers (seen inconsistently on mobile,
+      // especially for an audio-only stream with no video track at all)
+      // never fire those events reliably. Poll the one thing that's true
+      // everywhere — readyState has actually advanced — rather than leaving
+      // the UI stuck on "Connecting…" forever if the events just don't come.
+      clearInterval(el._callReadyPoll);
+      let attempts = 0;
+      el._callReadyPoll = setInterval(() => {
+        attempts += 1;
+        if (el.readyState >= 2) markReady();
+        else if (attempts > 40) clearInterval(el._callReadyPoll); // ~12s — give up polling, not the call itself
+      }, 300);
     }
   };
 
