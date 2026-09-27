@@ -137,7 +137,7 @@ export default function ActiveCall({ userId }) {
             className={`call-video h-full w-full ${fit === "contain" ? "call-video--contain" : ""}`}
           />
         )}
-        {!preConnect && !call.remoteStream && showVideo && (
+        {!preConnect && showVideo && (!call.remoteStream || !call.remoteMediaReady) && (
           <div className="absolute inset-0 flex items-center justify-center" style={{ background: "var(--call-bg)" }}>
             <span className="call-avatar-breathe"><Avatar person={call.peer} size="xl" /></span>
           </div>
@@ -165,7 +165,15 @@ export default function ActiveCall({ userId }) {
         <div className="flex flex-col items-center">
           <p className="text-sm font-bold" style={{ color: "var(--call-ink)" }}>{call.peer?.fullName}</p>
           <p className="flex items-center gap-1.5 text-xs" style={{ color: "var(--call-muted)" }}>
-            {preConnect ? "Calling…" : call.status === "connecting" ? "Connecting…" : call.status === "reconnecting" ? "Reconnecting…" : call.status === "connected" ? formatDuration(call.duration) : ""}
+            {preConnect
+              ? "Calling…"
+              : call.status === "connecting" || waitingForMedia
+                ? "Connecting…"
+                : call.status === "reconnecting"
+                  ? "Reconnecting…"
+                  : call.status === "connected"
+                    ? formatDuration(call.duration)
+                    : ""}
             {call.quality && call.status === "connected" && (
               <span className="flex items-center gap-1" title={QUALITY_LABEL[call.quality]}>
                 <span className={`call-quality-dot call-quality-${call.quality}`} />
@@ -176,7 +184,7 @@ export default function ActiveCall({ userId }) {
         <CallSafetyMenu />
       </div>
 
-      {(call.status === "connecting" || call.status === "reconnecting") && (
+      {(call.status === "connecting" || call.status === "reconnecting" || waitingForMedia) && (
         <div className="call-connecting-bar absolute top-16 right-0 left-0 z-30 h-0.5" />
       )}
       {call.status === "reconnecting" && (
