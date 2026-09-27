@@ -214,8 +214,11 @@ export default function CallProvider({ user, children }) {
   const getLocalMedia = async (wantVideo) => {
     const constraints = { audio: true, video: wantVideo ? { facingMode: "user" } : false };
     try {
-      return await navigator.mediaDevices.getUserMedia(constraints);
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      dlog("getUserMedia ok", { tracks: stream.getTracks().map((track) => `${track.kind}:${track.readyState}`) });
+      return stream;
     } catch (mediaError) {
+      dlog("getUserMedia failed", mediaError?.name, { wantVideo });
       if (wantVideo) {
         // Camera denied/unavailable — fall back to audio-only rather than failing the call outright.
         const audioOnly = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -227,7 +230,10 @@ export default function CallProvider({ user, children }) {
   };
 
   const attachLocalTracks = (pc, stream) => {
-    stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+    stream.getTracks().forEach((track) => {
+      pc.addTrack(track, stream);
+      dlog("addTrack", track.kind, track.id);
+    });
     cameraTrackRef.current = stream.getVideoTracks()[0] || null;
   };
 
@@ -238,6 +244,7 @@ export default function CallProvider({ user, children }) {
     attachLocalTracks(pc, stream);
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
+    dlog("offer created and sent");
     await emitAck("call:offer", { callId, sdp: offer });
   };
 
@@ -262,11 +269,13 @@ export default function CallProvider({ user, children }) {
   };
 
   const processSignal = async (pc, callId, signal) => {
+    dlog("processSignal", signal.type);
     if (signal.type === "offer") {
       await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
       await flushPendingCandidates(pc);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
+      dlog("answer created and sent");
       await emitAck("call:answer", { callId, sdp: answer });
     } else if (signal.type === "answer") {
       await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
