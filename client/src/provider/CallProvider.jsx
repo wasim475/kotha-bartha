@@ -738,7 +738,7 @@ export default function CallProvider({ user, children }) {
       dismissError: () => setError(""),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [call, cameraOn, micOn, minimized, layoutSwapped, screenShare, quality, duration, error, audioOnlyFallback, chatMessages, chatOpen, chatUnread, reactions, localStream, remoteStream, screenStream],
+    [call, cameraOn, micOn, minimized, layoutSwapped, screenShare, quality, duration, error, audioOnlyFallback, chatMessages, chatOpen, chatUnread, reactions, localStream, remoteStream, remoteMediaReady, screenStream],
   );
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;
