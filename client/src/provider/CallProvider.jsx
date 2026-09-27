@@ -28,6 +28,12 @@ const emitAck = (event, payload) =>
     activeSocket.emit(event, payload, (ack) => resolve(ack || { ok: false }));
   });
 
+// Dev-only tracing for the media pipeline (getUserMedia → addTrack → offer/
+// answer → ontrack → <video>). `import.meta.env.DEV` is statically false in
+// a production build, so this branch is dead-code-eliminated — never a
+// runtime cost or a leak, and never logs tokens/credentials/message content.
+const dlog = import.meta.env.DEV ? (...args) => console.log("[call]", ...args) : () => {};
+
 export default function CallProvider({ user, children }) {
   const [call, setCallState] = useState(IDLE);
   const [cameraOn, setCameraOn] = useState(true);
@@ -46,6 +52,10 @@ export default function CallProvider({ user, children }) {
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const [screenStream, setScreenStream] = useState(null);
+  // True only once the remote <video> has actually decoded and started
+  // rendering a frame — a WebRTC connectionState of "connected" means the
+  // transport is up, not that media is flowing yet (see attachVideo below).
+  const [remoteMediaReady, setRemoteMediaReady] = useState(false);
 
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
@@ -132,6 +142,7 @@ export default function CallProvider({ user, children }) {
     setChatOpen(false);
     setChatUnread(0);
     setReactions([]);
+    setRemoteMediaReady(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stopAllTracks only reads refs, safe to omit
   }, [setCall]);
 
@@ -141,15 +152,36 @@ export default function CallProvider({ user, children }) {
     if (pcRef.current) return pcRef.current;
     const pc = new RTCPeerConnection({ iceServers: iceServers() });
     pcRef.current = pc;
+    setRemoteMediaReady(false);
 
     pc.onicecandidate = ({ candidate }) => {
       if (candidate) emitAck("call:ice-candidate", { callId, candidate });
     };
     pc.ontrack = (event) => {
-      setRemote(event.streams[0] || remoteStreamRef.current);
+      dlog("ontrack", {
+        kind: event.track.kind,
+        trackId: event.track.id,
+        streamId: event.streams[0]?.id || null,
+        trackReadyState: event.track.readyState,
+        trackMuted: event.track.muted,
+      });
+      // Most browsers always populate event.streams[0] when the sender added
+      // the track with an explicit stream (see attachLocalTracks below), but
+      // per-track-only delivery is valid WebRTC — fall back to accumulating
+      // tracks into one persistent MediaStream rather than dropping the track.
+      let stream = event.streams[0];
+      if (!stream) {
+        stream = remoteStreamRef.current instanceof MediaStream ? remoteStreamRef.current : new MediaStream();
+        if (!stream.getTracks().some((track) => track.id === event.track.id)) stream.addTrack(event.track);
+      }
+      event.track.onunmute = () => dlog("remote track unmuted", event.track.kind);
+      setRemote(stream);
     };
+    pc.oniceconnectionstatechange = () => dlog("iceConnectionState", pc.iceConnectionState);
+    pc.onicegatheringstatechange = () => dlog("iceGatheringState", pc.iceGatheringState);
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
+      dlog("connectionState", state);
       if (state === "connected") {
         reconnectSinceRef.current = null;
         emitAck("call:state", { callId, status: "connected" });
