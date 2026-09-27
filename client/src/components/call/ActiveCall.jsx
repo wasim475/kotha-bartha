@@ -105,6 +105,11 @@ export default function ActiveCall({ userId }) {
 
   const mainIsRemote = !call.layoutSwapped;
   const showVideo = call.video || call.screenShare.active;
+  // The peer connection reaching "connected" only proves the transport is
+  // up — it says nothing about whether the remote video is actually
+  // decoding frames yet, so the loading state tracks real media readiness
+  // (see CallProvider's attachVideo/remoteMediaReady) instead.
+  const waitingForMedia = call.status === "connected" && !call.remoteMediaReady;
 
   const onMainTap = () => {
     const now = Date.now();
