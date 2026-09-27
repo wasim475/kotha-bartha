@@ -41,7 +41,7 @@ export default function CallChatPanel({ userId }) {
       initial={reduced ? { opacity: 0 } : { opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       exit={reduced ? { opacity: 0 } : { opacity: 0, y: 24 }}
-      className="absolute inset-x-0 bottom-0 z-20 flex h-[52%] max-h-105 flex-col overflow-hidden rounded-t-2xl border-t sm:inset-x-auto sm:right-4 sm:bottom-24 sm:w-80 sm:rounded-2xl sm:border"
+      className="absolute inset-x-0 bottom-0 z-40 flex h-[52%] max-h-105 flex-col overflow-hidden rounded-t-2xl border-t sm:inset-x-auto sm:right-4 sm:bottom-24 sm:w-80 sm:rounded-2xl sm:border"
       style={{ background: "var(--call-panel-strong)", borderColor: "var(--call-line)" }}
       data-testid="call-chat-panel"
     >

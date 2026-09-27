@@ -34,6 +34,11 @@ export default function FloatingCall() {
   if (!visible) return null;
 
   const onPointerDown = (event) => {
+    // Don't capture the pointer when the press started on one of the bar's
+    // own buttons — capturing here would re-target the matching pointerup
+    // (and the click synthesized from it) at this container instead of the
+    // button, silently swallowing every tap on Mute/Expand/End.
+    if (event.target.closest("button")) return;
     const rect = ref.current.getBoundingClientRect();
     drag.current = { startX: event.clientX, startY: event.clientY, originLeft: rect.left, originTop: rect.top };
     ref.current.setPointerCapture(event.pointerId);

@@ -78,6 +78,9 @@ export default function ActiveCall({ userId }) {
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
 
+  const preConnect = call && call.status === "ringing" && call.role === "caller";
+  const visible = Boolean(call && !call.minimized && (preConnect || ["accepted", "connecting", "connected", "reconnecting"].includes(call.status)));
+
   useEffect(() => {
     navigator.mediaDevices
       ?.enumerateDevices?.()
@@ -86,16 +89,19 @@ export default function ActiveCall({ userId }) {
   }, []);
 
   useEffect(() => {
-    if (call) {
+    // Re-attach whenever this screen (re)appears too, not just when the
+    // stream objects change — the <video> elements themselves are fresh DOM
+    // nodes every time `visible` flips from false to true (e.g. returning
+    // from the minimized floating bar), and a fresh node's srcObject starts
+    // out empty regardless of whether the underlying stream already existed.
+    if (call && visible) {
       call.attachVideo(localVideoRef.current, call.localStream);
       call.attachVideo(remoteVideoRef.current, call.remoteStream);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [call?.streamTick, call?.layoutSwapped]);
+  }, [call?.localStream, call?.remoteStream, call?.layoutSwapped, visible]);
 
-  const preConnect = call && call.status === "ringing" && call.role === "caller";
-  const visible = call && (preConnect || ["accepted", "connecting", "connected", "reconnecting"].includes(call.status));
-  if (!visible || call.minimized) return null;
+  if (!visible) return null;
 
   const mainIsRemote = !call.layoutSwapped;
   const showVideo = call.video || call.screenShare.active;
