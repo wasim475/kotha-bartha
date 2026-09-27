@@ -177,7 +177,10 @@ async function main() {
     await tid(pA, "ludo-play-again").click();
     const remCard = tid(pB, "ludo-request");
     await remCard.waitFor({ timeout: 30000 });
-    check("rematch: 'Play again' asks the opponent (popup 'Play another … match?') instead of starting a game", /Play another Ludo \(Quick Ludo\) match/.test(await tid(pB, "ludo-request-message").innerText()) && /lobby/.test(pA.url()));
+    // The popup's variant name loads asynchronously (a fresh fetch after pB's last
+    // full navigation above) — wait for it to settle rather than catching it mid-fetch.
+    const remMessageOk = await until(async () => /Play another Ludo \(Quick Ludo\) match/.test(await tid(pB, "ludo-request-message").innerText()), 10000);
+    check("rematch: 'Play again' asks the opponent (popup 'Play another … match?') instead of starting a game", remMessageOk && /lobby/.test(pA.url()));
     await tid(pB, "ludo-accept").click();
     const onNewGame = (p) => until(() => p.url().includes("/play/") && !p.url().endsWith(gameId), 40000);
     await Promise.all([onNewGame(pA), onNewGame(pB)]);
