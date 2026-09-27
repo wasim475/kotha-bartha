@@ -58,7 +58,9 @@ async function main() {
     await sleep(2500); // let both sockets connect and register presence
 
     // ---- Golden path: video call, real WebRTC connect, mid-call features, clean end ----------
-    await pA.getByLabel("Start video call").click();
+    const videoCallBtn = pA.getByLabel("Start video call");
+    check("the video-call button becomes enabled once the conversation/presence load", await until(() => videoCallBtn.isEnabled(), 20000));
+    await videoCallBtn.click();
     check("A starts a video call and sees the outgoing call screen", await until(() => tid(pA, "call-screen").isVisible().catch(() => false)));
 
     check("B sees the incoming-call popup while on Feed, not Messages", await until(() => tid(pB, "call-incoming").isVisible().catch(() => false)));
@@ -73,12 +75,42 @@ async function main() {
       return doc?.status === "connected" ? doc : false;
     }, 20000);
     check("the call reaches 'connected' server-side (real WebRTC offer/answer/ICE succeeded)", Boolean(connected));
-    check("A's screen renders the remote video element", await until(() => pA.locator("video.call-video").first().isVisible().catch(() => false)));
-    check("B's screen renders the remote video element", await until(() => pB.locator("video.call-video").first().isVisible().catch(() => false)));
+
+    // Real media readiness, not just DOM visibility — a connectionState of
+    // "connected" only proves the transport is up, never that the <video>
+    // element is actually decoding and rendering frames (see CallProvider's
+    // attachVideo/remoteMediaReady). Check readyState/dimensions and that
+    // currentTime is actually advancing.
+    const mediaFlowing = async (page) => page.evaluate(async () => {
+      const video = document.querySelector("video.call-video");
+      if (!video) return false;
+      if (video.readyState < 2 || video.paused || !video.videoWidth || !video.videoHeight) return false;
+      const t0 = video.currentTime;
+      await new Promise((r) => setTimeout(r, 400));
+      return video.currentTime > t0;
+    });
+    check("A's remote video is actually decoding and playing frames", await until(() => mediaFlowing(pA), 15000));
+    check("B's remote video is actually decoding and playing frames", await until(() => mediaFlowing(pB), 15000));
+    check("A's loading/connecting indicator clears once real media is flowing", await until(async () => !(await pA.getByText("Connecting…").isVisible().catch(() => false)), 8000));
+
+    const audioWired = async (page) => page.evaluate(() => {
+      const video = document.querySelector("video.call-video");
+      if (!video || !video.srcObject) return false;
+      const audioTracks = video.srcObject.getAudioTracks();
+      return !video.muted && audioTracks.length > 0 && audioTracks.every((track) => track.readyState === "live" && track.enabled);
+    });
+    check("A's remote element carries a live, unmuted, enabled remote audio track", await audioWired(pA));
+    check("B's remote element carries a live, unmuted, enabled remote audio track", await audioWired(pB));
 
     await tid(pA, "call-mic").click();
     check("toggling the mic updates its own accessible label", (await tid(pA, "call-mic").getAttribute("aria-label")) === "Unmute microphone");
     await tid(pA, "call-mic").click();
+
+    // Screen share regression: camera video must resume once sharing stops.
+    await pA.getByLabel("Share your screen").click();
+    check("B sees the screen-share indicator", await until(() => pB.getByText("is sharing their screen").isVisible().catch(() => false)));
+    await pA.getByLabel("Stop sharing your screen").click();
+    check("camera video still flows for B after screen share stops", await until(() => mediaFlowing(pB), 8000));
 
     await pA.getByLabel("Reactions").click();
     await pA.getByLabel("Fire").click();
