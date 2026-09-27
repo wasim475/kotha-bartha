@@ -15,6 +15,8 @@
   --ludo-cell: #fffdf8;
   --ludo-grid: rgba(60, 50, 40, 0.28);
   --ludo-board-bg: #f4ede2;
+  --ludo-socket: #ffffff;
+  --ludo-blocked: #d1352b;
   font-family: "DM Sans", "Hind Siliguri", ui-sans-serif, system-ui, sans-serif;
 }
 :root[data-theme="dark"] .ludo-scope {
@@ -25,6 +27,8 @@
   --ludo-cell: #34312e;
   --ludo-grid: rgba(255, 255, 255, 0.16);
   --ludo-board-bg: #262422;
+  --ludo-socket: #46423e;
+  --ludo-blocked: #ff6b5e;
 }
 .ludo-scope [data-color="red"] { --seat: var(--ludo-red); --seat-soft: var(--ludo-red-soft); }
 .ludo-scope [data-color="green"] { --seat: var(--ludo-green); --seat-soft: var(--ludo-green-soft); }
@@ -74,9 +78,9 @@
   position: relative;
   width: 100%;
   aspect-ratio: 1;
-  border-radius: 14px;
+  border-radius: 22px;
   background: var(--ludo-board-bg);
-  box-shadow: 0 10px 30px -14px rgba(0, 0, 0, 0.35), inset 0 0 0 1px var(--line);
+  box-shadow: 0 14px 34px -14px rgba(0, 0, 0, 0.4), inset 0 0 0 1px var(--line);
   overflow: hidden;
   touch-action: manipulation;
   user-select: none;
@@ -94,21 +98,33 @@
 }
 .ludo-token {
   position: absolute;
-  inset: 8%;
+  inset: 9%;
   display: grid;
   place-items: center;
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: radial-gradient(circle at 34% 28%, color-mix(in srgb, #fff 60%, var(--seat)) 0%, var(--seat) 46%, color-mix(in srgb, #000 30%, var(--seat)) 100%);
-  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.4), inset 0 0 0 2px rgba(255, 255, 255, 0.55);
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 32%),
+    radial-gradient(circle at 34% 30%, color-mix(in srgb, #fff 55%, var(--seat)) 0%, var(--seat) 48%, color-mix(in srgb, #000 32%, var(--seat)) 100%);
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.4), inset 0 0 0 2px rgba(255, 255, 255, 0.6), inset 0 -3px 4px rgba(0, 0, 0, 0.22);
   color: #fff;
-  font-size: clamp(8px, 2.4vw, 13px);
-  font-weight: 800;
-  line-height: 1;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.45);
   pointer-events: none;
   cursor: default;
+}
+.ludo-token::before {
+  /* Grounds the piece on the cell, like a cast shadow. */
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -22%;
+  width: 76%;
+  height: 24%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.3);
+  filter: blur(0.5px);
+  z-index: -1;
 }
 .ludo-token[data-movable="true"] { pointer-events: auto; cursor: pointer; }
 .ludo-token[data-movable="true"]::after {
@@ -133,7 +149,6 @@
   inset: -30%;
   border-radius: 50%;
 }
-.ludo-token-num { position: relative; z-index: 1; }
 .ludo-target {
   position: absolute;
   inset: 22%;

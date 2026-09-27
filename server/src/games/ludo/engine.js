@@ -16,6 +16,7 @@
 const {
   TOKENS_PER_PLAYER,
   FINISH,
+  LAST_TRACK_REL,
   IN_BASE,
   SEATS_FOR_PLAYERS,
   SEAT_COLORS,
@@ -203,6 +204,9 @@ function computeLegalMoves(state, seat, dice) {
         if (rules.exactHome) continue; // would overshoot Home
         to = FINISH;
       }
+      // Some modes (see QUICK_CAPTURE) never let a token leave the shared track at
+      // all — entering the home column, let alone Home, is simply not a legal move.
+      if (!rules.allowHomeEntry && to > LAST_TRACK_REL) continue;
       kind = to === FINISH ? "HOME" : "STEP";
     }
 

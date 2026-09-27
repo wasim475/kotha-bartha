@@ -16,7 +16,7 @@
 // The client never says where a token is or what was rolled. It only expresses
 // an intention — ROLL_DICE, SELECT_TOKEN { tokenId } — and the engine decides.
 
-import { TOKENS_PER_PLAYER, FINISH, IN_BASE, SEATS_FOR_PLAYERS, SEAT_COLORS, isInBase, isFinished, isOnTrack, absoluteCell } from "./board.js";
+import { TOKENS_PER_PLAYER, FINISH, LAST_TRACK_REL, IN_BASE, SEATS_FOR_PLAYERS, SEAT_COLORS, isInBase, isFinished, isOnTrack, absoluteCell } from "./board.js";
 import { resolveRules } from "./rules.js";
 import { getVariant, WIN_RULES } from "./variants.js";
 import { rollDie, toUint32 } from "./rng.js";
@@ -196,6 +196,9 @@ function computeLegalMoves(state, seat, dice) {
         if (rules.exactHome) continue; // would overshoot Home
         to = FINISH;
       }
+      // Some modes (see QUICK_CAPTURE) never let a token leave the shared track at
+      // all — entering the home column, let alone Home, is simply not a legal move.
+      if (!rules.allowHomeEntry && to > LAST_TRACK_REL) continue;
       kind = to === FINISH ? "HOME" : "STEP";
     }
 

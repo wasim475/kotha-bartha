@@ -1,7 +1,7 @@
 import { AnimatePresence, motion as Motion } from "framer-motion";
 import { memo, useMemo } from "react";
 
-import { BASE_SPOTS, HOME_COLUMN_GRID, SEAT_COLORS, START_CELL, TRACK_GRID, gridPosition } from "../../../../../games/ludo/board.js";
+import { BASE_SPOTS, HOME_COLUMN_GRID, SEAT_COLORS, START_CELL, TRACK_GRID, TRACK_LENGTH, gridPosition } from "../../../../../games/ludo/board.js";
 
 const SIZE = 15;
 
@@ -17,24 +17,33 @@ const percent = (value) => `${(value / SIZE) * 100}%`;
 const boxPosition = (point) => ({ x: `${(point.col - 0.5) * 100}%`, y: `${(point.row - 0.5) * 100}%` });
 
 const STAR = "M0,-0.34 L0.1,-0.1 L0.34,-0.1 L0.15,0.06 L0.22,0.3 L0,0.16 L-0.22,0.3 L-0.15,0.06 L-0.34,-0.1 L-0.1,-0.1 Z";
+// A direction arrow drawn on the cell right after each colour's start, pointing the
+// way that colour travels (clockwise) — the little "which way do I go" cue real
+// Ludo boards use at the mouth of the track.
+const ARROW = "M-0.26,-0.22 L0.22,0 L-0.26,0.22 Z";
+// The "no entry" cross painted over a home-column entrance when a mode (see
+// QUICK_CAPTURE) never lets a token leave the shared track.
+const CROSS = "M-0.26,-0.26 L0.26,0.26 M0.26,-0.26 L-0.26,0.26";
+
+// Which way (in board-grid units) each colour's arrow at the mouth of the track points.
+const ARROW_ROTATION = [0, 90, 180, 270];
 
 // The static board: drawn once, never re-rendered while tokens move.
-const BoardArt = memo(function BoardArt({ rotation, safeCells }) {
+const BoardArt = memo(function BoardArt({ rotation, safeCells, blockedHome }) {
   const color = (seat) => `var(--ludo-${SEAT_COLORS[seat]})`;
-  const soft = (seat) => `var(--ludo-${SEAT_COLORS[seat]}-soft)`;
   return (
     <svg viewBox={`0 0 ${SIZE} ${SIZE}`} aria-hidden="true" focusable="false">
       <g transform={`rotate(${rotation * 90} ${SIZE / 2} ${SIZE / 2})`}>
-        {/* Corner bases */}
+        {/* Corner bases: a solid colour card holding a lighter rounded tray with four token sockets. */}
         {[0, 1, 2, 3].map((seat) => {
           const row = seat === 0 || seat === 1 ? 0 : 9;
           const col = seat === 0 || seat === 3 ? 0 : 9;
           return (
             <g key={seat}>
-              <rect x={col} y={row} width="6" height="6" fill={color(seat)} />
-              <rect x={col + 1} y={row + 1} width="4" height="4" rx="0.5" fill="var(--ludo-cell)" />
+              <rect x={col} y={row} width="6" height="6" rx="0.9" fill={color(seat)} />
+              <rect x={col + 0.85} y={row + 0.85} width="4.3" height="4.3" rx="0.8" fill="var(--ludo-cell)" />
               {BASE_SPOTS[seat].map((spot, index) => (
-                <circle key={index} cx={spot.col} cy={spot.row} r="0.52" fill={soft(seat)} stroke={color(seat)} strokeWidth="0.06" />
+                <circle key={index} cx={spot.col} cy={spot.row} r="0.58" fill="var(--ludo-socket)" stroke="var(--ludo-grid)" strokeWidth="0.05" />
               ))}
             </g>
           );
@@ -43,19 +52,51 @@ const BoardArt = memo(function BoardArt({ rotation, safeCells }) {
         {/* Shared track */}
         {TRACK_GRID.map((cell, index) => {
           const startSeat = START_CELL.indexOf(index);
+          const arrowSeat = START_CELL.indexOf((index - 1 + TRACK_LENGTH) % TRACK_LENGTH);
           return (
             <g key={index}>
               <rect x={cell.col} y={cell.row} width="1" height="1" fill={startSeat >= 0 ? color(startSeat) : "var(--ludo-cell)"} stroke="var(--ludo-grid)" strokeWidth="0.04" />
               {safeCells.includes(index) && startSeat < 0 && <path d={STAR} transform={`translate(${cell.col + 0.5} ${cell.row + 0.5})`} fill="var(--ludo-grid)" />}
               {startSeat >= 0 && <path d={STAR} transform={`translate(${cell.col + 0.5} ${cell.row + 0.5})`} fill="rgba(255,255,255,0.85)" />}
+              {arrowSeat >= 0 && (
+                <path
+                  d={ARROW}
+                  transform={`translate(${cell.col + 0.5} ${cell.row + 0.5}) rotate(${ARROW_ROTATION[arrowSeat]})`}
+                  fill={color(arrowSeat)}
+                  opacity="0.55"
+                />
+              )}
             </g>
           );
         })}
 
-        {/* Home columns */}
+        {/* Home columns — greyed out and crossed off in a mode where they can never be entered. */}
         {HOME_COLUMN_GRID.map((cells, seat) =>
-          cells.map((cell, index) => <rect key={`${seat}-${index}`} x={cell.col} y={cell.row} width="1" height="1" fill={color(seat)} opacity={0.55 + index * 0.09} stroke="var(--ludo-grid)" strokeWidth="0.04" />),
+          cells.map((cell, index) => (
+            <rect
+              key={`${seat}-${index}`}
+              x={cell.col}
+              y={cell.row}
+              width="1"
+              height="1"
+              fill={blockedHome ? "var(--ludo-grid)" : color(seat)}
+              opacity={blockedHome ? 0.16 : 0.55 + index * 0.09}
+              stroke="var(--ludo-grid)"
+              strokeWidth="0.04"
+            />
+          )),
         )}
+        {blockedHome &&
+          HOME_COLUMN_GRID.map((cells, seat) => (
+            <path
+              key={`x-${seat}`}
+              d={CROSS}
+              transform={`translate(${cells[0].col + 0.5} ${cells[0].row + 0.5})`}
+              stroke="var(--ludo-blocked)"
+              strokeWidth="0.11"
+              strokeLinecap="round"
+            />
+          ))}
 
         {/* Centre: four triangles meeting at the middle */}
         <polygon points="6,6 6,9 7.5,7.5" fill={color(0)} />
@@ -91,7 +132,7 @@ function stackOffsets(tokens, rotation) {
  * director's animated ones), which tokens can be tapped, where they would land.
  * It decides nothing.
  */
-export default function Board({ tokens, movable, targets, selectedKey, onPick, safeCells = [], rotation = 0, turnSeat = null, effects = [], banner = null, reduced = false, label = "Ludo board" }) {
+export default function Board({ tokens, movable, targets, selectedKey, onPick, safeCells = [], blockedHome = false, rotation = 0, turnSeat = null, effects = [], banner = null, reduced = false, label = "Ludo board" }) {
   const placed = useMemo(() => stackOffsets(tokens, rotation), [tokens, rotation]);
   const targetList = useMemo(
     () => [...targets.entries()].map(([key, move]) => {
@@ -107,7 +148,7 @@ export default function Board({ tokens, movable, targets, selectedKey, onPick, s
 
   return (
     <div className="ludo-board" role="group" aria-label={label}>
-      <BoardArt rotation={rotation} safeCells={safe} />
+      <BoardArt rotation={rotation} safeCells={safe} blockedHome={blockedHome} />
 
       <div className="ludo-layer">
         {/* Where each tappable token would land — valid-move highlighting. */}
@@ -149,7 +190,6 @@ export default function Board({ tokens, movable, targets, selectedKey, onPick, s
                 transition={{ duration: 0.14 }}
               >
                 {isMovable && <span className="ludo-token-tap" aria-hidden="true" />}
-                <span className="ludo-token-num" aria-hidden="true">{token.id + 1}</span>
               </Motion.button>
             </Motion.div>
           );

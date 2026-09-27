@@ -514,6 +514,39 @@ test("Quick Ludo: no capture, no win — a safe-cell landing or plain move keeps
   assert.equal(result.state.winnerSeat, null);
 });
 
+test("Quick Ludo: allowHomeEntry is off by default — no token can ever enter the home column or Home", () => {
+  const state = make("QUICK_CAPTURE");
+  assert.equal(state.rules.allowHomeEntry, false);
+  // A token one step short of the home column: no dice value ever moves IT (token 0),
+  // even though other tokens (on the track, or released from base by a 6) still can.
+  const atEdge = setTokens(state, 0, [board.LAST_TRACK_REL, 5, 10, 15]);
+  for (let dice = 1; dice <= 6; dice++) {
+    const moves = computeLegalMoves(atEdge, 0, dice);
+    assert.ok(moves.every((move) => move.tokenId !== 0), `dice ${dice} should never move the token stuck at the edge`);
+  }
+  // With every OTHER token also stuck at the edge and none in base, dice 1-6 give
+  // exactly zero legal moves — the turn simply passes.
+  const allStuck = setTokens(state, 0, Array(4).fill(board.LAST_TRACK_REL));
+  for (let dice = 1; dice <= 6; dice++) assert.equal(computeLegalMoves(allStuck, 0, dice).length, 0, `dice ${dice}`);
+  const rolled = ok(act(withNextDice(allStuck, 3), { type: ACTION.ROLL_DICE, seat: 0 }));
+  assert.deepEqual(types(rolled), [EVENT.DICE_ROLLED, EVENT.NO_MOVES, EVENT.TURN_CHANGED]);
+  // Nothing ever legally lands past LAST_TRACK_REL, from any starting position.
+  for (let pos = 0; pos <= board.LAST_TRACK_REL; pos++) {
+    for (let dice = 1; dice <= 6; dice++) {
+      const moves = computeLegalMoves(setTokens(state, 0, [pos, 5, 10, 15]), 0, dice);
+      for (const move of moves) assert.ok(move.to <= board.LAST_TRACK_REL, `pos ${pos} + dice ${dice} landed at ${move.to}`);
+    }
+  }
+});
+
+test("Quick Ludo: other modes still allow home entry — the restriction is per-variant, not global", () => {
+  assert.equal(make("CAPTURE_AND_HOME").rules.allowHomeEntry, true);
+  assert.equal(make("CLASSIC_RANKED").rules.allowHomeEntry, true);
+  assert.equal(engine.createGame({ variantId: "LOCAL_CLASSIC", players: ["A", "B", "C", "D"].map((name) => ({ name })), seed: 1 }).rules.allowHomeEntry, true);
+  const state = setTokens(make("CLASSIC_RANKED"), 0, [board.LAST_TRACK_REL, IN_BASE, IN_BASE, IN_BASE]);
+  assert.equal(computeLegalMoves(state, 0, 2)[0].to, board.LAST_TRACK_REL + 2);
+});
+
 test("Capture + Home: capturing alone does not win", () => {
   const result = ok(act(captureSetup("CAPTURE_AND_HOME"), { type: ACTION.SELECT_TOKEN, seat: 0, tokenId: 0 }));
   assert.equal(result.state.phase, PHASE.ROLL);

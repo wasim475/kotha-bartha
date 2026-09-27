@@ -22,6 +22,10 @@ const DEFAULT_RULES = Object.freeze({
   extraTurnOnHome: true,
   // When exactly one token can move, move it automatically (no tap needed).
   autoMoveSingleLegal: true,
+  // Whether a token may ever leave the shared track into its own home column / Home.
+  // Off in modes built purely around capturing (see QUICK_CAPTURE), where a token
+  // finishing would let it sit safely out of reach instead of staying in play.
+  allowHomeEntry: true,
 
   // ---- Timing (ms). The SERVER's clock is the only one that counts.
   // 0 = no time limit (the default: nobody is hurried). Set it, per variant or here,
@@ -42,7 +46,7 @@ const DEFAULT_RULES = Object.freeze({
 });
 
 const NUMBER_KEYS = ["maxConsecutiveSixes", "turnTimeMs", "countdownMs", "maxTimeoutsBeforeForfeit", "disconnectGraceMs", "maxTurns"];
-const BOOLEAN_KEYS = ["extraTurnOnSix", "safeCellsProtect", "exactHome", "extraTurnOnCapture", "extraTurnOnHome", "autoMoveSingleLegal"];
+const BOOLEAN_KEYS = ["extraTurnOnSix", "safeCellsProtect", "exactHome", "extraTurnOnCapture", "extraTurnOnHome", "autoMoveSingleLegal", "allowHomeEntry"];
 
 // Merges variant overrides onto the defaults and validates the result.
 function resolveRules(overrides = {}) {

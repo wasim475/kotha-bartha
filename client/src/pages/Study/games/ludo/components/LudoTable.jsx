@@ -198,13 +198,14 @@ export default function LudoTable({ state, director, actingSeat, local = false, 
             targets={movable.targets}
             selectedKey={pendingKey}
             safeCells={state.rules.safeCells}
+            blockedHome={!state.rules.allowHomeEntry}
             onPick={(seat, id) => onPick(id)}
             rotation={rotation}
             turnSeat={finished ? null : state.turnSeat}
             effects={director.effects}
             banner={director.banner}
             reduced={director.reduced}
-            label={`Ludo board, ${variant?.title || ""}`}
+            label={`Ludo board, ${variant?.title || ""}${state.rules.allowHomeEntry ? "" : " — Home is blocked in this mode"}`}
           />
           {children}
         </div>

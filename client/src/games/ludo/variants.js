@@ -23,13 +23,18 @@ const VARIANTS = Object.freeze({
   QUICK_CAPTURE: Object.freeze({
     id: "QUICK_CAPTURE",
     title: "Quick Ludo",
-    description: "The first player to capture an opponent's token wins — the match ends immediately.",
+    description: "The first player to capture an opponent's token wins. Tokens can never enter Home — it's capture or nothing.",
     category: "ludo",
     minPlayers: 2,
     maxPlayers: 4,
     tokenCount: 4,
     winningRule: WIN_RULES.FIRST_CAPTURE,
-    rulesSummary: ["Roll a 6 to bring a token out.", "Land on an opponent's token (not on a safe cell) to capture it.", "First capture wins the match."],
+    rulesSummary: [
+      "Roll a 6 to bring a token out.",
+      "Tokens can never enter Home in this mode — a ✕ marks every home entrance.",
+      "Land on an opponent's token (not on a safe cell) to capture it.",
+      "First capture wins the match.",
+    ],
     online: true,
     local: false,
     rankingEnabled: false,
@@ -37,7 +42,9 @@ const VARIANTS = Object.freeze({
     enabled: true,
     // No turn time limit: take as long as you like to roll and move.
     timer: null,
-    rules: Object.freeze({ turnTimeMs: 0 }),
+    // Nobody can hide a token safely at Home — the whole game stays on the shared
+    // track, so a capture is always the only way to end it.
+    rules: Object.freeze({ turnTimeMs: 0, allowHomeEntry: false }),
     rewards: rewardTable({ 2: [3, 0], 3: [4, 0, 0], 4: [5, 0, 0, 0] }, { 2: [25, 8], 3: [30, 8, 8], 4: [35, 8, 8, 8] }),
   }),
 
