@@ -14,6 +14,7 @@ const { uploadBuffer, destroyAsset } = require("../utils/cloudinary");
 const { UNSEND_WINDOW_MS } = require("../utils/config");
 const { THEME_IDS } = require("../utils/conversationThemes");
 const { ACTIONS, requireAction } = require("../utils/moderation");
+const { otherParticipants, clearHiddenFor, bumpUnreadFor } = require("../utils/conversationHelpers");
 
 const router = express.Router();
 
@@ -23,25 +24,6 @@ const router = express.Router();
 // helpers work the same for both: a 1-to-1 conversation is just a group
 // of two without a name.
 // ============================================================
-
-const otherParticipants = (conversation, excludeUserId) =>
-  conversation.participantIds.filter(
-    (id) => id.toString() !== excludeUserId.toString(),
-  );
-
-const clearHiddenFor = (conversation, ids) => {
-  const idStrings = new Set([...ids].map((id) => id.toString()));
-  conversation.hiddenFor = (conversation.hiddenFor || []).filter(
-    (id) => !idStrings.has(id.toString()),
-  );
-};
-
-const bumpUnreadFor = (conversation, ids) => {
-  ids.forEach((id) => {
-    const key = id.toString();
-    conversation.unreadCounts?.set(key, (conversation.unreadCounts?.get(key) || 0) + 1);
-  });
-};
 
 const broadcastToOthers = (req, ids, event, payload) => {
   ids.forEach((id) => emitToUser(req, id, event, payload));
@@ -1172,101 +1154,13 @@ router.post(
 // ============================================================
 // CALL RECORD
 //
-// Created once per call by the caller's client after it ends (completed,
-// missed, or cancelled) — the only backend awareness of calls beyond the
-// existing raw call:signal WebRTC relay. Rendered as a distinct message
-// type on the client, same delivery path as a normal text message.
-// (Audio calls stay 1-to-1 — this route is unreachable for groups since
-// the client only ever offers the call button in a 1-to-1 thread.)
+// The call itself (invite, accept, decline, signalling, history) is owned by
+// call.service.js / call.routes.js — server-authoritative, unlike the old
+// client-self-reported version this replaced. That service creates this same
+// "call" message type (via its own recordCallMessage, mirroring the shape
+// this route used to build by hand) once a call reaches a final state, so it
+// keeps showing up here as a normal message with no client changes needed.
 // ============================================================
-
-const formatCallDuration = (totalSeconds) => {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-};
-
-router.post("/conversations/:conversationId/calls", requireAction(ACTIONS.SEND_MESSAGE), async (req, res, next) => {
-  try {
-    const outcome = String(req.body.outcome || "");
-    const durationSec = Math.max(0, Math.round(Number(req.body.durationSec) || 0));
-
-    if (!["completed", "missed", "cancelled"].includes(outcome)) {
-      return res.status(400).json({
-        error: { code: "INVALID_CALL", message: "Invalid call outcome." },
-      });
-    }
-
-    const conversation = await Conversation.findOne({
-      _id: req.params.conversationId,
-      participantIds: req.user._id,
-      isGroup: { $ne: true },
-    });
-
-    if (!conversation) {
-      return res.status(404).json({
-        error: { code: "NOT_FOUND", message: "Conversation not found." },
-      });
-    }
-
-    const recipientId = otherParticipants(conversation, req.user._id)[0];
-
-    if (await isBlockedEitherWay(req.user._id, recipientId)) {
-      return res.status(403).json({
-        error: { code: "BLOCKED", message: "You can't call this user." },
-      });
-    }
-
-    const body =
-      outcome === "completed"
-        ? `Audio call · ${formatCallDuration(durationSec)}`
-        : "Missed audio call";
-
-    clearHiddenFor(conversation, [req.user._id, recipientId]);
-
-    const message = await Message.create({
-      conversationId: conversation._id,
-      senderId: req.user._id,
-      recipientId,
-      body,
-      type: "call",
-      call: { outcome, durationSec: outcome === "completed" ? durationSec : 0 },
-      status: "delivered",
-    });
-
-    conversation.lastMessage = body;
-    conversation.lastMessageAt = message.createdAt;
-    conversation.lastMessageId = message._id;
-    bumpUnreadFor(conversation, [recipientId]);
-    await conversation.save();
-
-    const payload = {
-      id: message._id.toString(),
-      conversationId: conversation._id.toString(),
-      body: message.body,
-      type: "call",
-      call: { outcome, durationSec: message.call.durationSec || 0 },
-      createdAt: message.createdAt,
-      senderId: req.user._id.toString(),
-      sender: { id: req.user._id.toString(), fullName: req.user.fullName, avatar: req.user.avatar },
-      unsendExpiresAt: unsendExpiresAt(message),
-      forwardedFrom: null,
-    };
-
-    emitToUser(req, recipientId, "message:new", payload);
-
-    res.status(201).json({
-      data: {
-        ...payload,
-        status: message.status,
-        replyTo: null,
-        reactions: [],
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-});
 
 // ============================================================
 // ATTACHMENTS (images, files, voice messages)

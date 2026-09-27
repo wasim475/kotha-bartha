@@ -6,7 +6,6 @@ const jwt = require("jsonwebtoken");
 const app = require("./app");
 const Conversation = require("./models/Conversation");
 const User = require("./models/User");
-const { pairKey } = require("./utils/ids");
 const { isBlockedEitherWay } = require("./utils/blocks");
 const { addConnection, removeConnection, isOnline } = require("./utils/presence");
 const { startLeaderboardArchiveScheduler } = require("./services/leaderboardArchive.service");
@@ -14,6 +13,7 @@ const { registerTicTacToeSocket } = require("./sockets/ticTacToe.socket");
 const { registerGameChallengeSocket } = require("./sockets/gameChallenge.socket");
 const { registerLudoSocket } = require("./sockets/ludo.socket");
 const { startLudoScheduler } = require("./services/ludo.service");
+const { registerCallSocket } = require("./sockets/call.socket");
 const { announcePresence } = require("./services/ticTacToe.service");
 
 const port = process.env.PORT || 5000;
@@ -94,25 +94,12 @@ io.on("connection", (socket) => {
   registerGameChallengeSocket(io, socket);
   // Ludo lobbies and matches (real-time, server-authoritative) — sockets/ludo.socket.js.
   registerLudoSocket(io, socket);
+  // 1-to-1 video/audio calls (server-authoritative call state + WebRTC
+  // signalling relay) — sockets/call.socket.js.
+  registerCallSocket(io, socket);
 
   socket.on("typing:start", forwardTyping("typing:start"));
   socket.on("typing:stop", forwardTyping("typing:stop"));
-  socket.on("call:signal", async ({ to, signal }) => {
-    if (typeof to !== "string" || !signal) return;
-
-    // Blocked users can't exchange any call signal, in either direction —
-    // not just the call-initiating "offer".
-    if (await isBlockedEitherWay(socket.userId, to)) return;
-
-    // Only the call-initiating "offer" needs the conversation-eligibility
-    // check — answer/ice/end are just completing a call that already passed it.
-    if (signal.type === "offer") {
-      const authorized = await Conversation.exists({ pairKey: pairKey(socket.userId, to) });
-      if (!authorized) return;
-    }
-
-    io.to(`user:${to}`).emit("call:signal", { from: socket.userId, signal });
-  });
   socket.on("disconnect", async () => {
     if (!removeConnection(socket.userId)) return;
     announcePresence(io, socket.userId, false).catch((error) => console.error("presence announce failed:", error));

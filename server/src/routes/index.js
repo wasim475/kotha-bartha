@@ -17,6 +17,7 @@ const englishQuestionRoutes = require("./englishQuestions.routes");
 const ticTacToeRoutes = require("./ticTacToe.routes");
 const gameChallengeRoutes = require("./gameChallenge.routes");
 const ludoRoutes = require("./ludo.routes");
+const callRoutes = require("./call.routes");
 const reportsRoutes = require("./reports.routes");
 const adminRoutes = require("./admin");
 const { auditStaffContent } = require("../services/adminAudit.service");
@@ -45,6 +46,7 @@ router.use(englishQuestionRoutes);
 router.use(ticTacToeRoutes);
 router.use(gameChallengeRoutes);
 router.use(ludoRoutes);
+router.use(callRoutes);
 router.use(gameRoutes);
 
 module.exports = router;

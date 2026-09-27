@@ -19,6 +19,7 @@ const ACTIONS = Object.freeze({
   GAME_PLAY: "GAME_PLAY", // single-player games, Tic-Tac-Toe and friend challenges
   UPLOAD: "UPLOAD", // photos and files
   EDIT_PROFILE: "EDIT_PROFILE",
+  CALL: "CALL", // starting or answering a 1-to-1 video/audio call
 });
 
 const ALL_ACTIONS = Object.values(ACTIONS);
@@ -31,6 +32,7 @@ const DEFAULT_MUTE_BLOCKS = [
   ACTIONS.SEND_MESSAGE,
   ACTIONS.FRIEND_REQUEST,
   ACTIONS.GAME_PLAY,
+  ACTIONS.CALL,
 ];
 
 // Configurable without a code change: MODERATION_MUTE_BLOCKS="CREATE_POST,COMMENT,..."

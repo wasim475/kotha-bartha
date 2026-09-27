@@ -6,12 +6,14 @@ import {
   DoneAll,
   ErrorOutlined,
   ForumOutlined,
+  HistoryRounded,
   MoreHoriz,
   Unarchive,
   VolumeOff,
   VolumeUp,
 } from "@mui/icons-material";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 import Avatar from "../../../components/ui/Avatar";
 import Badge from "../../../components/ui/Badge";
@@ -127,12 +129,17 @@ const ConversationList = ({
         <p className="font-display text-sm font-semibold text-ink">
           {archiveView ? "Archived" : "Chats"}
         </p>
-        <IconButton
-          label="New conversation"
-          icon={<Add fontSize="small" />}
-          size="sm"
-          onClick={onNewConversation}
-        />
+        <span className="flex items-center gap-1">
+          <Link to="/app/calls">
+            <IconButton label="Call history" icon={<HistoryRounded fontSize="small" />} size="sm" />
+          </Link>
+          <IconButton
+            label="New conversation"
+            icon={<Add fontSize="small" />}
+            size="sm"
+            onClick={onNewConversation}
+          />
+        </span>
       </div>
       <div className="flex gap-1 rounded-md bg-soft p-0.5 text-xs font-semibold">
         <button

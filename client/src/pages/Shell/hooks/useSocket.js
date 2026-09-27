@@ -7,6 +7,7 @@ import { playIncomingMessageSound, playSoftMessageSound } from "../../../utility
 import { GC_EVENTS } from "../../../utility/gameChallenge";
 import { LUDO_EVENTS } from "../../../utility/ludo";
 import { TTT_EVENTS } from "../../../utility/ticTacToe";
+import { CALL_EVENTS } from "../../../utility/call";
 
 const socketUrl = api.defaults.baseURL.replace(/\/api\/v1$/, "");
 const forwardedMessageIds = new Set();
@@ -85,7 +86,6 @@ export default function useSocket(userId) {
     socket.on("friend:accepted", forward("friend:accepted"));
     socket.on("typing:start", forward("typing:start"));
     socket.on("typing:stop", forward("typing:stop"));
-    socket.on("call:signal", forward("call:signal"));
     socket.on("presence:update", forward("presence:update"));
     socket.on("conversation:updated", forward("conversation:updated"));
     socket.on("conversation:theme", forward("conversation:theme"));
@@ -96,6 +96,9 @@ export default function useSocket(userId) {
     GC_EVENTS.forEach((name) => socket.on(name, forward(name)));
     // Ludo lobbies, invitations and matches (see utility/ludo.js).
     LUDO_EVENTS.forEach((name) => socket.on(name, forward(name)));
+    // 1-to-1 calls: invite, accept/decline/cancel/missed, signalling, state,
+    // screen-share and reactions (see utility/call.js).
+    CALL_EVENTS.forEach((name) => socket.on(name, forward(name)));
 
     return () => {
       setActiveSocket(undefined);

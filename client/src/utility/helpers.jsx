@@ -6,8 +6,6 @@ export let activeSocket;
 export const setActiveSocket = (socket) => {
   activeSocket = socket;
 };
-export const sendSignal = (to, signal) =>
-  activeSocket?.emit("call:signal", { to, signal });
 export const sendTypingSignal = (to, conversationId, typing) =>
   activeSocket?.emit(typing ? "typing:start" : "typing:stop", {
     to,

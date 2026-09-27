@@ -2,7 +2,6 @@ import {
   ArrowBackRounded,
   Block,
   Call,
-  CallEnd,
   Close,
   EditNote,
   EmojiEmotions,
@@ -10,12 +9,14 @@ import {
   MoreHoriz,
   Palette,
   Search,
+  Videocam,
 } from "@mui/icons-material";
 import { Link } from "react-router-dom";
 
 import Avatar from "../../../components/ui/Avatar";
 import IconButton from "../../../components/ui/IconButton";
 import Menu from "../../../components/ui/Menu";
+import { useCall } from "../../../provider/CallProvider";
 import { formatTime } from "../../../utility/helpers";
 
 const ChatHeader = ({
@@ -25,9 +26,6 @@ const ChatHeader = ({
   onOpenGroupInfo,
   loading,
   onBack,
-  callState,
-  startCall,
-  finishCall,
   isTyping,
   search,
   searchOpen,
@@ -38,14 +36,15 @@ const ChatHeader = ({
   onOpenEmojiPack,
   onRequestBlock,
 }) => {
-  const onCall = callState === "idle" ? startCall : () => finishCall();
-  const inCall = callState !== "idle";
+  const call = useCall();
   const group = groupDetail?.data;
   const otherUser = !isGroup ? selected?.user : null;
   const displayName = otherUser?.nickname || otherUser?.fullName;
   const isBlocked = Boolean(otherUser?.isBlocked);
   const hasBlockedMe = Boolean(otherUser?.hasBlockedMe);
   const blocked = isBlocked || hasBlockedMe;
+  const callBusy = call && call.status !== "idle";
+  const placeCall = (video) => otherUser && !callBusy && call?.startCall(otherUser, { video });
 
   return (
     <div className="relative shrink-0 border-b border-line">
@@ -152,12 +151,18 @@ const ChatHeader = ({
       ) : (
         <>
           <IconButton
-            label={inCall ? "End voice call" : "Start voice call"}
-            icon={inCall ? <CallEnd fontSize="small" /> : <Call fontSize="small" />}
-            variant={inCall ? "danger" : "default"}
+            label="Start voice call"
+            icon={<Call fontSize="small" />}
             size="sm"
-            disabled={!selected || blocked}
-            onClick={onCall}
+            disabled={!selected || blocked || callBusy}
+            onClick={() => placeCall(false)}
+          />
+          <IconButton
+            label="Start video call"
+            icon={<Videocam fontSize="small" />}
+            size="sm"
+            disabled={!selected || blocked || callBusy}
+            onClick={() => placeCall(true)}
           />
           {selected && (
             <Menu

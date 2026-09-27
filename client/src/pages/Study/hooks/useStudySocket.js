@@ -6,6 +6,7 @@ import { realtime, setActiveSocket } from "../../../utility/helpers";
 import { GC_EVENTS } from "../../../utility/gameChallenge";
 import { LUDO_EVENTS } from "../../../utility/ludo";
 import { TTT_EVENTS } from "../../../utility/ticTacToe";
+import { CALL_EVENTS } from "../../../utility/call";
 
 const socketUrl = api.defaults.baseURL.replace(/\/api\/v1$/, "");
 
@@ -28,6 +29,8 @@ export default function useStudySocket(userId) {
     GC_EVENTS.forEach((name) => socket.on(name, forward(name)));
     // Ludo lobbies, invitations and matches (see utility/ludo.js).
     LUDO_EVENTS.forEach((name) => socket.on(name, forward(name)));
+    // 1-to-1 calls, so an incoming call still rings while reading Study pages.
+    CALL_EVENTS.forEach((name) => socket.on(name, forward(name)));
 
     return () => {
       setActiveSocket(undefined);

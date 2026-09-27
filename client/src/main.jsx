@@ -8,6 +8,7 @@ import "./CSS/games.css";
 import "./CSS/ttt.css";
 import "./CSS/challenge.css";
 import "./CSS/ludo.css";
+import "./CSS/call.css";
 import "./index.css";
 import "./message.css";
 import "./CSS/comment.css";

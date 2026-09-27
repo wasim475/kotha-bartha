@@ -11,6 +11,7 @@ import Feed from "../../pages/feed/Feed";
 import SinglePost from "../../pages/feed/SinglePost";
 import Friends from "../../pages/friends/Friends";
 import Message from "../../pages/message/Message";
+import CallHistory from "../../pages/message/CallHistory";
 import Notifications from "../../pages/notifications/Notifications";
 import Profile from "../../pages/profile/Profile";
 import IncomingMessagePopupStack from "./components/IncomingMessagePopupStack";
@@ -107,6 +108,7 @@ export default function Shell({ user, onLogout }) {
               path="messages/:conversationId"
               element={<Message user={user} />}
             />
+            <Route path="calls" element={<CallHistory />} />
             <Route path="notifications" element={<Notifications />} />
             <Route path="profile/:id" element={<Profile user={user} />} />
             <Route path="*" element={<Navigate to="feed" replace />} />

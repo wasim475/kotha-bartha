@@ -1,0 +1,97 @@
+/* 1-to-1 video/audio call UI. Deliberately its own dark, video-first look
+   (like every mainstream calling app) rather than the light/dark app theme —
+   the tokens below are still CSS variables, redefined for dark mode, so
+   nothing here is a hardcoded one-off. */
+:root {
+  --call-bg: #0b0c10;
+  --call-panel: rgba(255, 255, 255, 0.08);
+  --call-panel-strong: rgba(20, 20, 26, 0.92);
+  --call-ink: #f5f6f8;
+  --call-muted: rgba(245, 246, 248, 0.66);
+  --call-line: rgba(255, 255, 255, 0.14);
+  --call-danger: #e5484d;
+  --call-good: #22c55e;
+  --call-warn: #f59e0b;
+  --call-poor: #ef4444;
+}
+
+@keyframes call-ring-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+  100% { box-shadow: 0 0 0 22px transparent; }
+}
+@keyframes call-avatar-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+@keyframes call-float-up {
+  0% { opacity: 0; transform: translateY(0) scale(0.8); }
+  15% { opacity: 1; transform: translateY(-10px) scale(1); }
+  100% { opacity: 0; transform: translateY(-140px) scale(1.15); }
+}
+@keyframes call-connecting-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.call-scope {
+  color: var(--call-ink);
+}
+
+.call-incoming-ring {
+  animation: call-ring-pulse 1.6s ease-out infinite;
+}
+.call-avatar-breathe {
+  animation: call-avatar-breathe 2.2s ease-in-out infinite;
+}
+
+.call-video {
+  background: #000;
+  object-fit: cover;
+}
+.call-video--contain {
+  object-fit: contain;
+}
+
+.call-pip {
+  touch-action: none;
+  cursor: grab;
+}
+.call-pip:active {
+  cursor: grabbing;
+}
+
+.call-connecting-bar {
+  position: relative;
+  overflow: hidden;
+  background: var(--call-line);
+}
+.call-connecting-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 70%, white), transparent);
+  animation: call-connecting-sweep 1.3s linear infinite;
+}
+
+.call-reaction-float {
+  animation: call-float-up 2.2s ease-out forwards;
+}
+
+.call-quality-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  display: inline-block;
+}
+.call-quality-good { background: var(--call-good); }
+.call-quality-unstable { background: var(--call-warn); }
+.call-quality-poor { background: var(--call-poor); }
+
+@media (prefers-reduced-motion: reduce) {
+  .call-incoming-ring,
+  .call-avatar-breathe,
+  .call-connecting-bar::after,
+  .call-reaction-float {
+    animation: none !important;
+  }
+}

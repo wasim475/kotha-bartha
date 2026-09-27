@@ -9,6 +9,8 @@ import DataDeletion from '../pages/privacyPolicy/DataDeletation';
 import TicTacToeGlobalHost from "../components/ticTacToe/TicTacToeGlobalHost";
 import GameChallengeGlobalHost from "../components/gameChallenge/GameChallengeGlobalHost";
 import LudoGlobalHost from "../components/ludo/LudoGlobalHost";
+import CallGlobalHost from "../components/call/CallGlobalHost";
+import CallProvider from "../provider/CallProvider";
 import AdminRoutes from "../pages/Admin/AdminRoutes";
 import PageTracker from "../components/account/PageTracker";
 import RestrictionBanner from "../components/account/RestrictionBanner";
@@ -18,7 +20,7 @@ export default function MainRouter() {
 
   if (checking) return <div className="loading-screen"><span className="brand-mark">ক</span><p>Preparing your space...</p></div>;
 
-  return <BrowserRouter>{user && <TicTacToeGlobalHost key={`ttt-${user.id}`} user={user} />}{user && <GameChallengeGlobalHost key={`challenge-${user.id}`} user={user} />}{user && <LudoGlobalHost key={`ludo-${user.id}`} user={user} />}<PageTracker />{user && <RestrictionBanner key={`restriction-${user.id}`} user={user} />}<Routes>
+  const body = <BrowserRouter>{user && <TicTacToeGlobalHost key={`ttt-${user.id}`} user={user} />}{user && <GameChallengeGlobalHost key={`challenge-${user.id}`} user={user} />}{user && <LudoGlobalHost key={`ludo-${user.id}`} user={user} />}{user && <CallGlobalHost key={`call-${user.id}`} userId={user.id} />}<PageTracker />{user && <RestrictionBanner key={`restriction-${user.id}`} user={user} />}<Routes>
     <Route path="privacy-policy" element={<PrivacyPolicy/>} />
     <Route path="data-deletion" element={<DataDeletion/>} />
     <Route path="/login" element={user ? <Navigate to="/app/feed" replace /> : <AuthPage mode="login" onAuth={setUser} />} />
@@ -28,4 +30,6 @@ export default function MainRouter() {
     <Route path="/admin/*" element={user ? <AdminRoutes user={user} /> : <Navigate to="/login" replace />} />
     <Route path="*" element={<Navigate to={user ? "/app/feed" : "/login"} replace />} />
   </Routes></BrowserRouter>;
+
+  return user ? <CallProvider user={user}>{body}</CallProvider> : body;
 }

@@ -32,8 +32,9 @@ const messageSchema = new mongoose.Schema(
       default: "text",
     },
     call: {
-      outcome: { type: String, enum: ["completed", "missed", "cancelled"] },
+      outcome: { type: String, enum: ["completed", "missed", "declined", "cancelled"] },
       durationSec: { type: Number, default: 0 },
+      video: { type: Boolean, default: false },
     },
     attachment: {
       url: String,

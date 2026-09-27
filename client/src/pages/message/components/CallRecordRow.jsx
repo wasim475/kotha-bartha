@@ -1,4 +1,4 @@
-import { Call, CallMissed } from "@mui/icons-material";
+import { Call, CallMissed, Videocam, VideocamOff } from "@mui/icons-material";
 
 import { cx } from "../../../utility/cx";
 
@@ -11,12 +11,13 @@ const formatMessageTime = (date) => {
 
 /**
  * Call log entry — a message-like record created once a call ends
- * (completed/missed/cancelled). Deliberately not a text bubble: no reply,
- * react, edit, or delete affordances, since none of those apply to it.
+ * (completed/missed/declined/cancelled). Deliberately not a text bubble: no
+ * reply, react, edit, or delete affordances, since none of those apply to it.
  */
 export default function CallRecordRow({ message, isOwn, groupStart }) {
   const missed = message.call?.outcome !== "completed";
-  const Icon = missed ? CallMissed : Call;
+  const video = Boolean(message.call?.video);
+  const Icon = missed ? (video ? VideocamOff : CallMissed) : video ? Videocam : Call;
 
   return (
     <div className={cx("flex", groupStart ? "mt-3" : "mt-1", isOwn ? "justify-end" : "justify-start")}>

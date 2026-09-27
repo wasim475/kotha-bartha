@@ -15,7 +15,6 @@ import useMessageResources from "./hooks/useMessageResources";
 import useMessageScroll from "./hooks/useMessageScroll";
 import useMessageSearch from "./hooks/useMessageSearch";
 import useMessageState from "./hooks/useMessageState";
-import useVoiceCall from "./hooks/useVoiceCall";
 
 import ChatHeader from "./components/ChatHeader";
 import ConversationList from "./components/ConversationList";
@@ -28,7 +27,6 @@ import EmojiPackDialog from "./components/EmojiPackDialog";
 import NewConversationDialog from "./components/NewConversationDialog";
 import NicknameDialog from "./components/NicknameDialog";
 import ThemeDialog from "./components/ThemeDialog";
-import VoiceCall from "./components/VoicCall";
 
 const confirmCopy = {
   conversation: {
@@ -103,8 +101,6 @@ const Message = ({ user }) => {
     conversations,
     preserveScrollPosition: scroll.preserveScrollPosition,
   });
-  const call = useVoiceCall({ selected, conversationId, thread, conversations });
-
   const jumpToMessage = (messageId) => {
     if (!messageId) return;
     const row = document.getElementById(`message-${messageId}`);
@@ -273,9 +269,6 @@ const Message = ({ user }) => {
                 onOpenGroupInfo={() => setGroupInfoOpen(true)}
                 loading={conversations.loading}
                 onBack={() => navigate("/app/messages")}
-                callState={call.callState}
-                startCall={call.startCall}
-                finishCall={call.finishCall}
                 isTyping={isTyping}
                 search={search}
                 searchOpen={searchOpen}
@@ -299,17 +292,6 @@ const Message = ({ user }) => {
                   })
                 }
               />
-              {!isGroup && (
-                <VoiceCall
-                  selected={selected}
-                  callState={call.callState}
-                  incomingCall={call.incomingCall}
-                  callDuration={call.callDuration}
-                  remoteAudio={call.remoteAudio}
-                  acceptCall={call.acceptCall}
-                  finishCall={call.finishCall}
-                />
-              )}
               <MessageThread
                 messages={thread.data}
                 loading={thread.loading}

@@ -38,6 +38,11 @@ export default function useNotifications() {
       return;
     }
 
+    if (notification.type === "missed_call" && notification.payload?.conversationId) {
+      navigate(`/app/messages/${notification.payload.conversationId}`);
+      return;
+    }
+
     if (notification.postId) {
       const params = new URLSearchParams();
       if (notification.commentId) params.set("commentId", notification.commentId);
