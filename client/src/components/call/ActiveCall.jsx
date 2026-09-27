@@ -96,7 +96,7 @@ export default function ActiveCall({ userId }) {
     // out empty regardless of whether the underlying stream already existed.
     if (call && visible) {
       call.attachVideo(localVideoRef.current, call.localStream);
-      call.attachVideo(remoteVideoRef.current, call.remoteStream);
+      call.attachVideo(remoteVideoRef.current, call.remoteStream, { isRemote: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [call?.localStream, call?.remoteStream, call?.layoutSwapped, visible]);
