@@ -143,6 +143,55 @@ async function main() {
     check("declining removes the popup for the callee", await until(async () => !(await tid(pB, "call-incoming").isVisible().catch(() => true))));
     check("...and closes the outgoing screen for the caller", await until(async () => !(await tid(pA, "call-screen").isVisible().catch(() => true))));
 
+    // ---- Calling → Ringing, and a real audio-only call, with a fresh pair so B can start
+    // genuinely absent (this is what "Calling…" vs "Ringing…" actually distinguishes) --------
+    await ctxB.close();
+    const ctxB2 = await browser.newContext({ viewport: { width: 420, height: 860 }, permissions: ["camera", "microphone"] });
+    await ctxB2.addCookies([{ name: "kotha_token", value: tok(B), domain: "localhost", path: "/" }]);
+    const pB2 = await ctxB2.newPage();
+
+    await pA.getByLabel("Start video call").click();
+    check("the caller sees 'Calling…' before the callee has opened the app at all", await until(() => pA.getByText("Calling…").isVisible().catch(() => false)));
+    await pB2.goto(`${APP}/app/feed`, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await pB2.waitForFunction(() => !document.body.innerText.includes("Preparing your space"), null, { timeout: 30000 }).catch(() => {});
+    check("the callee sees the incoming popup once they do open it", await until(() => tid(pB2, "call-incoming").isVisible().catch(() => false)));
+    check("the caller's text flips to 'Ringing…' the instant it actually reaches a live device", await until(() => pA.getByText("Ringing…").isVisible().catch(() => false), 8000));
+    await tid(pB2, "call-decline").click();
+    await until(async () => !(await tid(pA, "call-screen").isVisible().catch(() => true)));
+    await ctxA.close();
+
+    // Audio-only call, with its own fresh caller context (a brand new tab, like
+    // a real call would be, rather than a fourth consecutive WebRTC session
+    // reusing the same page/devices) — the reported bug was that the <video>
+    // element wasn't even mounted when `video: false`, so the remote
+    // MediaStream had nowhere to play.
+    const ctxA2 = await browser.newContext({ viewport: { width: 420, height: 860 }, permissions: ["camera", "microphone"] });
+    await ctxA2.addCookies([{ name: "kotha_token", value: tok(A), domain: "localhost", path: "/" }]);
+    const pA2 = await ctxA2.newPage();
+    await pA2.goto(`${APP}/app/messages/${conv._id}`, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await pA2.waitForFunction(() => !document.body.innerText.includes("Preparing your space"), null, { timeout: 30000 }).catch(() => {});
+    const voiceBtn = pA2.getByLabel("Start voice call");
+    await until(() => voiceBtn.isEnabled(), 20000);
+    await voiceBtn.click();
+    check("the callee sees the incoming audio-call popup", await until(() => tid(pB2, "call-incoming").isVisible().catch(() => false)));
+    await tid(pB2, "call-accept").click();
+    const audioConnected = await until(async () => {
+      const doc = await Call.findOne({ callerId: A._id, calleeId: B._id }).sort({ createdAt: -1 }).lean();
+      return doc?.status === "connected" ? doc : false;
+    }, 20000);
+    check("the audio-only call reaches 'connected' server-side", Boolean(audioConnected));
+    const audioActuallyPlaying = async (page) => page.evaluate(() => {
+      const el = document.querySelector("video.call-video");
+      if (!el || !el.srcObject) return false;
+      const audioTracks = el.srcObject.getAudioTracks();
+      return !el.paused && !el.muted && audioTracks.length > 0 && audioTracks.every((track) => track.readyState === "live" && track.enabled);
+    });
+    check("the caller actually has live, unmuted, playing remote audio (the reported 'no sound' bug)", await until(() => audioActuallyPlaying(pA2), 10000));
+    check("the callee actually has live, unmuted, playing remote audio", await until(() => audioActuallyPlaying(pB2), 10000));
+    await tid(pA2, "call-end").click().catch(() => {});
+    await ctxA2.close();
+    await ctxB2.close();
+
     console.log(`\n${failures} failing check(s).`);
   } catch (error) {
     console.error("Browser test crashed:", error);

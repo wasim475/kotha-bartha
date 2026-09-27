@@ -43,7 +43,7 @@ function registerCallSocket(io, socket) {
 
   socket.on(
     "call:join",
-    guarded(async (callId) => ({ call: await service.joinCallRoom({ _id: socket.userId }, callId, socket) })),
+    guarded(async (callId) => ({ call: await service.joinCallRoom({ _id: socket.userId }, callId, socket, io) })),
   );
 
   const relay = (type) =>

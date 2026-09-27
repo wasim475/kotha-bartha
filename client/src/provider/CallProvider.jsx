@@ -49,6 +49,11 @@ export default function CallProvider({ user, children }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [chatUnread, setChatUnread] = useState(0);
   const [reactions, setReactions] = useState([]);
+  // True once the callee's device has actually joined the call room (proof
+  // the invite reached a live, rendering client — see call:ringing below),
+  // as opposed to just having been created server-side. Lets the caller's
+  // UI say "Ringing…" instead of a plain "Calling…" once it's real.
+  const [ringingLive, setRingingLive] = useState(false);
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const [screenStream, setScreenStream] = useState(null);
@@ -143,6 +148,7 @@ export default function CallProvider({ user, children }) {
     setChatUnread(0);
     setReactions([]);
     setRemoteMediaReady(false);
+    setRingingLive(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stopAllTracks only reads refs, safe to omit
   }, [setCall]);
 
@@ -580,7 +586,17 @@ export default function CallProvider({ user, children }) {
     }
     setCall({ status: "ringing", callId: invite.id, role: "callee", peer: invite.caller, video: invite.video, conversationId: invite.conversationId });
     startRingtone();
+    // Proves to the caller this is a live, rendering device (not just a
+    // socket that happens to be connected) — lets their UI say "Ringing…"
+    // instead of "Calling…". Fires the instant the invite arrives, before
+    // the person has looked at the popup, same as a real phone ringing.
+    emitAck("call:join", { callId: invite.id });
   }, [setCall]));
+
+  useRealtime("call:ringing", useCallback((event) => {
+    if (event.detail?.callId !== callRef.current.callId || callRef.current.role !== "caller") return;
+    setRingingLive(true);
+  }, []));
 
   useRealtime("call:accepted", useCallback((event) => {
     const summary = event.detail?.call;
@@ -625,6 +641,10 @@ export default function CallProvider({ user, children }) {
 
   useRealtime("call:ended", useCallback((event) => {
     if (event.detail?.callId !== callRef.current.callId) return;
+    // "failed" is the server giving up on a call that never connected (or
+    // dropped and couldn't recover) — surface that instead of the call
+    // silently vanishing, which otherwise looks identical to a normal end.
+    if (event.detail?.reason === "failed") setError("Couldn't connect the call.");
     resetToIdle();
   }, [resetToIdle]));
 
@@ -713,6 +733,7 @@ export default function CallProvider({ user, children }) {
       chatOpen,
       chatUnread,
       reactions,
+      ringingLive,
       reactionOptions: CALL_REACTIONS,
       localStream,
       remoteStream,
@@ -738,7 +759,7 @@ export default function CallProvider({ user, children }) {
       dismissError: () => setError(""),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [call, cameraOn, micOn, minimized, layoutSwapped, screenShare, quality, duration, error, audioOnlyFallback, chatMessages, chatOpen, chatUnread, reactions, localStream, remoteStream, remoteMediaReady, screenStream],
+    [call, cameraOn, micOn, minimized, layoutSwapped, screenShare, quality, duration, error, audioOnlyFallback, chatMessages, chatOpen, chatUnread, reactions, ringingLive, localStream, remoteStream, remoteMediaReady, screenStream],
   );
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;

@@ -81,7 +81,15 @@ export default function FloatingCall() {
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs font-bold" style={{ color: "var(--call-ink)" }}>{call.peer?.fullName}</p>
         <p className="text-[10px]" style={{ color: "var(--call-muted)" }}>
-          {call.status === "connected" ? formatDuration(call.duration) : call.status === "reconnecting" ? "Reconnecting…" : "Calling…"}
+          {call.status === "connected"
+            ? formatDuration(call.duration)
+            : call.status === "reconnecting"
+              ? "Reconnecting…"
+              : call.status === "ringing" && call.role === "caller"
+                ? call.ringingLive
+                  ? "Ringing…"
+                  : "Calling…"
+                : "Connecting…"}
         </p>
       </div>
       <button type="button" aria-label="Mute" onClick={call.toggleMic} className="grid size-8 shrink-0 place-items-center rounded-full" style={{ color: "var(--call-ink)" }}>

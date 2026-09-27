@@ -1,4 +1,5 @@
 import ActiveCall from "./ActiveCall";
+import CallErrorToast from "./CallErrorToast";
 import FloatingCall from "./FloatingCall";
 import IncomingCallPopup from "./IncomingCallPopup";
 
@@ -15,6 +16,7 @@ export default function CallGlobalHost({ userId }) {
       <IncomingCallPopup />
       <ActiveCall userId={userId} />
       <FloatingCall />
+      <CallErrorToast />
     </>
   );
 }

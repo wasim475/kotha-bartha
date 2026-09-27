@@ -7,7 +7,6 @@ const Friendship = require("../models/Friendship");
 const { GameError } = require("./games/GameError");
 const { pairKey } = require("../utils/ids");
 const { isBlockedEitherWay } = require("../utils/blocks");
-const { isReachable } = require("./ticTacToe.service");
 const { safeUser } = require("../utils/serializers");
 const { clearHiddenFor, bumpUnreadFor } = require("../utils/conversationHelpers");
 const { createNotification } = require("./notification.service");
@@ -26,6 +25,13 @@ const { createNotification } = require("./notification.service");
 // messaging feature's UNSEND_WINDOW_MINUTES (server/src/utils/config.js).
 const RING_TIMEOUT_MS = Number(process.env.CALL_RING_TIMEOUT_MS) || 45_000;
 const RECONNECT_TIMEOUT_MS = Number(process.env.CALL_RECONNECT_TIMEOUT_MS) || 30_000;
+// How long an accepted call is allowed to sit trying to connect before it's
+// given up on — without this, a call whose WebRTC negotiation never
+// succeeds even once (most commonly two peers behind NATs neither can
+// traverse without a TURN server) is stuck showing "Connecting…" forever,
+// since RECONNECT_TIMEOUT_MS only ever applied to a call that had already
+// connected at least once and then dropped.
+const CONNECT_TIMEOUT_MS = Number(process.env.CALL_CONNECT_TIMEOUT_MS) || 25_000;
 const REACTION_COOLDOWN_MS = 350;
 const REACTIONS = new Set(["heart", "thumbsup", "laugh", "wow", "sad", "fire"]);
 
@@ -44,13 +50,16 @@ const ANSWERED_STATUSES = ["accepted", "connecting", "connected", "reconnecting"
 // auto-resolves to "missed"/"failed" until a participant ends it by hand.
 const ringTimers = new Map();
 const reconnectTimers = new Map();
+const connectTimers = new Map();
 const lastReactionAt = new Map();
 
 function clearCallTimers(callId) {
   clearTimeout(ringTimers.get(callId));
   clearTimeout(reconnectTimers.get(callId));
+  clearTimeout(connectTimers.get(callId));
   ringTimers.delete(callId);
   reconnectTimers.delete(callId);
+  connectTimers.delete(callId);
 }
 
 // ---- Serialization ---------------------------------------------------------------------------
@@ -92,7 +101,12 @@ async function assertCanCall(callerId, target) {
     throw new GameError(403, "NOT_FRIENDS", "You can only call your friends.");
   }
   if (await isBlockedEitherWay(callerId, target._id)) throw new GameError(403, "BLOCKED", "You can't call this user.");
-  if (!isReachable(target._id)) throw new GameError(409, "TARGET_OFFLINE", `${target.fullName} isn't online right now.`);
+  // Deliberately NOT blocked on the target being offline right now (unlike
+  // Ludo/Tic-Tac-Toe invites) — a call is allowed to just ring: if they open
+  // the app before the ring timeout, `call:join` (see below) tells the
+  // caller it's actually ringing live; if not, it resolves to "missed" the
+  // same way an unanswered call to someone who WAS online does, and they see
+  // it (missed-call notification + call-log message) once they come back.
 }
 
 async function findActiveCall(userId) {
@@ -232,6 +246,28 @@ function scheduleReconnectTimeout(io, callId) {
   reconnectTimers.set(callId.toString(), timer);
 }
 
+function scheduleConnectTimeout(io, callId) {
+  clearTimeout(connectTimers.get(callId.toString()));
+  const timer = setTimeout(async () => {
+    connectTimers.delete(callId.toString());
+    try {
+      const call = await Call.findOneAndUpdate({ _id: callId, status: { $in: ["accepted", "connecting"] } }, { $set: { status: "failed", endedAt: new Date() } }, { new: true });
+      if (!call) return; // it reached "connected" (or ended some other way) before the timeout fired
+      finalizeDuration(call);
+      await call.save();
+      await recordCallMessage(io, call, "completed");
+      const summary = await serializeCall(call);
+      const payload = { callId: call._id.toString(), reason: "failed", call: summary };
+      emit(io, callRoom(call._id), "call:ended", payload);
+      emit(io, userRoom(call.callerId), "call:ended", payload);
+      emit(io, userRoom(call.calleeId), "call:ended", payload);
+    } catch (error) {
+      console.error("call connect timeout failed:", error);
+    }
+  }, CONNECT_TIMEOUT_MS);
+  connectTimers.set(callId.toString(), timer);
+}
+
 function finalizeDuration(call) {
   call.durationSec = call.acceptedAt ? Math.max(0, Math.round((Date.now() - call.acceptedAt.getTime()) / 1000)) : 0;
 }
@@ -286,6 +322,7 @@ async function acceptCall(user, callId, io) {
     throw new GameError(409, "CALL_UNAVAILABLE", "This call is no longer available.", { status: existing.status });
   }
   clearCallTimers(call._id.toString());
+  scheduleConnectTimeout(io, call._id);
   const summary = await serializeCall(call);
   emit(io, userRoom(call.callerId), "call:accepted", { call: summary });
   // My own other tabs/devices: close their copy of the incoming-call popup.
@@ -368,10 +405,15 @@ async function reportState(user, callId, io, nextState) {
   const updated = await Call.findOneAndUpdate({ _id: callId, status: call.status }, { $set: set }, { new: true });
   if (!updated) return serializeCall(call);
 
-  if (nextState === "reconnecting") scheduleReconnectTimeout(io, updated._id);
-  else {
+  if (nextState === "reconnecting") {
+    scheduleReconnectTimeout(io, updated._id);
+  } else {
     clearTimeout(reconnectTimers.get(updated._id.toString()));
     reconnectTimers.delete(updated._id.toString());
+  }
+  if (nextState === "connected") {
+    clearTimeout(connectTimers.get(updated._id.toString()));
+    connectTimers.delete(updated._id.toString());
   }
 
   emit(io, callRoom(updated._id), "call:state", { callId: updated._id.toString(), status: updated.status, by: user._id.toString(), connectedAt: updated.connectedAt || null });
@@ -423,13 +465,21 @@ async function sendReaction(user, callId, io, type) {
   emit(io, callRoom(call._id), "call:reaction", { callId: call._id.toString(), from: user._id.toString(), type });
 }
 
-async function joinCallRoom(user, callId, socket) {
+async function joinCallRoom(user, callId, socket, io) {
   if (!mongoose.isValidObjectId(callId)) throw notFound();
   const call = await Call.findById(callId);
   if (!call) throw notFound();
   assertParticipant(call, user._id);
   if (!ANSWERED_STATUSES.includes(call.status) && call.status !== "ringing") throw new GameError(409, "CALL_NOT_ACTIVE", "This call has ended.");
   socket.join(callRoom(call._id));
+  // The callee's own client joins the instant it receives "call:invite" (see
+  // CallProvider) — reaching here at all proves the invite landed on a live,
+  // rendering device, which is the one thing the caller can't otherwise know
+  // (the call is created, and rings, even for an offline friend). Tell the
+  // caller so their UI can say "Ringing…" instead of just "Calling…".
+  if (call.status === "ringing" && call.calleeId.equals(user._id)) {
+    emit(io, userRoom(call.callerId), "call:ringing", { callId: call._id.toString() });
+  }
   return serializeCall(call);
 }
 

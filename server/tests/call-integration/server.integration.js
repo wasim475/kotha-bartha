@@ -7,6 +7,7 @@
 // remote-DB latency, not from the feature itself.
 process.env.CALL_RING_TIMEOUT_MS = "3000";
 process.env.CALL_RECONNECT_TIMEOUT_MS = "1500";
+process.env.CALL_CONNECT_TIMEOUT_MS = "8000"; // generous: the golden path below does several real round trips before it ever reports "connected"
 
 const { start, check, sleep, until, done } = require("./harness");
 
@@ -27,7 +28,8 @@ const { start, check, sleep, until, done } = require("./harness");
 
     await befriend("A", "C");
     res = await api("POST", "/calls", "A", { userId: idOf("C") });
-    check("cannot call an offline friend", res.status === 409 && res.code === "TARGET_OFFLINE", res.code);
+    check("calling an offline friend still succeeds — it just rings", res.status === 201 && res.data.status === "ringing", JSON.stringify(res.json));
+    await api("POST", `/calls/${res.data.id}/cancel`, "A"); // tidy up so A isn't "busy" for the tests below
 
     // ---- Golden path: A calls C (video), C accepts, signalling relays, then ends ----------
     await befriend("A", "B");
@@ -49,6 +51,8 @@ const { start, check, sleep, until, done } = require("./harness");
 
     await sockA.ask("call:join", { callId });
     await sockC.ask("call:join", { callId });
+    const ringingSignal = await until(() => sockA.last("call:ringing"));
+    check("the caller is told the call is actually ringing on the callee's live device", ringingSignal?.callId === callId);
 
     res = await api("POST", `/calls/${callId}/accept`, "C");
     check("callee can accept", res.status === 200 && res.data.status === "accepted");
@@ -161,6 +165,19 @@ const { start, check, sleep, until, done } = require("./harness");
     res = await api("POST", "/calls", "A", { userId: idOf("B") });
     check("can't call someone already in a call", res.status === 409 && res.code === "TARGET_BUSY", res.code);
     await api("POST", `/calls/${busySetupId}/end`, "B");
+
+    // ---- Connect timeout: accepted but never reports "connected" (e.g. ICE never succeeds — no
+    // TURN server) must eventually give up instead of sitting in "Connecting…" forever -----------
+    res = await api("POST", "/calls", "A", { userId: idOf("B") });
+    const stuckId = res.data.id;
+    await api("POST", `/calls/${stuckId}/accept`, "B"); // never reports connecting/connected after this
+    const stuckDoc = await until(async () => {
+      const doc = await Call.findById(stuckId).lean();
+      return doc?.status === "failed" ? doc : false;
+    }, 12000);
+    check("a call that never reports 'connected' eventually fails instead of hanging forever", Boolean(stuckDoc));
+    const stuckMsg = await until(() => Message.findOne({ conversationId: res.data.conversationId, type: "call" }).sort({ createdAt: -1 }).lean());
+    check("the failed attempt is still logged like a completed (if instant) call", stuckMsg?.call?.outcome === "completed", JSON.stringify(stuckMsg?.call));
 
     // ---- Missed call: nobody answers within the (shortened, for this test) ring timeout ----
     res = await api("POST", "/calls", "A", { userId: idOf("B") });

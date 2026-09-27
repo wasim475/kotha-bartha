@@ -9,6 +9,7 @@ import { api } from "./api";
 export const CALL_EVENTS = [
   "call:invite",
   "call:accepted",
+  "call:ringing",
   "call:declined",
   "call:cancelled",
   "call:missed",

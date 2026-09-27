@@ -1,7 +1,6 @@
 import {
   CallEnd,
   ChatBubbleOutlineRounded,
-  Close,
   EmojiEmotions,
   FlipCameraIosRounded,
   Mic,
@@ -119,16 +118,12 @@ export default function ActiveCall({ userId }) {
 
   return (
     <div className="call-scope fixed inset-0 z-90 flex flex-col overflow-hidden" style={{ background: "var(--call-bg)" }} data-testid="call-screen">
-      {/* Main video */}
+      {/* Main video — the <video> element stays mounted even for an audio-only
+          call or while waiting: it's what actually plays the remote audio,
+          not just the picture, so it must never be swapped out for a plain
+          avatar div the way the video-only content on top of it can be. */}
       <div className="absolute inset-0" onClick={onMainTap}>
-        {preConnect || !showVideo ? (
-          <div className="flex h-full flex-col items-center justify-center gap-4">
-            <span className="call-avatar-breathe">
-              <Avatar person={call.peer} size="xl" />
-            </span>
-            <p className="text-lg font-semibold" style={{ color: "var(--call-ink)" }}>{call.peer?.fullName || "Friend"}</p>
-          </div>
-        ) : (
+        {!preConnect && (
           <video
             ref={mainIsRemote ? remoteVideoRef : localVideoRef}
             autoPlay
@@ -137,20 +132,26 @@ export default function ActiveCall({ userId }) {
             className={`call-video h-full w-full ${fit === "contain" ? "call-video--contain" : ""}`}
           />
         )}
-        {!preConnect && showVideo && (!call.remoteStream || !call.remoteMediaReady) && (
-          <div className="absolute inset-0 flex items-center justify-center" style={{ background: "var(--call-bg)" }}>
-            <span className="call-avatar-breathe"><Avatar person={call.peer} size="xl" /></span>
+        {(preConnect || !showVideo || !call.remoteStream || !call.remoteMediaReady) && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4" style={{ background: "var(--call-bg)" }}>
+            <span className="call-avatar-breathe">
+              <Avatar person={call.peer} size="xl" />
+            </span>
+            {(preConnect || !showVideo) && (
+              <p className="text-lg font-semibold" style={{ color: "var(--call-ink)" }}>{call.peer?.fullName || "Friend"}</p>
+            )}
           </div>
         )}
       </div>
 
-      {/* Self PiP (only once we actually have a local stream) */}
+      {/* Self PiP (only once we actually have a local stream) — same reasoning:
+          keep the element mounted so whichever stream it's holding keeps
+          playing its audio, and only overlay the avatar for the video-off case. */}
       {call.localStream && !preConnect && (
         <DraggablePip onTap={() => call.toggleLayout()}>
-          {showVideo ? (
-            <video ref={mainIsRemote ? localVideoRef : remoteVideoRef} autoPlay playsInline muted={mainIsRemote} className="call-video h-full w-full" />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center" style={{ background: "var(--call-panel-strong)" }}>
+          <video ref={mainIsRemote ? localVideoRef : remoteVideoRef} autoPlay playsInline muted={mainIsRemote} className="call-video h-full w-full" />
+          {!showVideo && (
+            <div className="absolute inset-0 flex items-center justify-center" style={{ background: "var(--call-panel-strong)" }}>
               <Avatar person={mainIsRemote ? { fullName: "You" } : call.peer} size="sm" />
             </div>
           )}
@@ -166,7 +167,9 @@ export default function ActiveCall({ userId }) {
           <p className="text-sm font-bold" style={{ color: "var(--call-ink)" }}>{call.peer?.fullName}</p>
           <p className="flex items-center gap-1.5 text-xs" style={{ color: "var(--call-muted)" }}>
             {preConnect
-              ? "Calling…"
+              ? call.ringingLive
+                ? "Ringing…"
+                : "Calling…"
               : call.status === "connecting" || waitingForMedia
                 ? "Connecting…"
                 : call.status === "reconnecting"
@@ -194,12 +197,6 @@ export default function ActiveCall({ userId }) {
         <div className="relative z-30 mx-auto mt-2 flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-semibold" style={{ background: "var(--call-panel-strong)", color: "var(--call-ink)" }}>
           Video paused to improve connection
           <button type="button" onClick={call.resumeVideo} className="underline" style={{ color: "var(--accent)" }}>Turn video back on</button>
-        </div>
-      )}
-      {call.error && (
-        <div className="relative z-30 mx-3.5 mt-2 flex items-center justify-between gap-2 rounded-xl px-3.5 py-2 text-xs font-medium" style={{ background: "var(--call-danger)", color: "#fff" }} role="alert">
-          {call.error}
-          <button type="button" aria-label="Dismiss" onClick={call.dismissError}><Close fontSize="small" /></button>
         </div>
       )}
 
