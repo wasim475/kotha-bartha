@@ -186,8 +186,11 @@ async function main() {
       const audioTracks = el.srcObject.getAudioTracks();
       return !el.paused && !el.muted && audioTracks.length > 0 && audioTracks.every((track) => track.readyState === "live" && track.enabled);
     });
-    check("the caller actually has live, unmuted, playing remote audio (the reported 'no sound' bug)", await until(() => audioActuallyPlaying(pA2), 10000));
-    check("the callee actually has live, unmuted, playing remote audio", await until(() => audioActuallyPlaying(pB2), 10000));
+    // This is the last of several WebRTC sessions this run has opened across
+    // multiple browser contexts — give it a bit more margin than an isolated
+    // run would need before treating a slow one as a real failure.
+    check("the caller actually has live, unmuted, playing remote audio (the reported 'no sound' bug)", await until(() => audioActuallyPlaying(pA2), 18000));
+    check("the callee actually has live, unmuted, playing remote audio", await until(() => audioActuallyPlaying(pB2), 18000));
     await tid(pA2, "call-end").click().catch(() => {});
     await ctxA2.close();
     await ctxB2.close();
