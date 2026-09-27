@@ -655,8 +655,46 @@ export default function CallProvider({ user, children }) {
     callSfx.message();
   }, [user, chatOpen]));
 
-  const attachVideo = (el, stream) => {
-    if (el && stream && el.srcObject !== stream) el.srcObject = stream;
+  // Assigning `srcObject` alone doesn't guarantee playback: the `autoplay`
+  // attribute is unreliable once the assignment happens asynchronously well
+  // after the click that started/accepted the call (exactly what happens
+  // here — it fires from a useEffect once ICE finishes), and an UNMUTED
+  // element (the remote video always is — see ActiveCall) is the case
+  // browsers are strictest about. This is the actual root cause of "call
+  // connects but the remote face/audio never appears": the peer connection
+  // reaching "connected" only proves the transport is up, never that the
+  // element is actually decoding and rendering frames.
+  const attachVideo = (el, stream, { isRemote = false } = {}) => {
+    if (!el || !stream) return;
+    if (el.srcObject !== stream) {
+      el.srcObject = stream;
+      dlog("attachVideo", { isRemote, streamId: stream.id, tracks: stream.getTracks().map((track) => track.kind) });
+      if (isRemote) setRemoteMediaReady(false);
+    }
+    const tryPlay = () => {
+      const playPromise = el.play();
+      playPromise?.catch((playError) => {
+        dlog("video.play() blocked", playError?.name, { isRemote, muted: el.muted });
+        if (!el.muted) {
+          // A muted autoplay is allowed almost everywhere; unmuting right
+          // after an element is already playing is treated differently from
+          // a fresh unmuted autoplay request, so this recovers real audio
+          // instead of leaving the element permanently paused.
+          el.muted = true;
+          el.play()?.then(() => { el.muted = false; }).catch((retryError) => dlog("muted retry also failed", retryError?.name));
+        }
+      });
+    };
+    tryPlay();
+    if (isRemote && !el.dataset.callReadyBound) {
+      el.dataset.callReadyBound = "1";
+      const markReady = () => {
+        dlog("remote video ready", { readyState: el.readyState, videoWidth: el.videoWidth, videoHeight: el.videoHeight });
+        setRemoteMediaReady(true);
+      };
+      el.addEventListener("loadeddata", markReady);
+      el.addEventListener("playing", markReady);
+    }
   };
 
   const value = useMemo(
@@ -678,6 +716,7 @@ export default function CallProvider({ user, children }) {
       reactionOptions: CALL_REACTIONS,
       localStream,
       remoteStream,
+      remoteMediaReady,
       screenStream,
       attachVideo,
       startCall: call_,
