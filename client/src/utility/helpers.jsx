@@ -63,6 +63,34 @@ export const formatTime = (date) => {
   return formatter.format(-diffYears, "year");
 };
 
+// Presence-specific: "Today at 10:22 PM" / "Yesterday at 10:22 PM" /
+// "2 days ago at 10:22 PM" rather than formatTime's generic relative
+// phrasing — used anywhere a friend's online/last-seen status is shown
+// (currently just the Messages chat header) so there's exactly one place
+// this format is defined, not a competing one per call site. Always in the
+// viewer's own local timezone (Date's own formatting methods already are).
+export const formatLastSeen = (date) => {
+  if (!date) return "";
+  const seen = new Date(date);
+  if (Number.isNaN(seen.getTime())) return "";
+
+  const time = seen.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const now = new Date();
+  const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((startOfDay(now) - startOfDay(seen)) / 86400000);
+
+  if (diffDays <= 0) return `Today at ${time}`;
+  if (diffDays === 1) return `Yesterday at ${time}`;
+  if (diffDays <= 6) return `${diffDays} days ago at ${time}`;
+
+  const dateLabel = seen.toLocaleDateString([], {
+    day: "numeric",
+    month: "short",
+    year: seen.getFullYear() === now.getFullYear() ? undefined : "numeric",
+  });
+  return `${dateLabel} at ${time}`;
+};
+
 export function ResourceState({ loading, error, empty, children }) {
   if (loading)
     return (

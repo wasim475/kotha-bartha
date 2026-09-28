@@ -2,6 +2,7 @@ import ActiveCall from "./ActiveCall";
 import CallErrorToast from "./CallErrorToast";
 import FloatingCall from "./FloatingCall";
 import IncomingCallPopup from "./IncomingCallPopup";
+import ParticipantInvitePopup from "./ParticipantInvitePopup";
 
 /**
  * Mounted once, above every shell (see Router/Main.jsx), so a call — an
@@ -14,6 +15,7 @@ export default function CallGlobalHost({ userId }) {
   return (
     <>
       <IncomingCallPopup />
+      <ParticipantInvitePopup />
       <ActiveCall userId={userId} />
       <FloatingCall />
       <CallErrorToast />

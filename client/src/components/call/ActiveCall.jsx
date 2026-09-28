@@ -20,6 +20,7 @@ import CallChatPanel from "./CallChatPanel";
 import CallControlButton from "./CallControlButton";
 import CallReactionsOverlay from "./CallReactionsOverlay";
 import CallSafetyMenu from "./CallSafetyMenu";
+import ParticipantPanel from "./ParticipantPanel";
 
 const formatDuration = (totalSeconds) => {
   const minutes = Math.floor(totalSeconds / 60);
@@ -111,10 +112,22 @@ export default function ActiveCall({ userId }) {
   const mainIsRemote = !call.layoutSwapped;
   const showVideo = call.video || call.screenShare.active;
   // The peer connection reaching "connected" only proves the transport is
-  // up — it says nothing about whether the remote video is actually
-  // decoding frames yet, so the loading state tracks real media readiness
-  // (see CallProvider's attachVideo/remoteMediaReady) instead.
-  const waitingForMedia = call.status === "connected" && !call.remoteMediaReady;
+  // up — it says nothing about whether the remote video/audio is actually
+  // flowing yet, so the loading state tracks real, per-media-kind readiness
+  // (see CallProvider's attachVideo/remoteVideoReady/remoteAudioReady)
+  // instead, and a delay in only one of them never gets described as the
+  // whole call being disconnected.
+  const videoReady = !showVideo || call.remoteVideoReady;
+  const audioReady = call.remoteAudioReady;
+  const waitingForMedia = call.status === "connected" && !(videoReady && audioReady);
+  const mediaHint =
+    call.status !== "connected"
+      ? null
+      : !videoReady && audioReady
+        ? "Video connecting…"
+        : videoReady && !audioReady
+          ? "Audio connecting…"
+          : null;
 
   const onMainTap = () => {
     const now = Date.now();
@@ -138,7 +151,7 @@ export default function ActiveCall({ userId }) {
             className={`call-video h-full w-full ${fit === "contain" ? "call-video--contain" : ""}`}
           />
         )}
-        {(preConnect || !showVideo || !call.remoteStream || !call.remoteMediaReady) && (
+        {(preConnect || !showVideo || !call.remoteStream || !call.remoteVideoReady) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4" style={{ background: "var(--call-bg)" }}>
             <span className="call-avatar-breathe">
               <Avatar person={call.peer} size="xl" />
@@ -176,13 +189,15 @@ export default function ActiveCall({ userId }) {
               ? call.ringingLive
                 ? "Ringing…"
                 : "Calling…"
-              : call.status === "connecting" || waitingForMedia
+              : call.status === "connecting"
                 ? "Connecting…"
                 : call.status === "reconnecting"
                   ? "Reconnecting…"
-                  : call.status === "connected"
-                    ? formatDuration(call.duration)
-                    : ""}
+                  : waitingForMedia
+                    ? mediaHint || "Connecting…"
+                    : call.status === "connected"
+                      ? formatDuration(call.duration)
+                      : ""}
             {call.quality && call.status === "connected" && (
               <span className="flex items-center gap-1" title={QUALITY_LABEL[call.quality]}>
                 <span className={`call-quality-dot call-quality-${call.quality}`} />
@@ -190,7 +205,10 @@ export default function ActiveCall({ userId }) {
             )}
           </p>
         </div>
-        <CallSafetyMenu />
+        <span className="flex items-center gap-1.5">
+          <ParticipantPanel userId={userId} />
+          <CallSafetyMenu />
+        </span>
       </div>
 
       {(call.status === "connecting" || call.status === "reconnecting" || waitingForMedia) && (

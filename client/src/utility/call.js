@@ -19,6 +19,8 @@ export const CALL_EVENTS = [
   "call:screen-share:start",
   "call:screen-share:stop",
   "call:reaction",
+  "call:invite-participant",
+  "call:participant-responded",
 ];
 
 export const CALL_REACTIONS = [
@@ -40,6 +42,13 @@ export const declineCall = (callId) => api.post(`/calls/${callId}/decline`).then
 export const cancelCall = (callId) => api.post(`/calls/${callId}/cancel`).then(({ data }) => data.data);
 export const endCall = (callId) => api.post(`/calls/${callId}/end`).then(({ data }) => data.data);
 export const getCallHistory = (page = 1) => api.get("/calls/history", { params: { page } }).then(({ data }) => data.data);
+
+// "Add People" foundation — see server/src/models/Call.js's own comment:
+// this never joins anyone into the actual 1-to-1 media connection.
+export const getOnlineFriendsForCall = () => api.get("/calls/friends/online").then(({ data }) => data.data);
+export const inviteParticipantToCall = (callId, userId) => api.post(`/calls/${callId}/invite`, { userId }).then(({ data }) => data.data);
+export const respondToParticipantInvite = (callId, accept) =>
+  api.post(`/calls/${callId}/invite/${accept ? "accept" : "decline"}`).then(({ data }) => data.data);
 
 // ICE server configuration is environment-driven so a TURN server can be
 // added for production reliability without a client rebuild (see

@@ -10,6 +10,8 @@ import {
   endCall as endCallRequest,
   getActiveCall,
   iceServers,
+  inviteParticipantToCall,
+  respondToParticipantInvite as respondToParticipantInviteRequest,
   startCall as startCallRequest,
 } from "../utility/call";
 import { callHaptics, callSfx, configureCallAudio, startRingtone, stopRingtone } from "../utility/callSound";
@@ -54,13 +56,24 @@ export default function CallProvider({ user, children }) {
   // as opposed to just having been created server-side. Lets the caller's
   // UI say "Ringing…" instead of a plain "Calling…" once it's real.
   const [ringingLive, setRingingLive] = useState(false);
+  // "Add People" foundation — an invitation to join SOMEONE ELSE's active
+  // call as an additional participant. Deliberately separate from `call`
+  // above: it can arrive regardless of whether this device is on a call of
+  // its own, and (since there's no group-media support yet) accepting it
+  // never starts a call UI here — it just tells the server, and the person
+  // sees an honest "not supported yet" notice (see respondToParticipantInvite).
+  const [participantInvite, setParticipantInvite] = useState(null);
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const [screenStream, setScreenStream] = useState(null);
-  // True only once the remote <video> has actually decoded and started
-  // rendering a frame — a WebRTC connectionState of "connected" means the
-  // transport is up, not that media is flowing yet (see attachVideo below).
-  const [remoteMediaReady, setRemoteMediaReady] = useState(false);
+  // Tracked SEPARATELY per media kind — a WebRTC connectionState of
+  // "connected" only means the transport is up, not that either track is
+  // actually flowing yet (see attachVideo below), and audio/video don't
+  // necessarily become ready at the same moment (audio typically does
+  // first). Each is `true` once its track is either genuinely rendering, or
+  // was never expected in the first place (nothing to wait for).
+  const [remoteVideoReady, setRemoteVideoReady] = useState(false);
+  const [remoteAudioReady, setRemoteAudioReady] = useState(false);
 
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
@@ -154,7 +167,8 @@ export default function CallProvider({ user, children }) {
     setChatOpen(false);
     setChatUnread(0);
     setReactions([]);
-    setRemoteMediaReady(false);
+    setRemoteVideoReady(false);
+    setRemoteAudioReady(false);
     setRingingLive(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stopAllTracks only reads refs, safe to omit
   }, [setCall]);
@@ -165,7 +179,8 @@ export default function CallProvider({ user, children }) {
     if (pcRef.current) return pcRef.current;
     const pc = new RTCPeerConnection({ iceServers: iceServers() });
     pcRef.current = pc;
-    setRemoteMediaReady(false);
+    setRemoteVideoReady(false);
+    setRemoteAudioReady(false);
 
     pc.onicecandidate = ({ candidate }) => {
       if (candidate) emitAck("call:ice-candidate", { callId, candidate });
@@ -189,12 +204,16 @@ export default function CallProvider({ user, children }) {
       }
       event.track.onunmute = () => dlog("remote track unmuted", event.track.kind);
       setRemote(stream);
+      dlog("receivers", pc.getReceivers().map((receiver) => receiver.track?.kind || "(no track)"));
     };
     pc.oniceconnectionstatechange = () => dlog("iceConnectionState", pc.iceConnectionState);
     pc.onicegatheringstatechange = () => dlog("iceGatheringState", pc.iceGatheringState);
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
-      dlog("connectionState", state);
+      dlog("connectionState", state, {
+        senders: pc.getSenders().map((sender) => sender.track?.kind || "(no track)"),
+        receivers: pc.getReceivers().map((receiver) => receiver.track?.kind || "(no track)"),
+      });
       if (state === "connected") {
         reconnectSinceRef.current = null;
         emitAck("call:state", { callId, status: "connected" });
@@ -248,6 +267,7 @@ export default function CallProvider({ user, children }) {
       dlog("addTrack", track.kind, track.id);
     });
     cameraTrackRef.current = stream.getVideoTracks()[0] || null;
+    dlog("senders after attach", pc.getSenders().map((sender) => sender.track?.kind || "(no track)"));
   };
 
   const startAsCaller = async (callId, wantVideo) => {
@@ -564,6 +584,36 @@ export default function CallProvider({ user, children }) {
     setTimeout(() => setReactions((current) => current.filter((item) => item.id !== id)), 2300);
   };
 
+  // ---- "Add People" foundation (see server/src/models/Call.js) --------------------------------
+
+  const sendParticipantInvite = useCallback(async (targetUserId) => {
+    const callId = callRef.current.callId;
+    if (!callId) return { ok: false, message: "No active call." };
+    try {
+      const summary = await inviteParticipantToCall(callId, targetUserId);
+      setCall((current) => ({ ...current, participantInvites: summary.participantInvites }));
+      return { ok: true };
+    } catch (requestError) {
+      return { ok: false, message: requestError?.response?.data?.error?.message || "Couldn't send the invitation." };
+    }
+  }, [setCall]);
+
+  const respondToParticipantInviteAction = useCallback(async (accept) => {
+    const invite = participantInvite;
+    if (!invite) return;
+    stopRingtone();
+    setParticipantInvite(null);
+    try {
+      await respondToParticipantInviteRequest(invite.callId, accept);
+      // Group calling isn't supported yet — see the Call model's own comment.
+      // Say so plainly instead of pretending to connect them into a call that
+      // can't actually carry their media.
+      if (accept) setError("Group calling isn't available yet — ask them to call you directly for now.");
+    } catch (requestError) {
+      setError(requestError?.response?.data?.error?.message || "That invitation is no longer available.");
+    }
+  }, [participantInvite]);
+
   // ---- Chat (plain messages in the same 1-to-1 conversation; no history fetch — only
   // what arrives while this call is open, so it behaves like a lightweight side panel) ----------
 
@@ -674,6 +724,22 @@ export default function CallProvider({ user, children }) {
     callSfx.reaction();
   }, [user]));
 
+  useRealtime("call:invite-participant", useCallback((event) => {
+    const { callId, inviter, video } = event.detail || {};
+    if (!callId || !inviter) return;
+    setParticipantInvite({ callId, inviter, video });
+    startRingtone();
+  }, []));
+
+  useRealtime("call:participant-responded", useCallback((event) => {
+    const { callId, call: summary } = event.detail || {};
+    if (callId !== callRef.current.callId) return;
+    setCall((current) => ({ ...current, participantInvites: summary?.participantInvites || current.participantInvites }));
+    // My own outgoing invite got answered — dismiss the ringtone/popup if this device is also the invited person's (rare, e.g. multiple tabs).
+    setParticipantInvite((current) => (current?.callId === callId ? null : current));
+    stopRingtone();
+  }, [setCall]));
+
   useRealtime("message:new", useCallback((event) => {
     const message = event.detail;
     if (!message || message.conversationId !== callRef.current.conversationId || message.type === "call") return;
@@ -698,7 +764,10 @@ export default function CallProvider({ user, children }) {
     if (el.srcObject !== stream) {
       el.srcObject = stream;
       dlog("attachVideo", { isRemote, streamId: stream.id, tracks: stream.getTracks().map((track) => track.kind) });
-      if (isRemote) setRemoteMediaReady(false);
+      if (isRemote) {
+        setRemoteVideoReady(false);
+        setRemoteAudioReady(false);
+      }
     }
     const tryPlay = () => {
       const playPromise = el.play();
@@ -716,29 +785,44 @@ export default function CallProvider({ user, children }) {
     };
     tryPlay();
     if (isRemote) {
-      const markReady = () => {
-        dlog("remote video ready", { readyState: el.readyState, videoWidth: el.videoWidth, videoHeight: el.videoHeight });
-        clearInterval(el._callReadyPoll);
-        el._callReadyPoll = null;
-        setRemoteMediaReady(true);
+      // Video and audio are checked SEPARATELY: readyState alone reflects the
+      // element's overall pipeline and can reach HAVE_CURRENT_DATA from audio
+      // data arriving well before any video frame has actually decoded — a
+      // real bug this exact code once had, where a video call that only
+      // reported "audio ready" would drop its loading overlay and reveal a
+      // still-black video element instead of continuing to wait for a frame.
+      // If a track kind was never part of this stream at all (e.g. an
+      // audio-only call has no video track to wait for), that side counts as
+      // ready immediately rather than stalling on something that will never
+      // arrive.
+      const checkReady = () => {
+        const hasVideo = stream.getVideoTracks().length > 0;
+        const hasAudio = stream.getAudioTracks().length > 0;
+        if (!hasVideo || el.videoWidth > 0) setRemoteVideoReady(true);
+        if (!hasAudio || el.readyState >= 2) setRemoteAudioReady(true);
+        dlog("remote media check", { hasVideo, hasAudio, videoWidth: el.videoWidth, readyState: el.readyState });
+        if ((!hasVideo || el.videoWidth > 0) && (!hasAudio || el.readyState >= 2)) {
+          clearInterval(el._callReadyPoll);
+          el._callReadyPoll = null;
+        }
       };
       if (!el.dataset.callReadyBound) {
         el.dataset.callReadyBound = "1";
-        el.addEventListener("loadeddata", markReady);
-        el.addEventListener("playing", markReady);
-        el.addEventListener("canplay", markReady);
+        el.addEventListener("loadeddata", checkReady);
+        el.addEventListener("playing", checkReady);
+        el.addEventListener("canplay", checkReady);
+        el.addEventListener("resize", checkReady); // fires when the video's actual frame dimensions become known
       }
-      // Belt-and-suspenders: some browsers (seen inconsistently on mobile,
-      // especially for an audio-only stream with no video track at all)
+      // Belt-and-suspenders: some browsers (seen inconsistently on mobile)
       // never fire those events reliably. Poll the one thing that's true
-      // everywhere — readyState has actually advanced — rather than leaving
-      // the UI stuck on "Connecting…" forever if the events just don't come.
+      // everywhere — the element's own readyState/videoWidth — rather than
+      // leaving the UI stuck on "Connecting…" forever if events just don't come.
       clearInterval(el._callReadyPoll);
       let attempts = 0;
       el._callReadyPoll = setInterval(() => {
         attempts += 1;
-        if (el.readyState >= 2) markReady();
-        else if (attempts > 40) clearInterval(el._callReadyPoll); // ~12s — give up polling, not the call itself
+        checkReady();
+        if (attempts > 40) clearInterval(el._callReadyPoll); // ~12s — give up polling, not the call itself
       }, 300);
     }
   };
@@ -763,7 +847,8 @@ export default function CallProvider({ user, children }) {
       reactionOptions: CALL_REACTIONS,
       localStream,
       remoteStream,
-      remoteMediaReady,
+      remoteVideoReady,
+      remoteAudioReady,
       screenStream,
       attachVideo,
       startCall: call_,
@@ -783,9 +868,12 @@ export default function CallProvider({ user, children }) {
       setMinimized,
       toggleLayout: () => setLayoutSwapped((swapped) => !swapped),
       dismissError: () => setError(""),
+      participantInvite,
+      sendParticipantInvite,
+      respondToParticipantInvite: respondToParticipantInviteAction,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [call, cameraOn, micOn, minimized, layoutSwapped, screenShare, quality, duration, error, audioOnlyFallback, chatMessages, chatOpen, chatUnread, reactions, ringingLive, localStream, remoteStream, remoteMediaReady, screenStream],
+    [call, cameraOn, micOn, minimized, layoutSwapped, screenShare, quality, duration, error, audioOnlyFallback, chatMessages, chatOpen, chatUnread, reactions, ringingLive, localStream, remoteStream, remoteVideoReady, remoteAudioReady, screenStream, participantInvite, sendParticipantInvite, respondToParticipantInviteAction],
   );
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;

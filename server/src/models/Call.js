@@ -30,6 +30,23 @@ const callSchema = new mongoose.Schema(
       active: { type: Boolean, default: false },
       byUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     },
+    // "Add People" foundation — this call is still strictly 1-to-1 media (one
+    // RTCPeerConnection, one caller, one callee); an invited friend is never
+    // added to that connection. This just records who was asked and whether
+    // they said yes, so the data/authorization shape is already correct and
+    // extensible for when multi-party media (a real SFU) is built. Deliberately
+    // its own array rather than reusing callerId/calleeId, which stay exactly
+    // what they've always meant.
+    participantInvites: [
+      {
+        _id: false,
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+        invitedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+        status: { type: String, enum: ["pending", "accepted", "declined"], default: "pending" },
+        invitedAt: { type: Date, default: Date.now },
+        respondedAt: Date,
+      },
+    ],
   },
   { timestamps: true },
 );

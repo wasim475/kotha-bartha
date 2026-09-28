@@ -7,6 +7,7 @@ const Friendship = require("../models/Friendship");
 const { GameError } = require("./games/GameError");
 const { pairKey } = require("../utils/ids");
 const { isBlockedEitherWay } = require("../utils/blocks");
+const { listOnlineFriends } = require("./ticTacToe.service");
 const { safeUser } = require("../utils/serializers");
 const { clearHiddenFor, bumpUnreadFor } = require("../utils/conversationHelpers");
 const { createNotification } = require("./notification.service");
@@ -75,6 +76,12 @@ async function summarize(call, users) {
     caller: caller ? safeUser(caller) : { id: call.callerId.toString() },
     callee: callee ? safeUser(callee) : { id: call.calleeId.toString() },
     screenShare: call.screenShare?.active ? { active: true, byUserId: call.screenShare.byUserId?.toString() || null } : { active: false, byUserId: null },
+    participantInvites: (call.participantInvites || []).map((invite) => ({
+      userId: invite.userId.toString(),
+      invitedBy: invite.invitedBy.toString(),
+      status: invite.status,
+      user: users.get(invite.userId.toString()) ? safeUser(users.get(invite.userId.toString())) : { id: invite.userId.toString() },
+    })),
     createdAt: call.createdAt,
     acceptedAt: call.acceptedAt || null,
     connectedAt: call.connectedAt || null,
@@ -84,7 +91,8 @@ async function summarize(call, users) {
 }
 
 async function serializeCall(call) {
-  const users = await User.find({ _id: { $in: [call.callerId, call.calleeId] } }).select("fullName avatar");
+  const ids = [call.callerId, call.calleeId, ...(call.participantInvites || []).map((invite) => invite.userId)];
+  const users = await User.find({ _id: { $in: ids } }).select("fullName avatar");
   return summarize(call, new Map(users.map((user) => [user._id.toString(), user])));
 }
 
@@ -93,6 +101,14 @@ const forUser = (call, userId) => ({
   role: call.caller.id === String(userId) ? "caller" : "callee",
   peer: call.caller.id === String(userId) ? call.callee : call.caller,
 });
+
+// The "Add People" friend picker only ever offers friends who are online —
+// unlike starting a fresh 1-to-1 call, which now rings even for an offline
+// friend (see assertCanCall below), adding someone to an ALREADY-active call
+// they'd have to react to immediately makes far less sense if they're not
+// even signed in right now. Reuses the exact same presence-backed listing
+// Ludo/Tic-Tac-Toe already use — not a new source of truth for "online".
+const listOnlineFriendsFor = (user) => listOnlineFriends(user);
 
 // ---- Guards -----------------------------------------------------------------------------------
 
@@ -483,6 +499,53 @@ async function joinCallRoom(user, callId, socket, io) {
   return serializeCall(call);
 }
 
+// ---- "Add People" foundation (see the Call model's own comment) ------------------------------
+
+async function inviteParticipant(user, callId, targetId, io) {
+  if (!mongoose.isValidObjectId(callId)) throw notFound();
+  if (!mongoose.isValidObjectId(targetId)) throw new GameError(400, "INVALID_USER", "Choose a friend to invite.");
+  const call = await Call.findById(callId);
+  if (!call) throw notFound();
+  assertParticipant(call, user._id);
+  if (!ANSWERED_STATUSES.includes(call.status)) throw new GameError(409, "CALL_NOT_ACTIVE", "This call isn't active.");
+  if (call.callerId.equals(targetId) || call.calleeId.equals(targetId)) {
+    throw new GameError(409, "ALREADY_IN_CALL", "They're already in this call.");
+  }
+  if (call.participantInvites.some((invite) => invite.userId.equals(targetId) && invite.status === "pending")) {
+    throw new GameError(409, "ALREADY_PENDING", "They already have an invitation to this call.");
+  }
+
+  const target = await User.findById(targetId).select("fullName avatar accountStatus isMuted");
+  if (!target || target.accountStatus === "deleted") throw new GameError(404, "NOT_FOUND", "User not found.");
+  await assertCanCall(user._id, target);
+  await assertNotBusy(target._id); // can't join a call while already in one — same rule as starting a fresh call
+
+  call.participantInvites.push({ userId: target._id, invitedBy: user._id, status: "pending" });
+  await call.save();
+  const summary = await serializeCall(call);
+  emit(io, userRoom(target._id), "call:invite-participant", { callId: call._id.toString(), inviter: safeUser(user), video: call.video, call: summary });
+  return summary;
+}
+
+async function respondParticipantInvite(user, callId, accept, io) {
+  if (!mongoose.isValidObjectId(callId)) throw notFound();
+  const call = await Call.findById(callId);
+  if (!call) throw notFound();
+  const invite = call.participantInvites.find((item) => item.userId.equals(user._id) && item.status === "pending");
+  if (!invite) throw notFound();
+  if (!ANSWERED_STATUSES.includes(call.status)) throw new GameError(409, "CALL_NOT_ACTIVE", "This call has ended.");
+
+  invite.status = accept ? "accepted" : "declined";
+  invite.respondedAt = new Date();
+  await call.save();
+  const summary = await serializeCall(call);
+  const payload = { callId: call._id.toString(), userId: user._id.toString(), accepted: accept, call: summary };
+  emit(io, callRoom(call._id), "call:participant-responded", payload);
+  emit(io, userRoom(call.callerId), "call:participant-responded", payload);
+  emit(io, userRoom(call.calleeId), "call:participant-responded", payload);
+  return summary;
+}
+
 // ---- History --------------------------------------------------------------------------------
 
 async function getHistory(userId, { page = 1 } = {}) {
@@ -531,6 +594,9 @@ module.exports = {
   setScreenShare,
   sendReaction,
   joinCallRoom,
+  inviteParticipant,
+  respondParticipantInvite,
+  listOnlineFriendsFor,
   getHistory,
   forUser,
 };

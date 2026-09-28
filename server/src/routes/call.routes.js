@@ -15,6 +15,7 @@ const withRole = (data, userId) => (data && data.caller ? service.forUser(data, 
 
 router.get("/calls/active", respond(async (req) => ({ data: withRole(await service.getActiveCall(req.user._id), req.user._id) })));
 router.get("/calls/history", respond(async (req) => ({ data: await service.getHistory(req.user._id, { page: req.query.page }) })));
+router.get("/calls/friends/online", respond(async (req) => ({ data: await service.listOnlineFriendsFor(req.user) })));
 router.get("/calls/:callId", respond(async (req) => ({ data: withRole(await service.getCall(req.user._id, req.params.callId), req.user._id) })));
 
 // Body: { userId, video }
@@ -23,5 +24,14 @@ router.post("/calls/:callId/accept", call, respond(async (req) => ({ data: withR
 router.post("/calls/:callId/decline", respond(async (req) => ({ data: withRole(await service.declineCall(req.user, req.params.callId, io(req)), req.user._id) })));
 router.post("/calls/:callId/cancel", respond(async (req) => ({ data: withRole(await service.cancelCall(req.user, req.params.callId, io(req)), req.user._id) })));
 router.post("/calls/:callId/end", respond(async (req) => ({ data: withRole(await service.endCall(req.user, req.params.callId, io(req)), req.user._id) })));
+
+// "Add People" foundation — see the Call model's own comment: this never
+// adds anyone to the actual 1-to-1 media connection, only records who was
+// asked and lets them answer, with the same server-side authorization the
+// real call itself uses (friends, not blocked, not already busy).
+// Body: { userId }
+router.post("/calls/:callId/invite", call, respond(async (req) => ({ data: withRole(await service.inviteParticipant(req.user, req.params.callId, req.body?.userId, io(req)), req.user._id) }), 201));
+router.post("/calls/:callId/invite/accept", call, respond(async (req) => ({ data: withRole(await service.respondParticipantInvite(req.user, req.params.callId, true, io(req)), req.user._id) })));
+router.post("/calls/:callId/invite/decline", respond(async (req) => ({ data: withRole(await service.respondParticipantInvite(req.user, req.params.callId, false, io(req)), req.user._id) })));
 
 module.exports = router;

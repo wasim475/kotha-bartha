@@ -17,22 +17,7 @@ import Avatar from "../../../components/ui/Avatar";
 import IconButton from "../../../components/ui/IconButton";
 import Menu from "../../../components/ui/Menu";
 import { useCall } from "../../../provider/CallProvider";
-
-// "last seen" wants a clock time (e.g. "last seen 12:10 pm"), not the
-// relative "2 hours ago" phrasing utility/helpers.jsx's formatTime gives —
-// that one is shared by message timestamps/notifications elsewhere and
-// stays as-is; this is local to how presence reads in the chat header.
-const formatLastSeen = (date) => {
-  const seen = new Date(date);
-  if (Number.isNaN(seen.getTime())) return "";
-  const time = seen.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  const now = new Date();
-  if (seen.toDateString() === now.toDateString()) return `last seen ${time}`;
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (seen.toDateString() === yesterday.toDateString()) return `last seen yesterday at ${time}`;
-  return `last seen ${seen.toLocaleDateString([], { day: "numeric", month: "short" })} at ${time}`;
-};
+import { formatLastSeen } from "../../../utility/helpers";
 
 const ChatHeader = ({
   selected,

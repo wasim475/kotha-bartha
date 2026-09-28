@@ -196,6 +196,46 @@ const { start, check, sleep, until, done } = require("./harness");
     const note = await until(() => Notification.findOne({ recipientId: users.B._id, type: "missed_call", entityId: missedId }).lean());
     check("the callee gets a missed-call notification", Boolean(note));
 
+    // ---- "Add People" foundation (still strictly 1-to-1 media — see the Call model) --------
+    res = await api("POST", "/calls", "A", { userId: idOf("B") });
+    const groupCallId = res.data.id;
+    await api("POST", `/calls/${groupCallId}/accept`, "B");
+
+    res = await api("POST", `/calls/${groupCallId}/invite`, "A", { userId: idOf("D") });
+    check("can't invite a blocked friend into the call", res.status === 403 && res.code === "BLOCKED", res.code);
+
+    res = await api("POST", `/calls/${groupCallId}/invite`, "A", { userId: idOf("B") });
+    check("can't invite someone already in the call", res.status === 409 && res.code === "ALREADY_IN_CALL", res.code);
+
+    res = await api("POST", `/calls/${groupCallId}/invite`, "D", { userId: idOf("C") });
+    check("a non-participant can't invite anyone into someone else's call", res.status === 404, res.status);
+
+    res = await api("POST", `/calls/${groupCallId}/invite`, "A", { userId: idOf("C") });
+    check("A can invite an online friend to join the call", res.status === 201 && res.data.participantInvites?.[0]?.status === "pending", JSON.stringify(res.json));
+
+    const participantInvite = await until(() => sockC.last("call:invite-participant"));
+    check("C receives the invitation, wherever they are, as a global event", participantInvite?.callId === groupCallId && participantInvite?.inviter?.id === idOf("A"));
+
+    res = await api("POST", `/calls/${groupCallId}/invite`, "A", { userId: idOf("C") });
+    check("a duplicate invite to the same pending person is rejected", res.status === 409 && res.code === "ALREADY_PENDING", res.code);
+
+    res = await api("POST", `/calls/${groupCallId}/invite/accept`, "C");
+    check("C can accept — the invitation is recorded as accepted", res.status === 200 && res.data.participantInvites?.[0]?.status === "accepted");
+    const responded = await until(() => sockA.last("call:participant-responded"));
+    check("the caller is told the invite was accepted", responded?.accepted === true && responded?.userId === idOf("C"));
+    // The call itself is still, deliberately, strictly 1-to-1 media — accepting
+    // an "Add People" invite never changes who the real callerId/calleeId are.
+    const stillOneToOne = await Call.findById(groupCallId).lean();
+    check("accepting a participant invite does not alter the call's actual caller/callee", stillOneToOne.callerId.toString() === idOf("A") && stillOneToOne.calleeId.toString() === idOf("B"));
+
+    await api("POST", `/calls/${groupCallId}/end`, "A");
+
+    res = await api("POST", `/calls/${groupCallId}/invite`, "A", { userId: idOf("C") });
+    check("can't invite into a call that's already over", res.status === 409 && res.code === "CALL_NOT_ACTIVE", res.code);
+
+    res = await api("GET", "/calls/friends/online", "A");
+    check("the online-friends listing for Add People reuses the existing presence-backed one", res.status === 200 && Array.isArray(res.data));
+
     // ---- Moderation: muted/banned accounts can't call --------------------------------------
     const { User } = h;
     await User.updateOne({ _id: users.A._id }, { $set: { isMuted: true } });
