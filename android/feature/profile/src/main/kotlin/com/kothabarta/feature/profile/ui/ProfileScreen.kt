@@ -164,7 +164,7 @@ private fun FriendActionRow(state: ProfileUiState, viewModel: ProfileViewModel) 
                 Text("Add friend")
             }
         }
-        OutlinedButton(onClick = { /* Messages isn't built yet — see Routes.MESSAGES */ }) {
+        OutlinedButton(onClick = viewModel::openMessage, enabled = !state.messageActionInFlight) {
             Text("Message")
         }
     }

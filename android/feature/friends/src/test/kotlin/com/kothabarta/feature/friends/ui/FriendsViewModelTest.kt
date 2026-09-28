@@ -1,6 +1,8 @@
 package com.kothabarta.feature.friends.ui
 
 import com.kothabarta.core.network.ApiEnvelope
+import com.kothabarta.core.network.messages.ChatTarget
+import com.kothabarta.core.network.messages.ConversationLauncher
 import com.kothabarta.core.network.social.AcceptedResponse
 import com.kothabarta.core.network.social.CancelledResponse
 import com.kothabarta.core.network.social.FriendEntryDto
@@ -40,10 +42,18 @@ class FriendsViewModelTest {
     /** A real, unconnected [SocketManager] — `on`/`off` are safe no-ops with no live socket (see FeedViewModel-adjacent tests' precedent). */
     private fun offlineSocketManager() = SocketManager("http://localhost")
 
+    private fun newViewModel(api: FakeFriendsApi) =
+        FriendsViewModel(FriendsRepository(api), offlineSocketManager(), NeverCalledConversationLauncher())
+
+    private class NeverCalledConversationLauncher : ConversationLauncher {
+        override suspend fun openConversationWith(userId: String): com.kothabarta.core.common.ApiResult<ChatTarget> =
+            error("not exercised by these tests")
+    }
+
     @Test
     fun `friends tab loads bare users via GET friends tab=friends`() = runTest {
         val api = FakeFriendsApi(friends = listOf(SafeUserDto(id = "f1", fullName = "Alice")))
-        val viewModel = FriendsViewModel(FriendsRepository(api), offlineSocketManager())
+        val viewModel = newViewModel(api)
         advanceUntilIdle()
         assertEquals(listOf("f1"), viewModel.uiState.value.friends.map { it.id })
         assertEquals(FriendsTab.FRIENDS, viewModel.uiState.value.tab)
@@ -55,7 +65,7 @@ class FriendsViewModelTest {
             friends = listOf(SafeUserDto(id = "f1", fullName = "Alice")),
             requests = listOf(FriendEntryDto(id = "r1", status = "pending", user = SafeUserDto(id = "u9", fullName = "Bob"))),
         )
-        val viewModel = FriendsViewModel(FriendsRepository(api), offlineSocketManager())
+        val viewModel = newViewModel(api)
         advanceUntilIdle()
 
         viewModel.selectTab(FriendsTab.REQUESTS)
@@ -68,7 +78,7 @@ class FriendsViewModelTest {
     @Test
     fun `accepting a request calls accept then reloads the current tab`() = runTest {
         val api = FakeFriendsApi(requests = listOf(FriendEntryDto(id = "r1", status = "pending", user = SafeUserDto(id = "u9", fullName = "Bob"))))
-        val viewModel = FriendsViewModel(FriendsRepository(api), offlineSocketManager())
+        val viewModel = newViewModel(api)
         advanceUntilIdle() // flush the constructor's own initial load (defaults to the Friends tab) before switching tabs
         viewModel.selectTab(FriendsTab.REQUESTS)
         advanceUntilIdle()
@@ -83,7 +93,7 @@ class FriendsViewModelTest {
     @Test
     fun `declining a received request cancels by the sender's user id, not the request id`() = runTest {
         val api = FakeFriendsApi(requests = listOf(FriendEntryDto(id = "r1", status = "pending", user = SafeUserDto(id = "sender9", fullName = "Bob"))))
-        val viewModel = FriendsViewModel(FriendsRepository(api), offlineSocketManager())
+        val viewModel = newViewModel(api)
         advanceUntilIdle()
         viewModel.selectTab(FriendsTab.REQUESTS)
         advanceUntilIdle()

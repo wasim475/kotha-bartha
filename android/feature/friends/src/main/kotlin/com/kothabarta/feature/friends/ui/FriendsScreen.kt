@@ -19,6 +19,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -100,6 +101,7 @@ private fun FriendsList(friends: List<SafeUserDto>, onlineUserIds: Set<String>, 
                     }
                 }
                 Text(friend.fullName, modifier = Modifier.padding(start = Spacing.sm).weight(1f), style = MaterialTheme.typography.titleMedium)
+                TextButton(onClick = { viewModel.openMessage(friend.id) }) { Text("Message") }
                 OutlinedButton(onClick = { viewModel.unfriend(friend) }) { Text("Unfriend") }
             }
         }

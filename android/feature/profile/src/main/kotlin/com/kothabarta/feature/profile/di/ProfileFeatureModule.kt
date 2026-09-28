@@ -7,5 +7,5 @@ import org.koin.dsl.module
 
 val profileFeatureModule = module {
     single { ProfileRepository(authApi = get(), usersApi = get(), friendsApi = get()) }
-    viewModel { (userId: String?) -> ProfileViewModel(userId, get(), get()) }
+    viewModel { (userId: String?) -> ProfileViewModel(userId, get(), get(), get()) }
 }

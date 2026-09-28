@@ -6,6 +6,7 @@ import com.kothabarta.core.common.ApiResult
 import com.kothabarta.core.navigation.NavigationEvent
 import com.kothabarta.core.navigation.Routes
 import com.kothabarta.core.network.decodeSocketPayload
+import com.kothabarta.core.network.messages.ConversationLauncher
 import com.kothabarta.core.network.social.FriendAcceptedEvent
 import com.kothabarta.core.network.social.FriendEntryDto
 import com.kothabarta.core.network.social.FriendNewEvent
@@ -40,6 +41,7 @@ data class FriendsUiState(
 class FriendsViewModel(
     private val repository: FriendsRepository,
     private val socketManager: SocketManager,
+    private val conversationLauncher: ConversationLauncher,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FriendsUiState())
@@ -132,5 +134,19 @@ class FriendsViewModel(
 
     fun openProfile(userId: String) {
         viewModelScope.launch { _navigationEvents.emit(NavigationEvent.NavigateTo(Routes.profile(userId))) }
+    }
+
+    fun openMessage(userId: String) {
+        viewModelScope.launch {
+            when (val result = conversationLauncher.openConversationWith(userId)) {
+                is ApiResult.Success -> {
+                    val target = result.data
+                    _navigationEvents.emit(
+                        NavigationEvent.NavigateTo(Routes.chat(target.conversationId, target.peerId, target.peerName, target.peerAvatarUrl)),
+                    )
+                }
+                is ApiResult.Failure -> _uiState.update { it.copy(error = result.error.message) }
+            }
+        }
     }
 }

@@ -5,6 +5,7 @@ import com.kothabarta.app.di.coreModule
 import com.kothabarta.feature.auth.di.authFeatureModule
 import com.kothabarta.feature.friends.di.friendsFeatureModule
 import com.kothabarta.feature.home.di.homeFeatureModule
+import com.kothabarta.feature.messages.di.messagesFeatureModule
 import com.kothabarta.feature.notifications.di.notificationsFeatureModule
 import com.kothabarta.feature.profile.di.profileFeatureModule
 import org.koin.android.ext.koin.androidContext
@@ -24,6 +25,7 @@ class KothaBartaApp : Application() {
                 profileFeatureModule,
                 friendsFeatureModule,
                 notificationsFeatureModule,
+                messagesFeatureModule,
             )
         }
     }

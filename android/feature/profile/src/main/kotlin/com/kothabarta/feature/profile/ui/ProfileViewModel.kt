@@ -7,6 +7,7 @@ import com.kothabarta.core.common.map
 import com.kothabarta.core.navigation.NavigationEvent
 import com.kothabarta.core.navigation.Routes
 import com.kothabarta.core.network.SessionManager
+import com.kothabarta.core.network.messages.ConversationLauncher
 import com.kothabarta.core.network.social.PhotoDto
 import com.kothabarta.core.network.social.PostDto
 import com.kothabarta.feature.profile.data.ProfileRepository
@@ -33,6 +34,7 @@ data class ProfileUiState(
     val contentRestricted: Boolean = false,
     val friendActionInFlight: Boolean = false,
     val friendActionError: String? = null,
+    val messageActionInFlight: Boolean = false,
 )
 
 /** `userId == null` means "my own profile" (see [ProfileRepository.getOwnProfile]). */
@@ -40,6 +42,7 @@ class ProfileViewModel(
     private val userId: String?,
     private val repository: ProfileRepository,
     private val sessionManager: SessionManager,
+    private val conversationLauncher: ConversationLauncher,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -120,6 +123,25 @@ class ProfileViewModel(
                 }
                 is ApiResult.Failure -> _uiState.update {
                     it.copy(friendActionInFlight = false, friendActionError = result.error.message)
+                }
+            }
+        }
+    }
+
+    fun openMessage() {
+        val id = profileId() ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(messageActionInFlight = true) }
+            when (val result = conversationLauncher.openConversationWith(id)) {
+                is ApiResult.Success -> {
+                    _uiState.update { it.copy(messageActionInFlight = false) }
+                    val target = result.data
+                    _navigationEvents.emit(
+                        NavigationEvent.NavigateTo(Routes.chat(target.conversationId, target.peerId, target.peerName, target.peerAvatarUrl)),
+                    )
+                }
+                is ApiResult.Failure -> _uiState.update {
+                    it.copy(messageActionInFlight = false, friendActionError = result.error.message)
                 }
             }
         }

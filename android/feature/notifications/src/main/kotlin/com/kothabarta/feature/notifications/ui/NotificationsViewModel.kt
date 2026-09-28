@@ -103,9 +103,11 @@ class NotificationsViewModel(
                 badge.update(_uiState.value.notifications.count { !it.read })
             }
             val postId = notification.postId
+            val conversationId = notification.payload?.get("conversationId") as? String
             val route = when {
                 postId != null -> Routes.post(postId)
                 notification.type == "friend_request" || notification.type == "friend_accepted" -> Routes.FRIENDS
+                notification.type == "missed_call" && conversationId != null -> Routes.chat(conversationId)
                 else -> null
             }
             if (route != null) _navigationEvents.emit(NavigationEvent.NavigateTo(route))

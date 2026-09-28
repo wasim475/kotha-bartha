@@ -5,6 +5,7 @@ import com.kothabarta.core.datastore.AppPreferences
 import com.kothabarta.core.network.ApiClientFactory
 import com.kothabarta.core.network.UnauthorizedNotifier
 import com.kothabarta.core.network.auth.AuthApi
+import com.kothabarta.core.network.messages.MessagesApi
 import com.kothabarta.core.network.social.FriendsApi
 import com.kothabarta.core.network.social.NotificationsApi
 import com.kothabarta.core.network.social.PostsApi
@@ -41,4 +42,5 @@ val coreModule = module {
     single { get<Retrofit>().create(UsersApi::class.java) }
     single { get<Retrofit>().create(FriendsApi::class.java) }
     single { get<Retrofit>().create(NotificationsApi::class.java) }
+    single { get<Retrofit>().create(MessagesApi::class.java) }
 }

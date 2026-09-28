@@ -2,6 +2,8 @@ package com.kothabarta.feature.profile.ui
 
 import com.kothabarta.core.network.ApiEnvelope
 import com.kothabarta.core.network.SessionManager
+import com.kothabarta.core.network.messages.ChatTarget
+import com.kothabarta.core.network.messages.ConversationLauncher
 import com.kothabarta.core.network.auth.AuthApi
 import com.kothabarta.core.network.auth.GoogleLoginRequest
 import com.kothabarta.core.network.auth.LoginRequest
@@ -69,6 +71,7 @@ class ProfileViewModelTest {
             userId = null,
             repository = ProfileRepository(FakeAuthApi(me), users, FakeFriendsApi()),
             sessionManager = NeverLoggedOutSession(),
+            conversationLauncher = NeverCalledConversationLauncher(),
         )
         advanceUntilIdle()
         assertEquals("me", viewModel.uiState.value.profile?.id)
@@ -83,7 +86,12 @@ class ProfileViewModelTest {
                 Response.success(ApiEnvelope(data = otherProfile(friendRequestReceived = true, receivedFriendRequestId = "req1")))
         }
         val friends = FakeFriendsApi()
-        val viewModel = ProfileViewModel(userId = "u2", repository = ProfileRepository(FakeAuthApi(null), users, friends), sessionManager = NeverLoggedOutSession())
+        val viewModel = ProfileViewModel(
+            userId = "u2",
+            repository = ProfileRepository(FakeAuthApi(null), users, friends),
+            sessionManager = NeverLoggedOutSession(),
+            conversationLauncher = NeverCalledConversationLauncher(),
+        )
         advanceUntilIdle()
         assertTrue(viewModel.uiState.value.profile?.friendRequestReceived == true)
 
@@ -104,7 +112,12 @@ class ProfileViewModelTest {
                     "{\"error\":{\"code\":\"BLOCKED\",\"message\":\"You can't add this person.\"}}".toResponseBody("application/json".toMediaType()),
                 )
         }
-        val viewModel = ProfileViewModel(userId = "u2", repository = ProfileRepository(FakeAuthApi(null), users, friends), sessionManager = NeverLoggedOutSession())
+        val viewModel = ProfileViewModel(
+            userId = "u2",
+            repository = ProfileRepository(FakeAuthApi(null), users, friends),
+            sessionManager = NeverLoggedOutSession(),
+            conversationLauncher = NeverCalledConversationLauncher(),
+        )
         advanceUntilIdle()
 
         viewModel.sendFriendRequest()
@@ -152,5 +165,10 @@ class ProfileViewModelTest {
     private class NeverLoggedOutSession : SessionManager {
         override val isSignedIn = true
         override suspend fun logout() = error("not exercised by these tests")
+    }
+
+    private class NeverCalledConversationLauncher : ConversationLauncher {
+        override suspend fun openConversationWith(userId: String): com.kothabarta.core.common.ApiResult<ChatTarget> =
+            error("not exercised by these tests")
     }
 }

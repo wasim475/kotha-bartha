@@ -63,6 +63,7 @@ dependencies {
     implementation(project(":feature:profile"))
     implementation(project(":feature:friends"))
     implementation(project(":feature:notifications"))
+    implementation(project(":feature:messages"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

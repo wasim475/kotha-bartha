@@ -15,12 +15,15 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.kothabarta.core.navigation.NavigationEvent
 import com.kothabarta.core.navigation.Routes
 import com.kothabarta.feature.friends.ui.FriendsScreen
 import com.kothabarta.feature.home.ui.FeedScreen
 import com.kothabarta.feature.home.ui.PostDetailScreen
+import com.kothabarta.feature.messages.ui.ChatScreen
+import com.kothabarta.feature.messages.ui.ConversationsScreen
 import com.kothabarta.feature.notifications.data.NotificationBadge
 import com.kothabarta.feature.notifications.ui.NotificationsScreen
 import com.kothabarta.feature.profile.ui.ProfileScreen
@@ -31,9 +34,9 @@ private data class BottomNavItem(val route: String, val label: String, val emoji
 private val BOTTOM_NAV_ITEMS = listOf(
     BottomNavItem(Routes.HOME, "Home", "🏠"),
     BottomNavItem(Routes.FRIENDS, "Friends", "👥"),
+    BottomNavItem(Routes.MESSAGES, "Messages", "💬"),
     BottomNavItem(Routes.NOTIFICATIONS, "Alerts", "🔔"),
     BottomNavItem(Routes.MY_PROFILE, "Profile", "👤"),
-    // Messages is deliberately not here yet — see Routes.MESSAGES's doc comment.
 )
 
 /**
@@ -95,6 +98,7 @@ fun MainScreen(onSignedOut: (NavigationEvent) -> Unit) {
         ) {
             composable(Routes.HOME) { FeedScreen(onNavigate = onNavigate) }
             composable(Routes.FRIENDS) { FriendsScreen(onNavigate = onNavigate) }
+            composable(Routes.MESSAGES) { ConversationsScreen(onNavigate = onNavigate) }
             composable(Routes.NOTIFICATIONS) { NotificationsScreen(onNavigate = onNavigate) }
             composable(Routes.MY_PROFILE) { ProfileScreen(userId = null, onNavigate = onNavigate) }
             composable(
@@ -110,6 +114,26 @@ fun MainScreen(onSignedOut: (NavigationEvent) -> Unit) {
             ) { backStackEntry ->
                 val postId = backStackEntry.arguments?.getString(Routes.POST_ARG).orEmpty()
                 PostDetailScreen(postId = postId, onNavigate = onNavigate)
+            }
+            composable(
+                Routes.CHAT_PATTERN,
+                arguments = listOf(
+                    navArgument(Routes.CHAT_CONVERSATION_ARG) { type = NavType.StringType },
+                    navArgument(Routes.CHAT_PEER_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+                    navArgument(Routes.CHAT_PEER_NAME_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+                    navArgument(Routes.CHAT_PEER_AVATAR_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+                ),
+            ) { backStackEntry ->
+                val args = backStackEntry.arguments
+                val conversationId = args?.getString(Routes.CHAT_CONVERSATION_ARG).orEmpty()
+                fun decoded(key: String) = args?.getString(key)?.takeIf { it.isNotBlank() }?.let { Routes.decode(it) }
+                ChatScreen(
+                    conversationId = conversationId,
+                    peerId = decoded(Routes.CHAT_PEER_ID_ARG),
+                    peerName = decoded(Routes.CHAT_PEER_NAME_ARG),
+                    peerAvatarUrl = decoded(Routes.CHAT_PEER_AVATAR_ARG),
+                    onNavigate = onNavigate,
+                )
             }
         }
     }

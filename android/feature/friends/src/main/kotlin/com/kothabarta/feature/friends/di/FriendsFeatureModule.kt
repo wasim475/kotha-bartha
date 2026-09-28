@@ -7,5 +7,5 @@ import org.koin.dsl.module
 
 val friendsFeatureModule = module {
     single { FriendsRepository(friendsApi = get()) }
-    viewModel { FriendsViewModel(get(), get()) }
+    viewModel { FriendsViewModel(get(), get(), get()) }
 }
