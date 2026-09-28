@@ -19,10 +19,11 @@ enum class SocketConnectionState { DISCONNECTED, CONNECTING, CONNECTED }
  * uses — this is purely additive on the server side and changes no event
  * name or payload.
  *
- * Not wired into any feature UI yet in this first milestone (there is no
- * messaging/presence feature to consume events from yet) — connect/disconnect
- * are called from the auth flow only, to prove the whole foundation
- * (token → handshake → live connection) genuinely works end to end.
+ * Connect/disconnect are called from the auth flow (sign-in/sign-out); each
+ * feature's own ViewModel calls [on]/[off] for the events it cares about,
+ * always passing back the same [Emitter.Listener] instance to [off] so it
+ * only removes its own subscription — a bare event-name `off` would also
+ * silently drop any other feature's listener for that same event.
  */
 class SocketManager(private val serverUrl: String) {
 
@@ -60,8 +61,9 @@ class SocketManager(private val serverUrl: String) {
         socket?.on(event, listener)
     }
 
-    fun off(event: String) {
-        socket?.off(event)
+    /** Omitting [listener] removes every listener for [event] — prefer passing the same instance given to [on]. */
+    fun off(event: String, listener: Emitter.Listener? = null) {
+        if (listener != null) socket?.off(event, listener) else socket?.off(event)
     }
 
     fun emit(event: String, vararg args: Any) {

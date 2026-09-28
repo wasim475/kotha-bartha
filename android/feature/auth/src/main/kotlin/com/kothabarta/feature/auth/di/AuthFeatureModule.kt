@@ -1,8 +1,8 @@
 package com.kothabarta.feature.auth.di
 
+import com.kothabarta.core.network.SessionManager
 import com.kothabarta.feature.auth.data.AuthRepository
 import com.kothabarta.feature.auth.ui.LoginViewModel
-import com.kothabarta.feature.auth.ui.SignedInPlaceholderViewModel
 import com.kothabarta.feature.auth.ui.SignupViewModel
 import com.kothabarta.feature.auth.ui.SplashViewModel
 import org.koin.androidx.viewmodel.dsl.viewModel
@@ -17,8 +17,8 @@ import org.koin.dsl.module
  */
 val authFeatureModule = module {
     single { AuthRepository(authApi = get(), tokenStore = get(), socketManager = get()) }
+    single<SessionManager> { get<AuthRepository>() }
     viewModel { SplashViewModel(get()) }
     viewModel { LoginViewModel(get(), get()) }
     viewModel { SignupViewModel(get()) }
-    viewModel { SignedInPlaceholderViewModel(get()) }
 }

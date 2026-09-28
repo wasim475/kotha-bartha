@@ -7,7 +7,7 @@ import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
 
-/** `/api/v1/notifications/*` — see docs/architecture/android-api-contract.md's "Notifications". */
+/** `/api/v1/notifications` — see docs/architecture/android-api-contract.md's "Notifications". */
 interface NotificationsApi {
 
     @GET("notifications/unread-counts")

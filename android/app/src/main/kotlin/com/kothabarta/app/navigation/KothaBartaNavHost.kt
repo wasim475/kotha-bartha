@@ -10,24 +10,24 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.kothabarta.core.navigation.NavigationEvent
 import com.kothabarta.core.navigation.Routes
+import com.kothabarta.core.network.SessionManager
 import com.kothabarta.core.network.UnauthorizedNotifier
-import com.kothabarta.feature.auth.data.AuthRepository
 import com.kothabarta.feature.auth.ui.LoginScreen
-import com.kothabarta.feature.auth.ui.SignedInPlaceholderScreen
 import com.kothabarta.feature.auth.ui.SignupScreen
 import com.kothabarta.feature.auth.ui.SplashScreen
 import org.koin.compose.koinInject
 
 /**
- * The only place a real `NavController` exists — every screen's ViewModel
- * only ever emits a [NavigationEvent] (see :core:navigation's Routes.kt),
- * this is what turns those into an actual navigation call.
+ * The outer, pre-login graph (Splash/Login/Signup/[MainScreen]) — intentionally
+ * separate from [MainScreen]'s own inner `NavHost` for the signed-in bottom-nav
+ * tabs (Home/Friends/Notifications/Profile), a common "auth graph vs. main
+ * graph" split rather than one flat graph mixing both.
  */
 @Composable
 fun KothaBartaNavHost() {
     val navController = rememberNavController()
     val unauthorizedNotifier = koinInject<UnauthorizedNotifier>()
-    val authRepository = koinInject<AuthRepository>()
+    val sessionManager = koinInject<SessionManager>()
 
     val handleEvent: (NavigationEvent) -> Unit = { event ->
         when (event) {
@@ -44,7 +44,7 @@ fun KothaBartaNavHost() {
     // expired session.
     LaunchedEffect(Unit) {
         unauthorizedNotifier.events.collect {
-            authRepository.clearLocalSession()
+            sessionManager.logout()
             navController.navigate(Routes.LOGIN) {
                 popUpTo(0) { inclusive = true }
             }
@@ -56,7 +56,7 @@ fun KothaBartaNavHost() {
             composable(Routes.SPLASH) { SplashScreen(onNavigate = handleEvent) }
             composable(Routes.LOGIN) { LoginScreen(onNavigate = handleEvent) }
             composable(Routes.SIGNUP) { SignupScreen(onNavigate = handleEvent) }
-            composable(Routes.SIGNED_IN_PLACEHOLDER) { SignedInPlaceholderScreen(onNavigate = handleEvent) }
+            composable(Routes.MAIN) { MainScreen(onSignedOut = handleEvent) }
         }
     }
 }

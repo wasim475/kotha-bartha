@@ -8,7 +8,15 @@ import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import java.io.IOException
 import retrofit2.Response
 
-internal val networkMoshi: Moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+/**
+ * One shared Moshi instance for the whole app — also used outside this file
+ * to decode Socket.IO event payloads (raw JSON strings) into the same DTOs
+ * this module already defines, so a notification/friend-request/etc. arriving
+ * over the socket parses identically to the same shape arriving over REST.
+ */
+object NetworkJson {
+    val moshi: Moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+}
 
 /**
  * Every repository's only way to call the network — wraps a Retrofit call
@@ -22,6 +30,21 @@ suspend fun <T> safeApiCall(block: suspend () -> Response<ApiEnvelope<T>>): ApiR
         if (data != null) ApiResult.Success(data)
         else ApiResult.Failure(ApiError("EMPTY_RESPONSE", "The server returned no data.", code))
     }
+
+/**
+ * Like [safeApiCall], but for the handful of endpoints where the caller
+ * genuinely needs `meta` too (e.g. `GET /users/:id/posts`'s `meta.restricted`
+ * — see docs/architecture/android-api-contract.md). Most calls don't need
+ * this; reach for [safeApiCall] first.
+ */
+suspend fun <T> safeApiCallWithMeta(block: suspend () -> Response<ApiEnvelope<T>>): ApiResult<DataWithMeta<T>> =
+    runCatchingApiCall(block) { envelope, code ->
+        val data = envelope.data
+        if (data != null) ApiResult.Success(DataWithMeta(data, envelope.meta))
+        else ApiResult.Failure(ApiError("EMPTY_RESPONSE", "The server returned no data.", code))
+    }
+
+data class DataWithMeta<T>(val data: T, val meta: ApiMeta?)
 
 /**
  * Only `/auth/{register,login,google}` return both `data` (the user) and a
@@ -62,7 +85,7 @@ private suspend inline fun <T, R> runCatchingApiCall(
 
 private fun parseError(response: Response<*>): ApiError {
     val body = response.errorBody()?.string()
-    val parsed = body?.let { runCatching { networkMoshi.adapter(ApiErrorEnvelope::class.java).fromJson(it) }.getOrNull() }?.error
+    val parsed = body?.let { runCatching { NetworkJson.moshi.adapter(ApiErrorEnvelope::class.java).fromJson(it) }.getOrNull() }?.error
     return if (parsed != null) {
         ApiError(parsed.code, parsed.message, response.code())
     } else {

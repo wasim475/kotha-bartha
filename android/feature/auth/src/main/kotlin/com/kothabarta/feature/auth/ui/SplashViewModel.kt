@@ -30,7 +30,7 @@ class SplashViewModel(private val repository: AuthRepository) : ViewModel() {
                 Routes.LOGIN
             } else {
                 when (repository.currentUser()) {
-                    is ApiResult.Success -> Routes.SIGNED_IN_PLACEHOLDER
+                    is ApiResult.Success -> Routes.MAIN
                     is ApiResult.Failure -> {
                         repository.clearLocalSession()
                         Routes.LOGIN

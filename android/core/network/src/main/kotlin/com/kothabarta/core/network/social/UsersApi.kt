@@ -5,7 +5,7 @@ import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Path
 
-/** `/api/v1/users/*` — see docs/architecture/android-api-contract.md's "Users / Profile". */
+/** `/api/v1/users` — see docs/architecture/android-api-contract.md's "Users / Profile". */
 interface UsersApi {
 
     @GET("users/{userId}")

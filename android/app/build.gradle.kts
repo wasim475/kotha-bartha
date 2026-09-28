@@ -59,6 +59,10 @@ dependencies {
     implementation(project(":core:navigation"))
     implementation(project(":core:ui"))
     implementation(project(":feature:auth"))
+    implementation(project(":feature:home"))
+    implementation(project(":feature:profile"))
+    implementation(project(":feature:friends"))
+    implementation(project(":feature:notifications"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

@@ -65,7 +65,7 @@ class LoginViewModel(
                 is ApiResult.Success -> {
                     preferences.setLastUsedEmail(email)
                     _uiState.update { it.copy(isLoading = false) }
-                    _navigationEvents.emit(NavigationEvent.NavigateTo(Routes.SIGNED_IN_PLACEHOLDER, popUpToInclusive = Routes.LOGIN))
+                    _navigationEvents.emit(NavigationEvent.NavigateTo(Routes.MAIN, popUpToInclusive = Routes.LOGIN))
                 }
                 is ApiResult.Failure -> {
                     _uiState.update { it.copy(isLoading = false, errorMessage = result.error.message) }

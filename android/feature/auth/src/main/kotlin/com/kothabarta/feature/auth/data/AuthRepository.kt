@@ -3,6 +3,7 @@ package com.kothabarta.feature.auth.data
 import com.kothabarta.core.common.ApiResult
 import com.kothabarta.core.common.map
 import com.kothabarta.core.network.AuthSession
+import com.kothabarta.core.network.SessionManager
 import com.kothabarta.core.network.auth.AuthApi
 import com.kothabarta.core.network.auth.GoogleLoginRequest
 import com.kothabarta.core.network.auth.LoginRequest
@@ -25,8 +26,8 @@ class AuthRepository(
     private val authApi: AuthApi,
     private val tokenStore: TokenStore,
     private val socketManager: SocketManager,
-) {
-    val isSignedIn: Boolean
+) : SessionManager {
+    override val isSignedIn: Boolean
         get() = !tokenStore.getToken().isNullOrBlank()
 
     suspend fun login(email: String, password: String): ApiResult<UserDto> =
@@ -48,7 +49,7 @@ class AuthRepository(
     }
 
     /** A user-initiated sign-out — also tells the server, best-effort. */
-    suspend fun logout() {
+    override suspend fun logout() {
         runCatching { safeApiCall { authApi.logout() } }
         clearLocalSession()
     }

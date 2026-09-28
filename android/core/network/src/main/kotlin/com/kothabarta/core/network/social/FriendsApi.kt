@@ -10,7 +10,7 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 /**
- * `/api/v1/friends/*` — see docs/architecture/android-api-contract.md's
+ * `/api/v1/friends` — see docs/architecture/android-api-contract.md's
  * "Friends". Two read methods hit the same `GET /friends` endpoint with
  * different `tab` values because the response shape genuinely differs:
  * `tab=friends` returns bare users, `tab=requests`/`tab=sent` return

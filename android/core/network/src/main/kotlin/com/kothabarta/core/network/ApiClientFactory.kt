@@ -35,7 +35,7 @@ object ApiClientFactory {
         return Retrofit.Builder()
             .baseUrl(baseUrl)
             .client(okHttpClient)
-            .addConverterFactory(MoshiConverterFactory.create(networkMoshi))
+            .addConverterFactory(MoshiConverterFactory.create(NetworkJson.moshi))
             .build()
     }
 }

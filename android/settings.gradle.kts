@@ -16,12 +16,10 @@ dependencyResolutionManagement {
 
 rootProject.name = "kotha-barta"
 
-// Only the modules needed for the first Android foundation milestone (see
-// docs/architecture/android-implementation-plan.md, section N) are wired up
-// here. The other core/feature directories under android/ remain plain,
-// unregistered folders until the phase that needs them actually starts —
-// see that document's "Feature implementation order" for when each one
-// becomes a real Gradle module.
+// Only the modules built so far (foundation milestone + Phase 2's Home/
+// Profile/Friends/Notifications, see docs/architecture/android-implementation-plan.md)
+// are wired up here. The remaining feature directories under android/ stay
+// plain, unregistered folders until the phase that needs them starts.
 include(":app")
 include(":core:common")
 include(":core:network")
@@ -31,3 +29,7 @@ include(":core:websocket")
 include(":core:navigation")
 include(":core:ui")
 include(":feature:auth")
+include(":feature:home")
+include(":feature:profile")
+include(":feature:friends")
+include(":feature:notifications")

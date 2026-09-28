@@ -8,7 +8,7 @@ import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
 
-/** `/api/v1/posts/*` — see docs/architecture/android-api-contract.md's "Feed / Posts". */
+/** `/api/v1/posts` — see docs/architecture/android-api-contract.md's "Feed / Posts". */
 interface PostsApi {
 
     @GET("posts/feed")
