@@ -59,6 +59,39 @@ object Routes {
         val avatar = peerAvatarUrl?.let { encode(it) }.orEmpty()
         return "messages/$conversationId?$CHAT_PEER_ID_ARG=$id&$CHAT_PEER_NAME_ARG=$name&$CHAT_PEER_AVATAR_ARG=$avatar"
     }
+
+    // Study + Quiz/Games/Leaderboard/Tic-Tac-Toe/Ludo — added in the Study
+    // phase. STUDY is the 6th bottom-nav tab; everything else is pushed on
+    // top of it. Each game's own category/subject/lobby drill-down is kept
+    // as in-screen state inside that feature's ViewModel rather than more
+    // nav routes, matching the web's own single-page-per-feature shape.
+    const val STUDY = "study"
+    const val QUIZ = "quiz"
+    const val GAMES = "games"
+    const val LEADERBOARD = "leaderboard"
+    const val TIC_TAC_TOE = "tic_tac_toe"
+    const val LUDO = "ludo"
+
+    const val QUIZ_CHAPTER_ARG = "chapterId"
+    const val QUIZ_SET_ARG = "setNumber"
+    const val QUIZ_PLAY_PATTERN = "quiz/play/{$QUIZ_CHAPTER_ARG}/{$QUIZ_SET_ARG}"
+    fun quizPlay(chapterId: String, setNumber: Int) = "quiz/play/$chapterId/$setNumber"
+
+    const val GAME_TYPE_ARG = "gameType"
+    const val GAME_PLAY_PATTERN = "games/play/{$GAME_TYPE_ARG}"
+    fun gamePlay(gameType: String) = "games/play/$gameType"
+
+    const val CHALLENGE_MATCH_ARG = "matchId"
+    const val CHALLENGE_PLAY_PATTERN = "games/challenge/{$CHALLENGE_MATCH_ARG}"
+    fun challengePlay(matchId: String) = "games/challenge/$matchId"
+
+    const val TTT_GAME_ARG = "gameId"
+    const val TTT_GAME_PATTERN = "tic_tac_toe/game/{$TTT_GAME_ARG}"
+    fun tttGame(gameId: String) = "tic_tac_toe/game/$gameId"
+
+    const val LUDO_GAME_ARG = "gameId"
+    const val LUDO_GAME_PATTERN = "ludo/game/{$LUDO_GAME_ARG}"
+    fun ludoGame(gameId: String) = "ludo/game/$gameId"
 }
 
 /**

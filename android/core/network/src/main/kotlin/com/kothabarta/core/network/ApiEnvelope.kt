@@ -28,6 +28,10 @@ data class ApiMeta(
     val hasMore: Boolean? = null,
     val restricted: Boolean? = null,
     val count: Int? = null,
+    /** Only present on `GET /games` — the games catalog's category list. */
+    val categories: List<com.kothabarta.core.network.games.GameCategoryDto>? = null,
+    /** Only present on `GET /leaderboard/archive/:year/:month` when no archive exists yet. */
+    val label: String? = null,
 )
 
 /**

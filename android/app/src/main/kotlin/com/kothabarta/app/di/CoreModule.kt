@@ -5,11 +5,17 @@ import com.kothabarta.core.datastore.AppPreferences
 import com.kothabarta.core.network.ApiClientFactory
 import com.kothabarta.core.network.UnauthorizedNotifier
 import com.kothabarta.core.network.auth.AuthApi
+import com.kothabarta.core.network.games.GameChallengeApi
+import com.kothabarta.core.network.games.GamesApi
+import com.kothabarta.core.network.leaderboard.LeaderboardApi
+import com.kothabarta.core.network.ludo.LudoApi
 import com.kothabarta.core.network.messages.MessagesApi
+import com.kothabarta.core.network.quiz.QuizApi
 import com.kothabarta.core.network.social.FriendsApi
 import com.kothabarta.core.network.social.NotificationsApi
 import com.kothabarta.core.network.social.PostsApi
 import com.kothabarta.core.network.social.UsersApi
+import com.kothabarta.core.network.tictactoe.TicTacToeApi
 import com.kothabarta.core.security.EncryptedTokenStore
 import com.kothabarta.core.security.TokenStore
 import com.kothabarta.core.websocket.SocketManager
@@ -43,4 +49,10 @@ val coreModule = module {
     single { get<Retrofit>().create(FriendsApi::class.java) }
     single { get<Retrofit>().create(NotificationsApi::class.java) }
     single { get<Retrofit>().create(MessagesApi::class.java) }
+    single { get<Retrofit>().create(QuizApi::class.java) }
+    single { get<Retrofit>().create(GamesApi::class.java) }
+    single { get<Retrofit>().create(GameChallengeApi::class.java) }
+    single { get<Retrofit>().create(LeaderboardApi::class.java) }
+    single { get<Retrofit>().create(TicTacToeApi::class.java) }
+    single { get<Retrofit>().create(LudoApi::class.java) }
 }
