@@ -23,6 +23,12 @@ function issueSession(res, user) {
     secure: true,
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
+  // The cookie above is what the web client uses. A native client (Android)
+  // has no cookie jar, so the same token is also returned as a sibling
+  // top-level field here — additive only, `data` is untouched, so the web
+  // client (which only ever reads `data.data`) is unaffected. See
+  // docs/architecture/android-implementation-plan.md, section D.
+  return token;
 }
 
 router.post("/register", async (req, res, next) => {
@@ -63,8 +69,8 @@ router.post("/register", async (req, res, next) => {
       email: normalizedEmail,
       passwordHash: await bcrypt.hash(password, 12),
     });
-    issueSession(res, user);
-    return res.status(201).json({ data: user.toSafeJSON() });
+    const token = issueSession(res, user);
+    return res.status(201).json({ data: user.toSafeJSON(), token });
   } catch (error) {
     next(error);
   }
@@ -85,8 +91,8 @@ router.post("/login", async (req, res, next) => {
             message: "Email or password is incorrect.",
           },
         });
-    issueSession(res, user);
-    return res.json({ data: user.toSafeJSON() });
+    const token = issueSession(res, user);
+    return res.json({ data: user.toSafeJSON(), token });
   } catch (error) {
     next(error);
   }
@@ -147,8 +153,8 @@ router.post("/google", async (req, res, next) => {
       });
     }
 
-    issueSession(res, user);
-    return res.json({ data: user.toSafeJSON() });
+    const token = issueSession(res, user);
+    return res.json({ data: user.toSafeJSON(), token });
   } catch (error) {
     console.error("Google login error:", error);
     return res.status(401).json({

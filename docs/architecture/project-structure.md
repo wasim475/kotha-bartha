@@ -1,28 +1,19 @@
-# Project structure — current vs. proposed
+# Project structure
 
-## Current (as inspected, unchanged by this pass)
-
-```
-kotha-bartha/
-├── client/     # React 19 + Vite 8 + Tailwind v4, npm project, own package.json
-├── server/     # Express 5 + Socket.IO 4 + Mongoose 9, npm project, own package.json
-├── android/    # NEW — empty foundation only, added by this pass
-├── docs/
-├── LUDO.md, PHASE-1-ARCHITECTURE.md, README.md
-```
-
-There is no root `package.json` / npm workspaces — `client` and `server` are two independent projects that happen to live in one git repo. Nothing here assumes a monorepo tool (no Turborepo/Nx/Lerna config found).
-
-## Proposed target (Phase 2, not done in this pass)
+## Confirmed final architecture
 
 ```
 kotha-bartha/
-├── apps/
-│   ├── web/       ← today's client/, moved as-is
-│   └── android/   ← today's android/, filled in
-├── server/        ← unchanged, stays where it is
+├── client/     # existing React web application — stays exactly where it is
+├── android/    # future Kotlin Android application — scaffold only, see android/README.md
+├── server/     # shared Express + Socket.IO backend — stays exactly where it is
 ├── docs/
+│   └── architecture/
 └── README.md
 ```
 
-Moving `client/` → `apps/web/` is a real migration (Vite root, Render/deploy build command, any relative `../server` references, CI paths, git history) and is **deliberately not done now** — see `docs/architecture/...` risk notes below and the root report. `server/` does not need to move at all in either layout; it is already a sibling, already framework-agnostic about who calls it, and Android will simply become a second caller of the same REST/Socket.IO surface.
+This supersedes the earlier `apps/web` + `apps/android` proposal from the prior architecture pass: the confirmed direction is a **flat, non-nested layout** with `client/`, `android/`, and `server/` as siblings at the repo root. No monorepo tool (Turborepo, Nx, Lerna, npm workspaces) is introduced — there is still no root `package.json`; `client`, `server`, and eventually `android` (via Gradle) remain three independently-built projects that share nothing but the HTTP/Socket.IO contract documented in the other files in this folder.
+
+## Why this is safe as a pure addition
+
+`server/` was never moved and needs no path changes to serve a second client — it has no knowledge of where `client/` or `android/` live on disk; it only knows the origins it CORS-allows (`CLIENT_ORIGIN` env var) and the JWT it verifies. `client/`'s Vite config, build command, and Render deployment are untouched. `android/` is new and currently empty of any buildable content (see `android/README.md`), so its addition changes nothing for the existing two projects.

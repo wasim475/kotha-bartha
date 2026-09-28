@@ -33,11 +33,16 @@ app.set("io", io);
 io.use(async (socket, next) => {
   try {
     const cookie = socket.handshake.headers.cookie || "";
-    const token = cookie
+    const cookieToken = cookie
       .split(";")
       .map((part) => part.trim())
       .find((part) => part.startsWith("kotha_token="))
       ?.slice("kotha_token=".length);
+    // Native clients (Android) have no cookie jar, so they authenticate the
+    // handshake with `io(url, { auth: { token } })` instead — see
+    // docs/architecture/android-realtime-contract.md. The web client keeps
+    // using the cookie exactly as before; this is purely an added fallback.
+    const token = cookieToken || socket.handshake.auth?.token;
     socket.userId = jwt.verify(token, process.env.JWT_SECRET).sub;
     // A permanently deleted account (see services/contentModeration.service.js) can't connect.
     if (await User.exists({ _id: socket.userId, accountStatus: "deleted" })) {

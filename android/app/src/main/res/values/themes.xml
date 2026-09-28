@@ -1,0 +1,14 @@
+<resources>
+    <!--
+      The androidx.core.splashscreen theme covers only the process-cold-start
+      icon flash; the actual auth-check UI is the Compose SplashScreen in
+      :feature:auth (see MainActivity.kt) — this theme's only job is to not
+      show a blank white window for the first frame.
+    -->
+    <style name="Theme.KothaBarta.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#F6F4EF</item>
+        <item name="postSplashScreenTheme">@style/Theme.KothaBarta</item>
+    </style>
+
+    <style name="Theme.KothaBarta" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

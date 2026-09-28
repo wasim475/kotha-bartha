@@ -1,0 +1,20 @@
+*.iml
+
+.gradle/
+
+/local.properties
+
+.idea/
+
+.DS_Store
+
+# All Gradle build directories
+**/build/
+
+# Build/caches
+/captures
+.externalNativeBuild/
+.cxx/
+
+*.apk
+*.aab
