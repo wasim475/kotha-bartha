@@ -64,6 +64,12 @@ dependencies {
     implementation(project(":feature:friends"))
     implementation(project(":feature:notifications"))
     implementation(project(":feature:messages"))
+    implementation(project(":feature:study"))
+    implementation(project(":feature:quiz"))
+    implementation(project(":feature:games"))
+    implementation(project(":feature:leaderboard"))
+    implementation(project(":feature:tic_tac_toe"))
+    implementation(project(":feature:ludo"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

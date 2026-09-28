@@ -20,13 +20,24 @@ import androidx.navigation.navArgument
 import com.kothabarta.core.navigation.NavigationEvent
 import com.kothabarta.core.navigation.Routes
 import com.kothabarta.feature.friends.ui.FriendsScreen
+import com.kothabarta.feature.games.ui.ChallengePlayScreen
+import com.kothabarta.feature.games.ui.GamePlayScreen
+import com.kothabarta.feature.games.ui.GamesCatalogScreen
 import com.kothabarta.feature.home.ui.FeedScreen
 import com.kothabarta.feature.home.ui.PostDetailScreen
+import com.kothabarta.feature.leaderboard.ui.LeaderboardScreen
+import com.kothabarta.feature.ludo.ui.LudoGameScreen
+import com.kothabarta.feature.ludo.ui.LudoLobbyScreen
 import com.kothabarta.feature.messages.ui.ChatScreen
 import com.kothabarta.feature.messages.ui.ConversationsScreen
 import com.kothabarta.feature.notifications.data.NotificationBadge
 import com.kothabarta.feature.notifications.ui.NotificationsScreen
 import com.kothabarta.feature.profile.ui.ProfileScreen
+import com.kothabarta.feature.quiz.ui.QuizBrowseScreen
+import com.kothabarta.feature.quiz.ui.QuizPlayScreen
+import com.kothabarta.feature.study.ui.StudyScreen
+import com.kothabarta.feature.tictactoe.ui.TttGameScreen
+import com.kothabarta.feature.tictactoe.ui.TttLobbyScreen
 import org.koin.compose.koinInject
 
 private data class BottomNavItem(val route: String, val label: String, val emoji: String)
@@ -35,6 +46,7 @@ private val BOTTOM_NAV_ITEMS = listOf(
     BottomNavItem(Routes.HOME, "Home", "🏠"),
     BottomNavItem(Routes.FRIENDS, "Friends", "👥"),
     BottomNavItem(Routes.MESSAGES, "Messages", "💬"),
+    BottomNavItem(Routes.STUDY, "Study", "📚"),
     BottomNavItem(Routes.NOTIFICATIONS, "Alerts", "🔔"),
     BottomNavItem(Routes.MY_PROFILE, "Profile", "👤"),
 )
@@ -134,6 +146,53 @@ fun MainScreen(onSignedOut: (NavigationEvent) -> Unit) {
                     peerAvatarUrl = decoded(Routes.CHAT_PEER_AVATAR_ARG),
                     onNavigate = onNavigate,
                 )
+            }
+            composable(Routes.STUDY) { StudyScreen(onNavigate = onNavigate) }
+            composable(Routes.QUIZ) { QuizBrowseScreen(onNavigate = onNavigate) }
+            composable(
+                Routes.QUIZ_PLAY_PATTERN,
+                arguments = listOf(
+                    navArgument(Routes.QUIZ_CHAPTER_ARG) { type = NavType.StringType },
+                    navArgument(Routes.QUIZ_SET_ARG) { type = NavType.IntType },
+                ),
+            ) { backStackEntry ->
+                val args = backStackEntry.arguments
+                QuizPlayScreen(
+                    chapterId = args?.getString(Routes.QUIZ_CHAPTER_ARG).orEmpty(),
+                    setNumber = args?.getInt(Routes.QUIZ_SET_ARG) ?: 1,
+                )
+            }
+            composable(Routes.LEADERBOARD) { LeaderboardScreen() }
+            composable(Routes.TIC_TAC_TOE) { TttLobbyScreen(onNavigate = onNavigate) }
+            composable(
+                Routes.TTT_GAME_PATTERN,
+                arguments = listOf(navArgument(Routes.TTT_GAME_ARG) { type = NavType.StringType }),
+            ) { backStackEntry ->
+                val gameId = backStackEntry.arguments?.getString(Routes.TTT_GAME_ARG).orEmpty()
+                TttGameScreen(gameId = gameId, onNavigate = onNavigate)
+            }
+            composable(Routes.GAMES) { GamesCatalogScreen(onNavigate = onNavigate) }
+            composable(
+                Routes.GAME_PLAY_PATTERN,
+                arguments = listOf(navArgument(Routes.GAME_TYPE_ARG) { type = NavType.StringType }),
+            ) { backStackEntry ->
+                val gameType = backStackEntry.arguments?.getString(Routes.GAME_TYPE_ARG).orEmpty()
+                GamePlayScreen(gameType = gameType)
+            }
+            composable(
+                Routes.CHALLENGE_PLAY_PATTERN,
+                arguments = listOf(navArgument(Routes.CHALLENGE_MATCH_ARG) { type = NavType.StringType }),
+            ) { backStackEntry ->
+                val matchId = backStackEntry.arguments?.getString(Routes.CHALLENGE_MATCH_ARG).orEmpty()
+                ChallengePlayScreen(matchId = matchId)
+            }
+            composable(Routes.LUDO) { LudoLobbyScreen(onNavigate = onNavigate) }
+            composable(
+                Routes.LUDO_GAME_PATTERN,
+                arguments = listOf(navArgument(Routes.LUDO_GAME_ARG) { type = NavType.StringType }),
+            ) { backStackEntry ->
+                val gameId = backStackEntry.arguments?.getString(Routes.LUDO_GAME_ARG).orEmpty()
+                LudoGameScreen(gameId = gameId, onNavigate = onNavigate)
             }
         }
     }

@@ -1,5 +1,6 @@
 package com.kothabarta.core.websocket
 
+import io.socket.client.Ack
 import io.socket.client.IO
 import io.socket.client.Socket
 import io.socket.emitter.Emitter
@@ -68,5 +69,10 @@ class SocketManager(private val serverUrl: String) {
 
     fun emit(event: String, vararg args: Any) {
         socket?.emit(event, *args)
+    }
+
+    /** For the request/ack-style events (e.g. `ticTacToe:move`, `ludo:roll`) whose server handler replies via an ack callback. */
+    fun emitWithAck(event: String, data: Any, ack: Ack) {
+        socket?.emit(event, data, ack)
     }
 }

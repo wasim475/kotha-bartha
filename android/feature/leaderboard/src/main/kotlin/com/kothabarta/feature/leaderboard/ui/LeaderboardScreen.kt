@@ -18,7 +18,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.kothabarta.core.network.leaderboard.LeaderboardMeDto
+import androidx.compose.ui.unit.dp
 import com.kothabarta.core.network.leaderboard.LeaderboardRowDto
 import com.kothabarta.core.ui.components.AvatarImage
 import com.kothabarta.core.ui.components.EmptyState
@@ -70,12 +70,17 @@ fun LeaderboardScreen(viewModel: LeaderboardViewModel = koinViewModel()) {
             )
             else -> {
                 val data = state.data!!
-                LazyColumn(modifier = Modifier.weight(1f, fill = true).fillMaxWidth(), contentPadding = PaddingValues(Spacing.md)) {
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f, fill = true)
+                        .fillMaxWidth(),
+                    contentPadding = PaddingValues(Spacing.md),
+                ) {
                     items(data.top20, key = { it.rank }) { row -> LeaderboardRow(row) }
                 }
                 data.me?.let { me ->
                     if (!me.inTop20) {
-                        Surface(tonalElevation = 3.dp()) {
+                        Surface(tonalElevation = 3.dp) {
                             LeaderboardRow(
                                 LeaderboardRowDto(
                                     rank = me.rank, id = me.id, fullName = "You", avatar = me.avatar,
@@ -96,21 +101,19 @@ private fun LeaderboardRow(row: LeaderboardRowDto, highlight: Boolean = false) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = Spacing.xs),
+            .padding(vertical = Spacing.xs, horizontal = Spacing.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text("#${row.rank}", modifier = Modifier.padding(end = Spacing.sm), style = MaterialTheme.typography.titleMedium)
         AvatarImage(avatarUrl = row.avatar?.secureUrl, initials = row.fullName.take(2))
         Text(
             row.fullName,
-            modifier = Modifier.padding(start = Spacing.sm).weight(1f),
+            modifier = Modifier
+                .padding(start = Spacing.sm)
+                .weight(1f),
             style = if (highlight) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
             color = if (highlight) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
         )
         Text("${row.points} pts", style = MaterialTheme.typography.labelLarge)
     }
 }
-
-@Composable
-private fun Dp() = MaterialTheme.colorScheme
-private fun Int.dp() = androidx.compose.ui.unit.Dp(this.toFloat())
