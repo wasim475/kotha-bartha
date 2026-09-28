@@ -5,6 +5,7 @@ import com.kothabarta.core.datastore.AppPreferences
 import com.kothabarta.core.network.ApiClientFactory
 import com.kothabarta.core.network.UnauthorizedNotifier
 import com.kothabarta.core.network.auth.AuthApi
+import com.kothabarta.core.network.call.CallApi
 import com.kothabarta.core.network.games.GameChallengeApi
 import com.kothabarta.core.network.games.GamesApi
 import com.kothabarta.core.network.leaderboard.LeaderboardApi
@@ -55,4 +56,5 @@ val coreModule = module {
     single { get<Retrofit>().create(LeaderboardApi::class.java) }
     single { get<Retrofit>().create(TicTacToeApi::class.java) }
     single { get<Retrofit>().create(LudoApi::class.java) }
+    single { get<Retrofit>().create(CallApi::class.java) }
 }

@@ -3,6 +3,7 @@ package com.kothabarta.app
 import android.app.Application
 import com.kothabarta.app.di.coreModule
 import com.kothabarta.feature.auth.di.authFeatureModule
+import com.kothabarta.feature.calls.di.callsFeatureModule
 import com.kothabarta.feature.friends.di.friendsFeatureModule
 import com.kothabarta.feature.games.di.gamesFeatureModule
 import com.kothabarta.feature.home.di.homeFeatureModule
@@ -38,6 +39,7 @@ class KothaBartaApp : Application() {
                 tttFeatureModule,
                 gamesFeatureModule,
                 ludoFeatureModule,
+                callsFeatureModule,
             )
         }
     }

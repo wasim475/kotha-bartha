@@ -1,5 +1,7 @@
 package com.kothabarta.app.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -19,6 +21,8 @@ import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.kothabarta.core.navigation.NavigationEvent
 import com.kothabarta.core.navigation.Routes
+import com.kothabarta.feature.calls.ui.CallGlobalHost
+import com.kothabarta.feature.calls.ui.CallHistoryScreen
 import com.kothabarta.feature.friends.ui.FriendsScreen
 import com.kothabarta.feature.games.ui.ChallengePlayScreen
 import com.kothabarta.feature.games.ui.GamePlayScreen
@@ -103,10 +107,11 @@ fun MainScreen(onSignedOut: (NavigationEvent) -> Unit) {
             }
         },
     ) { padding ->
+        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
         NavHost(
             navController = navController,
             startDestination = Routes.HOME,
-            modifier = Modifier.padding(padding),
+            modifier = Modifier.fillMaxSize(),
         ) {
             composable(Routes.HOME) { FeedScreen(onNavigate = onNavigate) }
             composable(Routes.FRIENDS) { FriendsScreen(onNavigate = onNavigate) }

@@ -70,6 +70,7 @@ dependencies {
     implementation(project(":feature:leaderboard"))
     implementation(project(":feature:tic_tac_toe"))
     implementation(project(":feature:ludo"))
+    implementation(project(":feature:calls"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

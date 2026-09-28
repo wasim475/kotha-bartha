@@ -1,0 +1,17 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+      No Telecom/ConnectionService integration (that's a separate, much larger
+      feature — system Phone-app UI, default-dialer-style privileges) so these
+      use the microphone/camera foreground-service types, not "phoneCall",
+      which requires that integration. Enough to keep the RTCPeerConnection's
+      capture alive while the app is backgrounded or the screen is off.
+    -->
+    <service
+        android:name=".service.CallForegroundService"
+        android:foregroundServiceType="microphone|camera"
+        android:exported="false" />
+    <service
+        android:name=".service.ScreenShareForegroundService"
+        android:foregroundServiceType="mediaProjection"
+        android:exported="false" />
+</manifest>
