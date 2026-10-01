@@ -108,97 +108,99 @@ fun MainScreen(onSignedOut: (NavigationEvent) -> Unit) {
         },
     ) { padding ->
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-        NavHost(
-            navController = navController,
-            startDestination = Routes.HOME,
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            composable(Routes.HOME) { FeedScreen(onNavigate = onNavigate) }
-            composable(Routes.FRIENDS) { FriendsScreen(onNavigate = onNavigate) }
-            composable(Routes.MESSAGES) { ConversationsScreen(onNavigate = onNavigate) }
-            composable(Routes.NOTIFICATIONS) { NotificationsScreen(onNavigate = onNavigate) }
-            composable(Routes.MY_PROFILE) { ProfileScreen(userId = null, onNavigate = onNavigate) }
-            composable(
-                Routes.PROFILE_PATTERN,
-                arguments = listOf(navArgument(Routes.PROFILE_ARG) {}),
-            ) { backStackEntry ->
-                val userId = backStackEntry.arguments?.getString(Routes.PROFILE_ARG).orEmpty()
-                ProfileScreen(userId = userId, onNavigate = onNavigate)
+            NavHost(
+                navController = navController,
+                startDestination = Routes.HOME,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                composable(Routes.HOME) { FeedScreen(onNavigate = onNavigate) }
+                composable(Routes.FRIENDS) { FriendsScreen(onNavigate = onNavigate) }
+                composable(Routes.MESSAGES) { ConversationsScreen(onNavigate = onNavigate) }
+                composable(Routes.NOTIFICATIONS) { NotificationsScreen(onNavigate = onNavigate) }
+                composable(Routes.MY_PROFILE) { ProfileScreen(userId = null, onNavigate = onNavigate) }
+                composable(
+                    Routes.PROFILE_PATTERN,
+                    arguments = listOf(navArgument(Routes.PROFILE_ARG) {}),
+                ) { backStackEntry ->
+                    val userId = backStackEntry.arguments?.getString(Routes.PROFILE_ARG).orEmpty()
+                    ProfileScreen(userId = userId, onNavigate = onNavigate)
+                }
+                composable(
+                    Routes.POST_PATTERN,
+                    arguments = listOf(navArgument(Routes.POST_ARG) {}),
+                ) { backStackEntry ->
+                    val postId = backStackEntry.arguments?.getString(Routes.POST_ARG).orEmpty()
+                    PostDetailScreen(postId = postId, onNavigate = onNavigate)
+                }
+                composable(
+                    Routes.CHAT_PATTERN,
+                    arguments = listOf(
+                        navArgument(Routes.CHAT_CONVERSATION_ARG) { type = NavType.StringType },
+                        navArgument(Routes.CHAT_PEER_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+                        navArgument(Routes.CHAT_PEER_NAME_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+                        navArgument(Routes.CHAT_PEER_AVATAR_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+                    ),
+                ) { backStackEntry ->
+                    val args = backStackEntry.arguments
+                    val conversationId = args?.getString(Routes.CHAT_CONVERSATION_ARG).orEmpty()
+                    fun decoded(key: String) = args?.getString(key)?.takeIf { it.isNotBlank() }?.let { Routes.decode(it) }
+                    ChatScreen(
+                        conversationId = conversationId,
+                        peerId = decoded(Routes.CHAT_PEER_ID_ARG),
+                        peerName = decoded(Routes.CHAT_PEER_NAME_ARG),
+                        peerAvatarUrl = decoded(Routes.CHAT_PEER_AVATAR_ARG),
+                        onNavigate = onNavigate,
+                    )
+                }
+                composable(Routes.STUDY) { StudyScreen(onNavigate = onNavigate) }
+                composable(Routes.QUIZ) { QuizBrowseScreen(onNavigate = onNavigate) }
+                composable(
+                    Routes.QUIZ_PLAY_PATTERN,
+                    arguments = listOf(
+                        navArgument(Routes.QUIZ_CHAPTER_ARG) { type = NavType.StringType },
+                        navArgument(Routes.QUIZ_SET_ARG) { type = NavType.IntType },
+                    ),
+                ) { backStackEntry ->
+                    val args = backStackEntry.arguments
+                    QuizPlayScreen(
+                        chapterId = args?.getString(Routes.QUIZ_CHAPTER_ARG).orEmpty(),
+                        setNumber = args?.getInt(Routes.QUIZ_SET_ARG) ?: 1,
+                    )
+                }
+                composable(Routes.LEADERBOARD) { LeaderboardScreen() }
+                composable(Routes.TIC_TAC_TOE) { TttLobbyScreen(onNavigate = onNavigate) }
+                composable(
+                    Routes.TTT_GAME_PATTERN,
+                    arguments = listOf(navArgument(Routes.TTT_GAME_ARG) { type = NavType.StringType }),
+                ) { backStackEntry ->
+                    val gameId = backStackEntry.arguments?.getString(Routes.TTT_GAME_ARG).orEmpty()
+                    TttGameScreen(gameId = gameId, onNavigate = onNavigate)
+                }
+                composable(Routes.GAMES) { GamesCatalogScreen(onNavigate = onNavigate) }
+                composable(
+                    Routes.GAME_PLAY_PATTERN,
+                    arguments = listOf(navArgument(Routes.GAME_TYPE_ARG) { type = NavType.StringType }),
+                ) { backStackEntry ->
+                    val gameType = backStackEntry.arguments?.getString(Routes.GAME_TYPE_ARG).orEmpty()
+                    GamePlayScreen(gameType = gameType)
+                }
+                composable(
+                    Routes.CHALLENGE_PLAY_PATTERN,
+                    arguments = listOf(navArgument(Routes.CHALLENGE_MATCH_ARG) { type = NavType.StringType }),
+                ) { backStackEntry ->
+                    val matchId = backStackEntry.arguments?.getString(Routes.CHALLENGE_MATCH_ARG).orEmpty()
+                    ChallengePlayScreen(matchId = matchId)
+                }
+                composable(Routes.LUDO) { LudoLobbyScreen(onNavigate = onNavigate) }
+                composable(
+                    Routes.LUDO_GAME_PATTERN,
+                    arguments = listOf(navArgument(Routes.LUDO_GAME_ARG) { type = NavType.StringType }),
+                ) { backStackEntry ->
+                    val gameId = backStackEntry.arguments?.getString(Routes.LUDO_GAME_ARG).orEmpty()
+                    LudoGameScreen(gameId = gameId, onNavigate = onNavigate)
+                }
             }
-            composable(
-                Routes.POST_PATTERN,
-                arguments = listOf(navArgument(Routes.POST_ARG) {}),
-            ) { backStackEntry ->
-                val postId = backStackEntry.arguments?.getString(Routes.POST_ARG).orEmpty()
-                PostDetailScreen(postId = postId, onNavigate = onNavigate)
-            }
-            composable(
-                Routes.CHAT_PATTERN,
-                arguments = listOf(
-                    navArgument(Routes.CHAT_CONVERSATION_ARG) { type = NavType.StringType },
-                    navArgument(Routes.CHAT_PEER_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
-                    navArgument(Routes.CHAT_PEER_NAME_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
-                    navArgument(Routes.CHAT_PEER_AVATAR_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
-                ),
-            ) { backStackEntry ->
-                val args = backStackEntry.arguments
-                val conversationId = args?.getString(Routes.CHAT_CONVERSATION_ARG).orEmpty()
-                fun decoded(key: String) = args?.getString(key)?.takeIf { it.isNotBlank() }?.let { Routes.decode(it) }
-                ChatScreen(
-                    conversationId = conversationId,
-                    peerId = decoded(Routes.CHAT_PEER_ID_ARG),
-                    peerName = decoded(Routes.CHAT_PEER_NAME_ARG),
-                    peerAvatarUrl = decoded(Routes.CHAT_PEER_AVATAR_ARG),
-                    onNavigate = onNavigate,
-                )
-            }
-            composable(Routes.STUDY) { StudyScreen(onNavigate = onNavigate) }
-            composable(Routes.QUIZ) { QuizBrowseScreen(onNavigate = onNavigate) }
-            composable(
-                Routes.QUIZ_PLAY_PATTERN,
-                arguments = listOf(
-                    navArgument(Routes.QUIZ_CHAPTER_ARG) { type = NavType.StringType },
-                    navArgument(Routes.QUIZ_SET_ARG) { type = NavType.IntType },
-                ),
-            ) { backStackEntry ->
-                val args = backStackEntry.arguments
-                QuizPlayScreen(
-                    chapterId = args?.getString(Routes.QUIZ_CHAPTER_ARG).orEmpty(),
-                    setNumber = args?.getInt(Routes.QUIZ_SET_ARG) ?: 1,
-                )
-            }
-            composable(Routes.LEADERBOARD) { LeaderboardScreen() }
-            composable(Routes.TIC_TAC_TOE) { TttLobbyScreen(onNavigate = onNavigate) }
-            composable(
-                Routes.TTT_GAME_PATTERN,
-                arguments = listOf(navArgument(Routes.TTT_GAME_ARG) { type = NavType.StringType }),
-            ) { backStackEntry ->
-                val gameId = backStackEntry.arguments?.getString(Routes.TTT_GAME_ARG).orEmpty()
-                TttGameScreen(gameId = gameId, onNavigate = onNavigate)
-            }
-            composable(Routes.GAMES) { GamesCatalogScreen(onNavigate = onNavigate) }
-            composable(
-                Routes.GAME_PLAY_PATTERN,
-                arguments = listOf(navArgument(Routes.GAME_TYPE_ARG) { type = NavType.StringType }),
-            ) { backStackEntry ->
-                val gameType = backStackEntry.arguments?.getString(Routes.GAME_TYPE_ARG).orEmpty()
-                GamePlayScreen(gameType = gameType)
-            }
-            composable(
-                Routes.CHALLENGE_PLAY_PATTERN,
-                arguments = listOf(navArgument(Routes.CHALLENGE_MATCH_ARG) { type = NavType.StringType }),
-            ) { backStackEntry ->
-                val matchId = backStackEntry.arguments?.getString(Routes.CHALLENGE_MATCH_ARG).orEmpty()
-                ChallengePlayScreen(matchId = matchId)
-            }
-            composable(Routes.LUDO) { LudoLobbyScreen(onNavigate = onNavigate) }
-            composable(
-                Routes.LUDO_GAME_PATTERN,
-                arguments = listOf(navArgument(Routes.LUDO_GAME_ARG) { type = NavType.StringType }),
-            ) { backStackEntry ->
-                val gameId = backStackEntry.arguments?.getString(Routes.LUDO_GAME_ARG).orEmpty()
-                LudoGameScreen(gameId = gameId, onNavigate = onNavigate)
-            }
+            CallGlobalHost()
         }
     }
 }
