@@ -21,7 +21,7 @@ import kotlinx.coroutines.launch
  */
 class SplashViewModel(private val repository: AuthRepository) : ViewModel() {
 
-    private val _navigationEvents = MutableSharedFlow<NavigationEvent>(extraBufferCapacity = 1)
+    private val _navigationEvents = MutableSharedFlow<NavigationEvent>(replay = 1)
     val navigationEvents: SharedFlow<NavigationEvent> = _navigationEvents.asSharedFlow()
 
     init {
