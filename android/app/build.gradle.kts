@@ -5,10 +5,10 @@ plugins {
 }
 
 val debugApiBaseUrl = providers.gradleProperty("API_BASE_URL")
-    .orElse("http://10.0.2.2:5000/api/v1/")
+    .orElse("https://kotha-bartha.onrender.com/api/v1/")
     .get()
 val debugSocketUrl = providers.gradleProperty("SOCKET_URL")
-    .orElse("http://10.0.2.2:5000")
+    .orElse("https://kotha-bartha.onrender.com")
     .get()
 val googleWebClientId = providers.gradleProperty("GOOGLE_WEB_CLIENT_ID")
     .orElse("758733508959-4ptqjr4o27lg073pulpen7rd4frd17vm.apps.googleusercontent.com")
@@ -29,10 +29,8 @@ android {
 
     buildTypes {
         debug {
-            // Points at the machine's own loopback from the Android emulator's
-            // perspective (10.0.2.2), matching server/.env's default local dev
-            // port — see docs/architecture/android-implementation-plan.md
-            // section N. A device/physical build needs a real reachable host.
+            // Keep Android on the same hosted API as the web client by default.
+            // Local development can override these with Gradle properties.
             buildConfigField("String", "API_BASE_URL", "\"$debugApiBaseUrl\"")
             buildConfigField("String", "SOCKET_URL", "\"$debugSocketUrl\"")
             manifestPlaceholders["usesCleartextTraffic"] = "true"

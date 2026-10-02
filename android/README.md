@@ -2,9 +2,9 @@
 
 ## Local API connection
 
-The debug build defaults to `http://10.0.2.2:5000`, which reaches the host computer from the Android emulator. Start the backend from `server/` with `npm run dev`.
+Debug and release builds use the same hosted API as the web client by default: `https://kotha-bartha.onrender.com/api/v1/`.
 
-For a physical phone, use the computer's LAN IP address and keep the phone and computer on the same network. The backend must listen on that interface, and the computer firewall must allow port 5000. Override the debug URLs when building:
+For local backend development, start the server from `server/` with `npm run dev`, then override the debug URLs when building. On an emulator, `10.0.2.2` reaches the host computer. On a physical phone, use the computer's LAN IP address, keep both devices on the same network, and allow port 5000 through the firewall.
 
 ```powershell
 cd android
