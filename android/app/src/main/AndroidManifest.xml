@@ -5,6 +5,7 @@
         android:allowBackup="true"
         android:icon="@android:drawable/sym_def_app_icon"
         android:label="Kotha-Barta"
+        android:usesCleartextTraffic="${usesCleartextTraffic}"
         android:theme="@style/Theme.KothaBarta.Splash">
 
         <activity

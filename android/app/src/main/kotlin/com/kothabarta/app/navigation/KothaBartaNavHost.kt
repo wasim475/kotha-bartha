@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.kothabarta.app.BuildConfig
 import com.kothabarta.core.navigation.NavigationEvent
 import com.kothabarta.core.navigation.Routes
 import com.kothabarta.core.network.SessionManager
@@ -54,7 +55,12 @@ fun KothaBartaNavHost() {
     Surface(modifier = Modifier.fillMaxSize()) {
         NavHost(navController = navController, startDestination = Routes.SPLASH) {
             composable(Routes.SPLASH) { SplashScreen(onNavigate = handleEvent) }
-            composable(Routes.LOGIN) { LoginScreen(onNavigate = handleEvent) }
+            composable(Routes.LOGIN) {
+                LoginScreen(
+                    onNavigate = handleEvent,
+                    googleWebClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID,
+                )
+            }
             composable(Routes.SIGNUP) { SignupScreen(onNavigate = handleEvent) }
             composable(Routes.MAIN) { MainScreen(onSignedOut = handleEvent) }
         }

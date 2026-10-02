@@ -74,6 +74,29 @@ class LoginViewModel(
         }
     }
 
+    fun loginWithGoogle(credential: String) {
+        if (credential.isBlank()) {
+            _uiState.update { it.copy(errorMessage = "Google sign-in did not return a credential.") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            when (val result = repository.loginWithGoogle(credential)) {
+                is ApiResult.Success -> {
+                    _uiState.update { it.copy(isLoading = false) }
+                    _navigationEvents.emit(NavigationEvent.NavigateTo(Routes.MAIN, popUpToInclusive = Routes.LOGIN))
+                }
+                is ApiResult.Failure -> {
+                    _uiState.update { it.copy(isLoading = false, errorMessage = result.error.message) }
+                }
+            }
+        }
+    }
+
+    fun showGoogleSignInError(message: String) {
+        _uiState.update { it.copy(errorMessage = message) }
+    }
+
     fun goToSignup() {
         viewModelScope.launch { _navigationEvents.emit(NavigationEvent.NavigateTo(Routes.SIGNUP)) }
     }
