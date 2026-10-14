@@ -64,7 +64,7 @@ export const formatTime = (date) => {
 };
 
 // Presence-specific: "Today at 10:22 PM" / "Yesterday at 10:22 PM" /
-// "2 days ago at 10:22 PM" rather than formatTime's generic relative
+// "Sep 14 at 10:22 AM" rather than formatTime's generic relative
 // phrasing — used anywhere a friend's online/last-seen status is shown
 // (currently just the Messages chat header) so there's exactly one place
 // this format is defined, not a competing one per call site. Always in the
@@ -79,9 +79,10 @@ export const formatLastSeen = (date) => {
   const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const diffDays = Math.round((startOfDay(now) - startOfDay(seen)) / 86400000);
 
-  if (diffDays <= 0) return `Today at ${time}`;
-  if (diffDays === 1) return `Yesterday at ${time}`;
-  if (diffDays <= 6) return `${diffDays} days ago at ${time}`;
+  if (now.getTime() - seen.getTime() < 24 * 60 * 60 * 1000) {
+    if (diffDays <= 0) return `Today at ${time}`;
+    return `Yesterday at ${time}`;
+  }
 
   const dateLabel = seen.toLocaleDateString([], {
     day: "numeric",

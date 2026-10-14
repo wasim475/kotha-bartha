@@ -2,6 +2,7 @@ package com.kothabarta.core.datastore
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -21,10 +22,16 @@ class AppPreferences(context: Context) {
 
     private val dataStore = context.dataStore
     private val lastUsedEmailKey = stringPreferencesKey("last_used_email")
+    private val darkThemeKey = booleanPreferencesKey("dark_theme")
 
     val lastUsedEmail: Flow<String?> = dataStore.data.map { it[lastUsedEmailKey] }
+    val darkTheme: Flow<Boolean?> = dataStore.data.map { it[darkThemeKey] }
 
     suspend fun setLastUsedEmail(email: String) {
         dataStore.edit { it[lastUsedEmailKey] = email }
+    }
+
+    suspend fun setDarkTheme(enabled: Boolean) {
+        dataStore.edit { it[darkThemeKey] = enabled }
     }
 }

@@ -10,6 +10,7 @@ import com.kothabarta.core.network.social.CancelledResponse
 import com.kothabarta.core.network.social.FriendsApi
 import com.kothabarta.core.network.social.PhotoDto
 import com.kothabarta.core.network.social.PostDto
+import com.kothabarta.core.network.social.SafeUserDto
 import com.kothabarta.core.network.social.SendFriendRequestBody
 import com.kothabarta.core.network.social.UnfriendedResponse
 import com.kothabarta.core.network.social.UsersApi
@@ -19,6 +20,9 @@ class ProfileRepository(
     private val usersApi: UsersApi,
     private val friendsApi: FriendsApi,
 ) {
+    suspend fun searchUsers(query: String): ApiResult<List<SafeUserDto>> =
+        safeApiCall { usersApi.searchUsers(query) }
+
     suspend fun getOwnProfile(): ApiResult<ProfileUiModel> =
         safeApiCall { authApi.me() }.map { it.toProfileUiModel() }
 
