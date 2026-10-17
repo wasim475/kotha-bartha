@@ -5,9 +5,13 @@ const CourseSubject = require("../models/CourseSubject");
 const Course = require("../models/Course");
 const CourseSection = require("../models/CourseSection");
 const CourseLesson = require("../models/CourseLesson");
+const CourseLessonQuestion = require("../models/CourseLessonQuestion");
+const CourseLessonAttempt = require("../models/CourseLessonAttempt");
+const CourseLessonProgress = require("../models/CourseLessonProgress");
 const { upload } = require("../middleware/upload");
 const { uploadBuffer } = require("../utils/cloudinary");
 const { canManageSubjectCards, deletionActions, normalizeLessonBlocks, normalizeOrder, publicCourseFilter, publicLessonFilter, publicLessonListFilter } = require("../utils/coursePolicy");
+const courseTestsRoutes = require("./courseTests.routes");
 
 const router = express.Router();
 const staff = requireRole("admin", "moderator");
@@ -89,11 +93,16 @@ router.get("/staff/courses", staff, async (req, res, next) => {
   try {
     const [subjects, courses, sections, lessons] = await Promise.all([
       CourseSubject.find().sort({ order: 1 }).lean(), Course.find().sort({ order: 1, createdAt: -1 }).lean(),
-      CourseSection.find().sort({ order: 1 }).lean(), CourseLesson.find().select("title description courseId sectionId status order authorId updatedAt").sort({ order: 1 }).lean(),
+      CourseSection.find().sort({ order: 1 }).lean(), CourseLesson.find().select("title description courseId sectionId status testPublished order authorId updatedAt").sort({ order: 1 }).lean(),
     ]);
-    res.json({ data: { subjects, courses, sections, lessons } });
+    const questionCounts = await CourseLessonQuestion.aggregate([{ $match: { lessonId: { $in: lessons.map((lesson) => lesson._id) } } }, { $group: { _id: "$lessonId", count: { $sum: 1 } } }]);
+    const countByLesson = new Map(questionCounts.map((entry) => [String(entry._id), entry.count]));
+    res.json({ data: { subjects, courses, sections, lessons: lessons.map((lesson) => ({ ...lesson, questionCount: countByLesson.get(String(lesson._id)) || 0 })) } });
   } catch (e) { next(e); }
 });
+
+// Mount specific test/question routes before the generic staff CRUD patterns.
+router.use(courseTestsRoutes);
 
 router.post("/staff/courses/:kind", staff, async (req, res, next) => {
   try {
@@ -131,6 +140,7 @@ router.patch("/staff/courses/:kind/:id", staff, async (req, res, next) => {
     if (!Model) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Unknown content type." } });
     const doc = await Model.findById(id);
     if (!doc) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Content not found." } });
+    if (kind === "lessons" && req.user.role === "moderator" && String(doc.authorId) !== String(req.user._id)) return res.status(403).json({ error: { code: "FORBIDDEN", message: "Moderators can edit only lessons they created." } });
     const b = req.body || {};
     if (b.title !== undefined) { const value = String(b.title).trim(); if (!value || value.length > 160) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "A valid title is required." } }); doc.title = value; }
     if (b.description !== undefined) doc.description = String(b.description).slice(0, kind === "courses" ? 1000 : 600);
@@ -159,9 +169,26 @@ router.delete("/staff/courses/:kind/:id", staff, async (req, res, next) => {
   try {
     const { kind, id } = req.params; if (!validId(id)) return idError(res);
     if (kind === "subjects" && !canManageSubjectCards(req.user.role)) return res.status(403).json({ error: { code: "FORBIDDEN", message: "Only admins can manage subject cards." } });
+    if (kind === "lessons" && req.user.role === "moderator") {
+      const lesson = await CourseLesson.findById(id).select("authorId").lean();
+      if (lesson && String(lesson.authorId) !== String(req.user._id)) return res.status(403).json({ error: { code: "FORBIDDEN", message: "Moderators can delete only lessons they created." } });
+    }
     if (kind === "subjects" && await Course.exists({ subjectId: id })) return res.status(409).json({ error: { code: "IN_USE", message: "Move or remove its courses before deleting this subject." } });
     const actions = deletionActions(kind, id);
     if (!actions) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Unknown content type." } });
+    let lessonIds = [];
+    if (kind === "lessons") lessonIds = [id];
+    else if (kind === "courses" || kind === "sections") {
+      const lessonFilter = kind === "courses" ? { courseId: id } : { sectionId: id };
+      lessonIds = (await CourseLesson.find(lessonFilter).select("_id").lean()).map((lesson) => lesson._id);
+    }
+    if (lessonIds.length) {
+      await Promise.all([
+        CourseLessonQuestion.deleteMany({ lessonId: { $in: lessonIds } }),
+        CourseLessonAttempt.deleteMany({ lessonId: { $in: lessonIds } }),
+        CourseLessonProgress.deleteMany({ lessonId: { $in: lessonIds } }),
+      ]);
+    }
     const models = { subjects: CourseSubject, courses: Course, sections: CourseSection, lessons: CourseLesson };
     for (const action of actions) await models[action.collection][action.method](action.filter);
     res.json({ data: { deleted: true } });

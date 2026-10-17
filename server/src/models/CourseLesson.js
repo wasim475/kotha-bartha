@@ -17,6 +17,7 @@ const schema = new mongoose.Schema({
   blocks: { type: [blockSchema], default: [] },
   authorId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   status: { type: String, enum: ["draft", "published"], default: "draft", index: true },
+  testPublished: { type: Boolean, default: false, index: true },
   order: { type: Number, default: 0, min: 0, max: 10000 },
 }, { timestamps: true });
 schema.index({ courseId: 1, sectionId: 1, status: 1, order: 1 });

@@ -38,7 +38,7 @@ export function applyLessonFormat(value, start, end, format, linkUrl = "https://
 function safeHref(value) {
   try {
     const url = new URL(value);
-    return ["https:", "http:"].includes(url.protocol) ? url.href : null;
+    return url.protocol === "https:" ? url.href : null;
   } catch { return null; }
 }
 

@@ -28,6 +28,15 @@ function deletionActions(kind, id) {
   return null;
 }
 
+function hasUnsafeMarkdownLinks(text) {
+  const links = String(text || "").matchAll(/\[[^\]]+\]\(([^)\s]+)\)/g);
+  for (const link of links) {
+    try { if (new URL(link[1]).protocol !== "https:") return true; }
+    catch { return true; }
+  }
+  return false;
+}
+
 function normalizeLessonBlocks(input, safeUrl) {
   if (!Array.isArray(input) || input.length > 100 || input.some((block) => !block || !BLOCK_TYPES.has(block.type))) {
     return { error: "Lesson blocks are invalid." };
@@ -41,6 +50,9 @@ function normalizeLessonBlocks(input, safeUrl) {
     caption: String(block.caption || "").slice(0, 500),
     variant: CALLOUTS.has(block.variant) ? block.variant : "default",
   }));
+  if (blocks.some((block) => ["text", "quote", "callout"].includes(block.type) && hasUnsafeMarkdownLinks(block.text))) {
+    return { error: "Lesson links must use valid HTTPS URLs." };
+  }
   if (blocks.some((block) => ["image", "video"].includes(block.type) && !block.url)) {
     return { error: "Use a supported secure media URL." };
   }
@@ -52,6 +64,7 @@ module.exports = {
   canManageCourses,
   canManageSubjectCards,
   deletionActions,
+  hasUnsafeMarkdownLinks,
   normalizeLessonBlocks,
   normalizeOrder,
   publicCourseFilter,

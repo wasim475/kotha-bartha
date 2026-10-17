@@ -31,6 +31,7 @@ test("inline links reject unsafe schemes while formatting remains plain text", (
     { type: "link", text: "safe", href: "https://example.com/" },
     { type: "text", text: " [bad](javascript:alert(1))" },
   ]);
+  assert.equal(parseInlineLessonText("[insecure](http://example.com)")[0].type, "text");
 });
 
 test("editor dirty state clears after a successful save baseline is recorded", () => {

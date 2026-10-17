@@ -63,6 +63,8 @@ test("content block validation keeps supported ordered blocks and rejects unsafe
   assert.equal(normalizeLessonBlocks([{ type: "script" }], safeUrl).error, "Lesson blocks are invalid.");
   assert.equal(normalizeLessonBlocks([{ type: "video", url: "https://bad.example/watch" }], safeUrl).error, "Use a supported secure media URL.");
   assert.equal(normalizeLessonBlocks([{ type: "image", url: "javascript:alert(1)" }], safeUrl).error, "Use a supported secure media URL.");
+  assert.equal(normalizeLessonBlocks([{ type: "text", text: "[unsafe](javascript:alert(1))" }], safeUrl).error, "Lesson links must use valid HTTPS URLs.");
+  assert.equal(normalizeLessonBlocks([{ type: "text", text: "[safe](https://example.com)" }], safeUrl).error, undefined);
   assert.equal(normalizeLessonBlocks(Array(101).fill({ type: "text" }), safeUrl).error, "Lesson blocks are invalid.");
 });
 
