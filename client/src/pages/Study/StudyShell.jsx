@@ -93,7 +93,7 @@ export default function StudyShell({ user }) {
             <Route path="games/play/:gameType" element={<GamePlayer />} />
             <Route path="games/challenge/:matchId" element={<ChallengeMatch />} />
             <Route path="games/review/:attemptId" element={<GameReview />} />
-            <Route path="*" element={<Navigate to="blogs" replace />} />
+            <Route path="*" element={<Navigate to="/study/blogs" replace />} />
           </Routes>
         </main>
       </div>

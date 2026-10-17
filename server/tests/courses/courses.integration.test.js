@@ -68,6 +68,7 @@ test("Courses API integration: CRUD, ordering, publication and roles", { skip: !
 
     assert.equal((await request("GET", `/courses/${course._id}`)).status, 404, "draft course is hidden");
     assert.equal((await request("GET", `/courses/lessons/${lessonOne._id}`)).status, 404, "draft lesson is hidden");
+    assert.equal((await request("GET", "/courses/lessons/not-an-object-id")).status, 400, "invalid lesson IDs are rejected before lookup");
     assert.equal((await request("PATCH", `/staff/courses/lessons/${lessonOne._id}`, "user", { title: "Intrusion" })).status, 403);
     assert.equal((await request("POST", "/staff/courses/lessons", "moderator", { title: "Unsafe", courseId: course._id, sectionId: section._id, blocks: [{ type: "video", url: "https://evil.example/embed/x" }] })).status, 400);
     assert.equal((await request("POST", "/staff/courses/lessons", "moderator", { title: "Unsafe link", courseId: course._id, sectionId: section._id, blocks: [{ type: "text", text: "[unsafe](javascript:alert(1))" }] })).status, 400);
