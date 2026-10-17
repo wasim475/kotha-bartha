@@ -15,7 +15,9 @@ const router = express.Router();
 router.use(
   rateLimit({
     windowMs: 60 * 1000,
-    limit: 120,
+    // Analytics has page views plus periodic engagement heartbeats. A higher
+    // per-IP ceiling avoids rejecting normal users behind shared/NAT addresses.
+    limit: 300,
     standardHeaders: true,
     legacyHeaders: false,
   }),

@@ -1,4 +1,6 @@
 import { api } from "./api";
+import { rateLimitDelayMs } from "./pageEngagementPolicy.js";
+export { rateLimitDelayMs } from "./pageEngagementPolicy.js";
 
 // Page analytics: which page is open and for how long it was ACTIVELY used.
 //
@@ -54,6 +56,12 @@ let view = null; // the visit being measured
 let listening = false;
 let timer = null;
 let lastInteractionEvent = 0;
+let rateLimitedUntil = 0;
+
+function pauseForRateLimit(headers) {
+  const retryAfter = typeof headers?.get === "function" ? headers.get("Retry-After") : headers?.["retry-after"] || headers?.["Retry-After"];
+  rateLimitedUntil = Math.max(rateLimitedUntil, Date.now() + rateLimitDelayMs(retryAfter));
+}
 
 // ---- Measuring --------------------------------------------------------------------
 
@@ -78,11 +86,13 @@ const lastActivity = (now) => (view.segStart == null ? view.lastActiveEnd : Math
 // ---- Reporting --------------------------------------------------------------------
 
 async function post(payload) {
+  if (Date.now() < rateLimitedUntil) return true;
   const url = `${api.defaults.baseURL}/analytics/page-engagement`;
   try {
     // keepalive lets the request finish even while the page is being closed.
     const response = await fetch(url, { method: "POST", credentials: "include", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-    return response.ok || (response.status >= 400 && response.status < 500 && response.status !== 429); // a refusal will not get better by resending
+    if (response.status === 429) { pauseForRateLimit(response.headers); return false; }
+    return response.ok || response.status >= 400 && response.status < 500; // a refusal will not get better by resending
   } catch {
     return false;
   }
@@ -90,6 +100,7 @@ async function post(payload) {
 
 function report({ final = false } = {}) {
   if (!view) return;
+  if (Date.now() < rateLimitedUntil) return;
   const now = Date.now();
   const target = view;
   const durationSeconds = Math.floor(activeMs(now) / 1000);
@@ -123,7 +134,11 @@ function finalize() {
 function start(path) {
   const now = Date.now();
   view = { id: randomId(), path, enteredAt: now, active: 0, segStart: isVisible() ? now : null, lastInteraction: now, lastActiveEnd: now, lastSent: -1 };
-  api.post("/analytics/pageview", { sessionId: getSessionId(), viewId: view.id, path, device: deviceType() }).catch(() => {});
+  if (Date.now() >= rateLimitedUntil) {
+    api.post("/analytics/pageview", { sessionId: getSessionId(), viewId: view.id, path, device: deviceType() }).catch((error) => {
+      if (error.response?.status === 429) pauseForRateLimit(error.response.headers);
+    });
+  }
 }
 
 // ---- Browser lifecycle ---------------------------------------------------------------
