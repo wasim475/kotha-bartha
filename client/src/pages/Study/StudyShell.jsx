@@ -1,4 +1,4 @@
-import { useContext } from "react";
+import { Suspense, lazy, useContext } from "react";
 import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 
 import { Utility } from "../../provider/UtilityProvider";
@@ -24,7 +24,7 @@ import Leaderboard from "./leaderboard/Leaderboard";
 import PreviousLeaderboards from "./leaderboard/PreviousLeaderboards";
 import QuizAdmin from "./quiz/QuizAdmin";
 import QuizFlow from "./quiz/QuizFlow";
-import Courses from "./courses/Courses";
+const Courses = lazy(() => import("./courses/Courses"));
 
 const descriptions = {
   blogs: "Explore clear, structured lessons in the কথা-বার্তা learning space.",
@@ -58,7 +58,7 @@ export default function StudyShell({ user }) {
                 return <Route key={item.path} path={item.key} element={<Games canManage={canManageQuiz} />} />;
               }
               if (item.key === "blogs") {
-                return <Route key={item.path} path={`${item.key}/*`} element={<Courses user={user} />} />;
+                return <Route key={item.path} path={`${item.key}/*`} element={<Suspense fallback={<div className="course-message">Loading Courses…</div>}><Courses user={user} /></Suspense>} />;
               }
               return (
                 <Route

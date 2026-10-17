@@ -7,6 +7,7 @@ const CourseSection = require("../models/CourseSection");
 const CourseLesson = require("../models/CourseLesson");
 const { upload } = require("../middleware/upload");
 const { uploadBuffer } = require("../utils/cloudinary");
+const { canManageSubjectCards, deletionActions, normalizeLessonBlocks, normalizeOrder, publicCourseFilter, publicLessonFilter, publicLessonListFilter } = require("../utils/coursePolicy");
 
 const router = express.Router();
 const staff = requireRole("admin", "moderator");
@@ -59,10 +60,10 @@ router.get("/courses/subjects", async (req, res, next) => {
 router.get("/courses/:courseId", async (req, res, next) => {
   try {
     if (!validId(req.params.courseId)) return idError(res);
-    const course = await Course.findOne({ _id: req.params.courseId, status: "published" }).populate("subjectId", "title").lean();
+    const course = await Course.findOne(publicCourseFilter(req.params.courseId)).populate("subjectId", "title").lean();
     if (!course) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Course not found." } });
     const sections = await CourseSection.find({ courseId: course._id, visible: true }).sort({ order: 1, _id: 1 }).lean();
-    const lessons = await CourseLesson.find({ courseId: course._id, sectionId: { $in: sections.map((s) => s._id) }, status: "published" }).select("title description sectionId order updatedAt").sort({ order: 1, _id: 1 }).lean();
+    const lessons = await CourseLesson.find({ ...publicLessonListFilter(course._id), sectionId: { $in: sections.map((s) => s._id) } }).select("title description sectionId order updatedAt").sort({ order: 1, _id: 1 }).lean();
     res.json({ data: { ...course, sections: sections.map((section) => ({ ...section, lessons: lessons.filter((l) => String(l.sectionId) === String(section._id)) })) } });
   } catch (e) { next(e); }
 });
@@ -70,12 +71,12 @@ router.get("/courses/:courseId", async (req, res, next) => {
 router.get("/courses/lessons/:lessonId", async (req, res, next) => {
   try {
     if (!validId(req.params.lessonId)) return idError(res);
-    const lesson = await CourseLesson.findOne({ _id: req.params.lessonId, status: "published" }).lean();
+    const lesson = await CourseLesson.findOne(publicLessonFilter(req.params.lessonId)).lean();
     if (!lesson) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Lesson not found." } });
-    const course = await Course.findOne({ _id: lesson.courseId, status: "published" }).lean();
+    const course = await Course.findOne(publicCourseFilter(lesson.courseId)).lean();
     const section = await CourseSection.findOne({ _id: lesson.sectionId, courseId: lesson.courseId, visible: true }).lean();
     if (!course || !section) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Lesson not found." } });
-    const curriculum = await CourseLesson.find({ courseId: course._id, status: "published" }).select("_id title sectionId order").sort({ order: 1, _id: 1 }).lean();
+    const curriculum = await CourseLesson.find(publicLessonListFilter(course._id)).select("_id title sectionId order").sort({ order: 1, _id: 1 }).lean();
     const visibleSections = await CourseSection.find({ courseId: course._id, visible: true }).select("_id title order").sort({ order: 1, _id: 1 }).lean();
     const all = curriculum.map((item) => ({ ...item, section: visibleSections.find((s) => String(s._id) === String(item.sectionId)) })).filter((item) => item.section);
     const index = all.findIndex((item) => String(item._id) === String(lesson._id));
@@ -97,11 +98,11 @@ router.get("/staff/courses", staff, async (req, res, next) => {
 router.post("/staff/courses/:kind", staff, async (req, res, next) => {
   try {
     const { kind } = req.params;
-    if (kind === "subjects" && req.user.role !== "admin") return res.status(403).json({ error: { code: "FORBIDDEN", message: "Only admins can manage subject cards." } });
+    if (kind === "subjects" && !canManageSubjectCards(req.user.role)) return res.status(403).json({ error: { code: "FORBIDDEN", message: "Only admins can manage subject cards." } });
     const body = req.body || {};
     const title = String(body.title || "").trim();
     if (!title || title.length > 160) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "A valid title is required." } });
-    const order = Number.isInteger(body.order) && body.order >= 0 && body.order <= 10000 ? body.order : 0;
+    const order = normalizeOrder(body.order);
     const base = { title, order };
     let doc;
     if (kind === "subjects") doc = await CourseSubject.create({ ...base, description: String(body.description || "").slice(0, 500), coverUrl: safeUrl(body.coverUrl) ?? "", visible: body.visible !== false });
@@ -113,11 +114,9 @@ router.post("/staff/courses/:kind", staff, async (req, res, next) => {
       doc = await CourseSection.create({ ...base, courseId: body.courseId, description: String(body.description || "").slice(0, 500), visible: body.visible !== false });
     } else if (kind === "lessons") {
       if (!validId(body.courseId) || !validId(body.sectionId) || !(await CourseSection.exists({ _id: body.sectionId, courseId: body.courseId }))) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Choose a section in the selected course." } });
-      const blocks = Array.isArray(body.blocks) ? body.blocks : [];
-      if (blocks.length > 100 || blocks.some((b) => !["text", "image", "video", "quote", "callout", "divider"].includes(b.type))) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Lesson blocks are invalid." } });
-      const clean = blocks.map((b) => ({ type: b.type, text: String(b.text || "").slice(0, 20000), title: String(b.title || "").slice(0, 200), url: b.type === "video" ? safeUrl(b.url, true) : b.type === "image" ? safeUrl(b.url) : "", alt: String(b.alt || "").slice(0, 300), caption: String(b.caption || "").slice(0, 500), variant: ["important", "remember", "example", "warning", "tip"].includes(b.variant) ? b.variant : "default" }));
-      if (clean.some((b) => ["video", "image"].includes(b.type) && !b.url)) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Use a supported secure media URL." } });
-      doc = await CourseLesson.create({ ...base, courseId: body.courseId, sectionId: body.sectionId, description: String(body.description || "").slice(0, 600), blocks: clean, authorId: req.user._id, status: body.status === "published" ? "published" : "draft" });
+      const normalized = normalizeLessonBlocks(body.blocks ?? [], safeUrl);
+      if (normalized.error) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: normalized.error } });
+      doc = await CourseLesson.create({ ...base, courseId: body.courseId, sectionId: body.sectionId, description: String(body.description || "").slice(0, 600), blocks: normalized.blocks, authorId: req.user._id, status: body.status === "published" ? "published" : "draft" });
     } else return res.status(404).json({ error: { code: "NOT_FOUND", message: "Unknown content type." } });
     res.status(201).json({ data: doc });
   } catch (e) { next(e); }
@@ -126,7 +125,7 @@ router.post("/staff/courses/:kind", staff, async (req, res, next) => {
 router.patch("/staff/courses/:kind/:id", staff, async (req, res, next) => {
   try {
     const { kind, id } = req.params;
-    if (kind === "subjects" && req.user.role !== "admin") return res.status(403).json({ error: { code: "FORBIDDEN", message: "Only admins can manage subject cards." } });
+    if (kind === "subjects" && !canManageSubjectCards(req.user.role)) return res.status(403).json({ error: { code: "FORBIDDEN", message: "Only admins can manage subject cards." } });
     if (!validId(id)) return idError(res);
     const Model = { subjects: CourseSubject, courses: Course, sections: CourseSection, lessons: CourseLesson }[kind];
     if (!Model) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Unknown content type." } });
@@ -136,7 +135,7 @@ router.patch("/staff/courses/:kind/:id", staff, async (req, res, next) => {
     if (b.title !== undefined) { const value = String(b.title).trim(); if (!value || value.length > 160) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "A valid title is required." } }); doc.title = value; }
     if (b.description !== undefined) doc.description = String(b.description).slice(0, kind === "courses" ? 1000 : 600);
     if (b.coverUrl !== undefined && kind !== "lessons" && kind !== "sections") { const url = safeUrl(b.coverUrl); if (url === null) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Use a secure image URL." } }); doc.coverUrl = url; }
-    if (b.order !== undefined) { if (!Number.isInteger(b.order) || b.order < 0 || b.order > 10000) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Order must be between 0 and 10000." } }); doc.order = b.order; }
+    if (b.order !== undefined) { if (normalizeOrder(b.order, null) === null) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Order must be between 0 and 10000." } }); doc.order = b.order; }
     if (b.status !== undefined && kind !== "subjects" && kind !== "sections") { if (!["draft", "published"].includes(b.status)) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Invalid publication status." } }); doc.status = b.status; }
     if (b.visible !== undefined && ["subjects", "sections"].includes(kind)) doc.visible = Boolean(b.visible);
     if (kind === "courses" && b.subjectId !== undefined) { if (!validId(b.subjectId) || !(await CourseSubject.exists({ _id: b.subjectId }))) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Choose a valid subject." } }); doc.subjectId = b.subjectId; }
@@ -147,10 +146,9 @@ router.patch("/staff/courses/:kind/:id", staff, async (req, res, next) => {
         doc.courseId = courseId; doc.sectionId = sectionId;
       }
       if (b.blocks !== undefined) {
-        if (!Array.isArray(b.blocks) || b.blocks.length > 100 || b.blocks.some((x) => !["text", "image", "video", "quote", "callout", "divider"].includes(x.type))) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Lesson blocks are invalid." } });
-        const blocks = b.blocks.map((x) => ({ type: x.type, text: String(x.text || "").slice(0, 20000), title: String(x.title || "").slice(0, 200), url: x.type === "video" ? safeUrl(x.url, true) : x.type === "image" ? safeUrl(x.url) : "", alt: String(x.alt || "").slice(0, 300), caption: String(x.caption || "").slice(0, 500), variant: ["important", "remember", "example", "warning", "tip"].includes(x.variant) ? x.variant : "default" }));
-        if (blocks.some((x) => ["video", "image"].includes(x.type) && !x.url)) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Use a supported secure media URL." } });
-        doc.blocks = blocks;
+        const normalized = normalizeLessonBlocks(b.blocks, safeUrl);
+        if (normalized.error) return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: normalized.error } });
+        doc.blocks = normalized.blocks;
       }
     }
     await doc.save(); res.json({ data: doc });
@@ -160,12 +158,12 @@ router.patch("/staff/courses/:kind/:id", staff, async (req, res, next) => {
 router.delete("/staff/courses/:kind/:id", staff, async (req, res, next) => {
   try {
     const { kind, id } = req.params; if (!validId(id)) return idError(res);
-    if (kind === "subjects" && req.user.role !== "admin") return res.status(403).json({ error: { code: "FORBIDDEN", message: "Only admins can manage subject cards." } });
-    if (kind === "subjects") { if (await Course.exists({ subjectId: id })) return res.status(409).json({ error: { code: "IN_USE", message: "Move or remove its courses before deleting this subject." } }); await CourseSubject.findByIdAndDelete(id); }
-    else if (kind === "courses") { await CourseLesson.deleteMany({ courseId: id }); await CourseSection.deleteMany({ courseId: id }); await Course.findByIdAndDelete(id); }
-    else if (kind === "sections") { await CourseLesson.deleteMany({ sectionId: id }); await CourseSection.findByIdAndDelete(id); }
-    else if (kind === "lessons") await CourseLesson.findByIdAndDelete(id);
-    else return res.status(404).json({ error: { code: "NOT_FOUND", message: "Unknown content type." } });
+    if (kind === "subjects" && !canManageSubjectCards(req.user.role)) return res.status(403).json({ error: { code: "FORBIDDEN", message: "Only admins can manage subject cards." } });
+    if (kind === "subjects" && await Course.exists({ subjectId: id })) return res.status(409).json({ error: { code: "IN_USE", message: "Move or remove its courses before deleting this subject." } });
+    const actions = deletionActions(kind, id);
+    if (!actions) return res.status(404).json({ error: { code: "NOT_FOUND", message: "Unknown content type." } });
+    const models = { subjects: CourseSubject, courses: Course, sections: CourseSection, lessons: CourseLesson };
+    for (const action of actions) await models[action.collection][action.method](action.filter);
     res.json({ data: { deleted: true } });
   } catch (e) { next(e); }
 });
