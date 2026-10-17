@@ -56,24 +56,34 @@ test("content block validation keeps supported ordered blocks and rejects unsafe
   };
   const result = normalizeLessonBlocks([
     { type: "text", text: "A" }, { type: "quote", text: "B" }, { type: "image", url: "https://images.example/pic.jpg", alt: "pic" },
-    { type: "video", url: "https://youtu.be/abc" }, { type: "divider" },
+    { type: "video", url: "https://youtu.be/abc" }, { type: "table", rows: [["Term", "Meaning"], ["noun", "a name"]], firstRowHeader: true }, { type: "divider" },
   ], safeUrl);
   assert.equal(result.error, undefined);
-  assert.deepEqual(result.blocks.map((block) => block.type), ["text", "quote", "image", "video", "divider"]);
+  assert.deepEqual(result.blocks.map((block) => block.type), ["text", "quote", "image", "video", "table", "divider"]);
+  assert.deepEqual(result.blocks[4].rows, [["Term", "Meaning"], ["noun", "a name"]]);
+  assert.equal(result.blocks[4].firstRowHeader, true);
+  assert.deepEqual(normalizeLessonBlocks([{ type: "table", rows: [["A"], ["B"]], firstRowHeader: false }, { type: "text", text: "after" }], safeUrl).blocks.map((block) => block.type), ["table", "text"]);
   assert.equal(normalizeLessonBlocks([{ type: "script" }], safeUrl).error, "Lesson blocks are invalid.");
   assert.equal(normalizeLessonBlocks([{ type: "video", url: "https://bad.example/watch" }], safeUrl).error, "Use a supported secure media URL.");
   assert.equal(normalizeLessonBlocks([{ type: "image", url: "javascript:alert(1)" }], safeUrl).error, "Use a supported secure media URL.");
   assert.equal(normalizeLessonBlocks([{ type: "text", text: "[unsafe](javascript:alert(1))" }], safeUrl).error, "Lesson links must use valid HTTPS URLs.");
   assert.equal(normalizeLessonBlocks([{ type: "text", text: "[safe](https://example.com)" }], safeUrl).error, undefined);
+  assert.match(normalizeLessonBlocks([{ type: "table", rows: [["A"], ["B", "uneven"]] }], safeUrl).error, /same number/);
+  assert.match(normalizeLessonBlocks([{ type: "table", rows: [["<img src=x onerror=alert(1)>"]] }], safeUrl).blocks[0].rows[0][0], /<img/);
+  assert.match(normalizeLessonBlocks([{ type: "table", rows: [[{ html: "<script>" }]] }], safeUrl).error, /same number/);
+  assert.match(normalizeLessonBlocks([{ type: "table", rows: Array(31).fill(["cell"]) }], safeUrl).error, /rows/);
+  assert.match(normalizeLessonBlocks([{ type: "table", rows: [["A"]], firstRowHeader: "yes" }], safeUrl).error, /header setting/);
   assert.equal(normalizeLessonBlocks(Array(101).fill({ type: "text" }), safeUrl).error, "Lesson blocks are invalid.");
 });
 
 test("lesson schema rejects unsupported publication states and block types without database access", async () => {
   const doc = new CourseLesson({
     courseId: "507f1f77bcf86cd799439011", sectionId: "507f1f77bcf86cd799439012", authorId: "507f1f77bcf86cd799439013",
-    title: "Example", status: "published", blocks: [{ type: "text", text: "Example" }],
+    title: "Example", status: "published", blocks: [{ type: "text", text: "Example" }, { type: "table", rows: [["Heading", "Cell"], ["A", "B"]], firstRowHeader: true }],
   });
   await doc.validate();
+  assert.deepEqual(doc.blocks[1].rows, [["Heading", "Cell"], ["A", "B"]]);
+  assert.equal(doc.blocks[1].firstRowHeader, true);
   doc.status = "private";
   await assert.rejects(doc.validate());
 });

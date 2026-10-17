@@ -1,4 +1,4 @@
-import { parseInlineLessonText, parseLessonMarkup } from "./lessonMarkup";
+import { parseInlineLessonText, parseLessonMarkup, presentLessonTable } from "./lessonMarkup";
 
 function InlineText({ value }) {
   return parseInlineLessonText(value).map((part, index) => {
@@ -27,6 +27,11 @@ function RichText({ value }) {
 export default function LessonBlocks({ blocks = [] }) {
   return <div className="lesson-content">{blocks.map((block, index) => {
     if (block.type === "divider") return <hr key={index}/>;
+    if (block.type === "table") {
+      const table = presentLessonTable(block);
+      if (!table) return null;
+      return <div key={index} className="lesson-table-scroll" role="region" aria-label={`${table.caption || "Lesson table"} (scroll horizontally if needed)`} tabIndex="0"><table className="lesson-table">{table.caption && <caption>{table.caption}</caption>}<tbody>{table.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.cells.map((cell, columnIndex) => cell.header ? <th scope="col" key={columnIndex}>{cell.text}</th> : <td key={columnIndex}>{cell.text}</td>)}</tr>)}</tbody></table></div>;
+    }
     if (block.type === "image") return <figure key={index}><img className="lesson-image" src={block.url} alt={block.alt || ""}/>{block.caption && <figcaption>{block.caption}</figcaption>}</figure>;
     if (block.type === "video") {
       try {

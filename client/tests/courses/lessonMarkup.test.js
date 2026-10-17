@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyLessonFormat, hasUnsavedLessonChanges, parseInlineLessonText, parseLessonMarkup } from "../../src/pages/Study/courses/lessonMarkup.js";
+import { readFile } from "node:fs/promises";
+import { applyLessonFormat, createLessonTable, hasUnsavedLessonChanges, parseInlineLessonText, parseLessonMarkup, presentLessonTable, resizeLessonTable, updateLessonTableCell } from "../../src/pages/Study/courses/lessonMarkup.js";
 
 test("inline editor controls wrap selected text for bold, italic, underline and links", () => {
   assert.equal(applyLessonFormat("hello world", 6, 11, "bold").value, "hello **world**");
@@ -39,4 +40,33 @@ test("editor dirty state clears after a successful save baseline is recorded", (
   const savedSnapshot = JSON.stringify(edited);
   assert.equal(hasUnsavedLessonChanges(edited, savedSnapshot), false);
   assert.equal(hasUnsavedLessonChanges({ ...edited, title: "Changed again" }, savedSnapshot), true);
+});
+
+test("table editor creates configurable structured rows and columns and preserves edits while resizing", () => {
+  const table = createLessonTable(3, 4);
+  assert.equal(table.type, "table");
+  assert.equal(table.firstRowHeader, true);
+  assert.deepEqual(table.rows.map((row) => row.length), [4, 4, 4]);
+  const edited = updateLessonTableCell(table, 1, 2, "<b>plain text</b>");
+  const resized = resizeLessonTable(edited, 4, 5);
+  assert.equal(resized.rows[1][2], "<b>plain text</b>");
+  assert.equal(resized.rows[3][4], "");
+  assert.deepEqual(resizeLessonTable(resized, 1, 1).rows, [[""]]);
+  assert.equal(createLessonTable(99, 99).rows.length, 30);
+  assert.equal(createLessonTable(99, 99).rows[0].length, 12);
+});
+
+test("table presentation keeps cell content as text and marks only first-row headers", () => {
+  const table = presentLessonTable({ title: "Vocabulary", firstRowHeader: true, rows: [["Word", "Meaning"], ["<script>alert(1)</script>", "A name"]] });
+  assert.equal(table.caption, "Vocabulary");
+  assert.equal(table.rows[0].cells[0].header, true);
+  assert.equal(table.rows[1].cells[0].header, false);
+  assert.equal(table.rows[1].cells[0].text, "<script>alert(1)</script>");
+  assert.equal(presentLessonTable({ rows: [] }), null);
+});
+
+test("lesson table styles constrain the page and allow horizontal scrolling on mobile", async () => {
+  const css = await readFile(new URL("../../src/CSS/study.css", import.meta.url), "utf8");
+  assert.match(css, /\.lesson-table-scroll\{[^}]*max-width:100%[^}]*overflow-x:auto/);
+  assert.match(css, /\.lesson-table\{[^}]*width:max-content/);
 });

@@ -64,22 +64,27 @@ test("Courses API integration: CRUD, ordering, publication and roles", { skip: !
     const course = remember("courses", await request("POST", "/staff/courses/courses", "moderator", { title: "Test course", subjectId: subject._id, order: 5 }));
     const section = remember("sections", await request("POST", "/staff/courses/sections", "moderator", { title: "First section", courseId: course._id, order: 6 }));
     const lessonOne = remember("lessons", await request("POST", "/staff/courses/lessons", "moderator", { title: "First lesson", courseId: course._id, sectionId: section._id, order: 8, blocks: [{ type: "text", text: "First" }] }));
-    const lessonTwo = remember("lessons", await request("POST", "/staff/courses/lessons", "moderator", { title: "Second lesson", courseId: course._id, sectionId: section._id, order: 2, blocks: [{ type: "text", text: "Second" }] }));
+    const lessonTwo = remember("lessons", await request("POST", "/staff/courses/lessons", "moderator", { title: "Second lesson", courseId: course._id, sectionId: section._id, order: 2, blocks: [{ type: "text", text: "Before table" }, { type: "table", rows: [["Head", "Value"], ["A", "1"]], firstRowHeader: true }, { type: "divider" }, { type: "text", text: "After table" }] }));
 
     assert.equal((await request("GET", `/courses/${course._id}`)).status, 404, "draft course is hidden");
     assert.equal((await request("GET", `/courses/lessons/${lessonOne._id}`)).status, 404, "draft lesson is hidden");
     assert.equal((await request("PATCH", `/staff/courses/lessons/${lessonOne._id}`, "user", { title: "Intrusion" })).status, 403);
     assert.equal((await request("POST", "/staff/courses/lessons", "moderator", { title: "Unsafe", courseId: course._id, sectionId: section._id, blocks: [{ type: "video", url: "https://evil.example/embed/x" }] })).status, 400);
     assert.equal((await request("POST", "/staff/courses/lessons", "moderator", { title: "Unsafe link", courseId: course._id, sectionId: section._id, blocks: [{ type: "text", text: "[unsafe](javascript:alert(1))" }] })).status, 400);
+    assert.equal((await request("POST", "/staff/courses/lessons", "moderator", { title: "Invalid table", courseId: course._id, sectionId: section._id, blocks: [{ type: "table", rows: [["one"], ["two", "extra"]] }] })).status, 400);
 
     assert.equal((await request("PATCH", `/staff/courses/courses/${course._id}`, "moderator", { title: "Published test course", order: 1, status: "published" })).status, 200);
     assert.equal((await request("PATCH", `/staff/courses/lessons/${lessonOne._id}`, "moderator", { title: "Edited first lesson", order: 1, status: "published", blocks: [{ type: "text", text: "Updated" }] })).status, 200);
     assert.equal((await request("PATCH", `/staff/courses/lessons/${lessonTwo._id}`, "moderator", { order: 0, status: "published" })).status, 200);
+    assert.equal((await request("PATCH", `/staff/courses/lessons/${lessonTwo._id}`, "moderator", { blocks: [{ type: "text", text: "Before" }, { type: "table", rows: [["Column", "Value"], ["Term", "Edited"]], firstRowHeader: true }, { type: "divider" }, { type: "text", text: "After" }] })).status, 200);
     assert.equal((await request("PATCH", `/staff/courses/sections/${section._id}`, "moderator", { title: "Edited section", order: 0, visible: true })).status, 200);
 
     const publicCourse = await request("GET", `/courses/${course._id}`);
     assert.equal(publicCourse.status, 200);
     assert.deepEqual(publicCourse.body.data.sections[0].lessons.map((lesson) => lesson.title), ["Second lesson", "Edited first lesson"]);
+    const publicTableLesson = await request("GET", `/courses/lessons/${lessonTwo._id}`);
+    assert.deepEqual(publicTableLesson.body.data.lesson.blocks.map((block) => block.type), ["text", "table", "divider", "text"]);
+    assert.deepEqual(publicTableLesson.body.data.lesson.blocks[1].rows, [["Column", "Value"], ["Term", "Edited"]]);
     const publicLesson = await request("GET", `/courses/lessons/${lessonOne._id}`);
     assert.equal(publicLesson.status, 200);
     assert.equal(publicLesson.body.data.lesson.blocks[0].text, "Updated");

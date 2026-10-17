@@ -9,6 +9,36 @@ export function hasUnsavedLessonChanges(value, baseline) {
   return JSON.stringify(value) !== baseline;
 }
 
+export function createLessonTable(rowCount = 2, columnCount = 2) {
+  const rows = Math.max(1, Math.min(30, Math.floor(Number(rowCount) || 1)));
+  const columns = Math.max(1, Math.min(12, Math.floor(Number(columnCount) || 1)));
+  return { type: "table", rows: Array.from({ length: rows }, () => Array(columns).fill("")), firstRowHeader: true };
+}
+
+export function resizeLessonTable(table, rowCount, columnCount) {
+  const rows = Math.max(1, Math.min(30, Math.floor(Number(rowCount) || 1)));
+  const columns = Math.max(1, Math.min(12, Math.floor(Number(columnCount) || 1)));
+  return {
+    ...table,
+    rows: Array.from({ length: rows }, (_, rowIndex) =>
+      Array.from({ length: columns }, (_, columnIndex) => table.rows?.[rowIndex]?.[columnIndex] || "")),
+  };
+}
+
+export function updateLessonTableCell(table, rowIndex, columnIndex, value) {
+  return { ...table, rows: table.rows.map((row, index) => index === rowIndex ? row.map((cell, col) => col === columnIndex ? value : cell) : row) };
+}
+
+export function presentLessonTable(table) {
+  if (!Array.isArray(table?.rows) || !table.rows.length || !table.rows.every((row) => Array.isArray(row))) return null;
+  return {
+    caption: typeof table.title === "string" ? table.title : "",
+    rows: table.rows.map((row, rowIndex) => ({
+      cells: row.map((cell) => ({ header: table.firstRowHeader === true && rowIndex === 0, text: typeof cell === "string" ? cell : "" })),
+    })),
+  };
+}
+
 export function applyLessonFormat(value, start, end, format, linkUrl = "https://example.com") {
   const text = String(value || "");
   const selected = text.slice(start, end);

@@ -1,13 +1,15 @@
 const mongoose = require("mongoose");
 
 const blockSchema = new mongoose.Schema({
-  type: { type: String, enum: ["text", "image", "video", "quote", "callout", "divider"], required: true },
+  type: { type: String, enum: ["text", "image", "video", "quote", "callout", "divider", "table"], required: true },
   text: { type: String, maxlength: 20000, default: "" },
   title: { type: String, maxlength: 200, default: "" },
   url: { type: String, maxlength: 1000, default: "" },
   alt: { type: String, maxlength: 300, default: "" },
   caption: { type: String, maxlength: 500, default: "" },
   variant: { type: String, enum: ["important", "remember", "example", "warning", "tip", "default"], default: "default" },
+  rows: { type: [[{ type: String, maxlength: 2000 }]], default: [] },
+  firstRowHeader: { type: Boolean, default: false },
 }, { _id: false });
 const schema = new mongoose.Schema({
   courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course", required: true, index: true },
