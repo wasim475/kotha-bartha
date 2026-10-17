@@ -1,4 +1,8 @@
-export const COURSES_BASE_PATH = "/study/blogs";
+export const COURSES_BASE_PATH = "/study/courses";
+export const LEGACY_BLOGS_BASE_PATH = "/study/blogs";
+export const LEGACY_BLOGS_ROUTE_PATH = "blogs/*";
+
+export const legacyBlogsRedirectPath = (pathname) => pathname.replace(/^\/study\/blogs(?=\/|$)/, COURSES_BASE_PATH);
 
 export const COURSE_ROUTE_PATHS = Object.freeze({
   home: "",

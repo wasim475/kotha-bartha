@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { matchRoutes } from "react-router-dom";
-import { COURSE_ROUTE_PATHS, COURSES_BASE_PATH, coursePath, lessonPath, lessonTestPath } from "../../src/pages/Study/courses/courseRoutes.js";
+import { COURSE_ROUTE_PATHS, COURSES_BASE_PATH, LEGACY_BLOGS_BASE_PATH, LEGACY_BLOGS_ROUTE_PATH, coursePath, lessonPath, lessonTestPath, legacyBlogsRedirectPath } from "../../src/pages/Study/courses/courseRoutes.js";
 
 const routes = [{
   path: COURSES_BASE_PATH,
@@ -24,9 +24,17 @@ test("course and lesson routes match direct URLs with their intended IDs", () =>
 
 test("course navigation keeps lesson links inside the Courses route", () => {
   const href = lessonPath("lesson-456");
-  assert.equal(href, "/study/blogs/lesson/lesson-456");
+  assert.equal(href, "/study/courses/lesson/lesson-456");
   assert.ok(matchRoutes(routes, href));
   assert.equal(matchRoutes(routes, "/study/lesson/lesson-456"), null);
+});
+
+test("legacy Blogs paths redirect to matching Courses paths", () => {
+  const oldRoutes = [{ path: "/study", children: [{ path: LEGACY_BLOGS_ROUTE_PATH }] }];
+  assert.ok(matchRoutes(oldRoutes, LEGACY_BLOGS_BASE_PATH));
+  assert.ok(matchRoutes(oldRoutes, `${LEGACY_BLOGS_BASE_PATH}/lesson/lesson-456`));
+  assert.equal(legacyBlogsRedirectPath(LEGACY_BLOGS_BASE_PATH), COURSES_BASE_PATH);
+  assert.equal(legacyBlogsRedirectPath(`${LEGACY_BLOGS_BASE_PATH}/lesson/lesson-456`), lessonPath("lesson-456"));
 });
 
 test("missing IDs do not match the lesson route, while malformed IDs reach backend validation", () => {

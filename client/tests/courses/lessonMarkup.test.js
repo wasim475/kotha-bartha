@@ -70,3 +70,13 @@ test("lesson table styles constrain the page and allow horizontal scrolling on m
   assert.match(css, /\.lesson-table-scroll\{[^}]*max-width:100%[^}]*overflow-x:auto/);
   assert.match(css, /\.lesson-table\{[^}]*width:max-content/);
 });
+
+test("lesson reading styles widen the article, switch to a mobile curriculum drawer, and keep controls off the reading overlay", async () => {
+  const css = await readFile(new URL("../../src/CSS/study.css", import.meta.url), "utf8");
+  const lessonStyles = css.slice(css.indexOf("/* Courses lesson reading layout */"));
+  assert.match(lessonStyles, /\.lesson-layout\{display:grid;grid-template-columns:minmax\(210px,240px\) minmax\(0,760px\)/);
+  assert.match(lessonStyles, /@media\(max-width:1024px\)\{[\s\S]*?\.lesson-sidebar\{display:none\}[\s\S]*?\.mobile-curriculum-toggle\{display:inline-flex/);
+  assert.match(lessonStyles, /\.lesson-curriculum-drawer\{[^}]*height:100dvh/);
+  assert.match(lessonStyles, /\.lesson-pagination\{position:static/);
+  assert.match(lessonStyles, /font-family:var\(--font-message/);
+});

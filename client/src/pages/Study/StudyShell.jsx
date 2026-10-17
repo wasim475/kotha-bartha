@@ -1,5 +1,5 @@
 import { Suspense, lazy, useContext } from "react";
-import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { Utility } from "../../provider/UtilityProvider";
 
@@ -24,13 +24,19 @@ import Leaderboard from "./leaderboard/Leaderboard";
 import PreviousLeaderboards from "./leaderboard/PreviousLeaderboards";
 import QuizAdmin from "./quiz/QuizAdmin";
 import QuizFlow from "./quiz/QuizFlow";
+import { LEGACY_BLOGS_ROUTE_PATH, legacyBlogsRedirectPath } from "./courses/courseRoutes";
 const Courses = lazy(() => import("./courses/Courses"));
 
 const descriptions = {
-  blogs: "Explore clear, structured lessons in the কথা-বার্তা learning space.",
+  courses: "Explore clear, structured lessons in the কথা-বার্তা learning space.",
   quiz: "Test what you know with quick, bite-sized quizzes.",
   "class-study": "Class-wise study material and structured resources.",
 };
+
+function LegacyBlogsRedirect() {
+  const location = useLocation();
+  return <Navigate to={{ pathname: legacyBlogsRedirectPath(location.pathname), search: location.search, hash: location.hash }} replace />;
+}
 
 export default function StudyShell({ user }) {
   const navigate = useNavigate();
@@ -57,7 +63,7 @@ export default function StudyShell({ user }) {
               if (item.key === "games") {
                 return <Route key={item.path} path={item.key} element={<Games canManage={canManageQuiz} />} />;
               }
-              if (item.key === "blogs") {
+              if (item.key === "courses") {
                 return <Route key={item.path} path={`${item.key}/*`} element={<Suspense fallback={<div className="course-message">Loading Courses…</div>}><Courses user={user} /></Suspense>} />;
               }
               return (
@@ -74,6 +80,7 @@ export default function StudyShell({ user }) {
                 />
               );
             })}
+            <Route path={LEGACY_BLOGS_ROUTE_PATH} element={<LegacyBlogsRedirect />} />
             <Route
               path="quiz-admin"
               element={canManageQuiz ? <QuizAdmin user={user} /> : <Navigate to="quiz" replace />}
@@ -93,7 +100,7 @@ export default function StudyShell({ user }) {
             <Route path="games/play/:gameType" element={<GamePlayer />} />
             <Route path="games/challenge/:matchId" element={<ChallengeMatch />} />
             <Route path="games/review/:attemptId" element={<GameReview />} />
-            <Route path="*" element={<Navigate to="/study/blogs" replace />} />
+            <Route path="*" element={<Navigate to="/study/courses" replace />} />
           </Routes>
         </main>
       </div>
