@@ -24,9 +24,10 @@ import Leaderboard from "./leaderboard/Leaderboard";
 import PreviousLeaderboards from "./leaderboard/PreviousLeaderboards";
 import QuizAdmin from "./quiz/QuizAdmin";
 import QuizFlow from "./quiz/QuizFlow";
+import Courses from "./courses/Courses";
 
 const descriptions = {
-  blogs: "Study notes, guides and articles from the কথা-বার্তা community.",
+  blogs: "Explore clear, structured lessons in the কথা-বার্তা learning space.",
   quiz: "Test what you know with quick, bite-sized quizzes.",
   "class-study": "Class-wise study material and structured resources.",
 };
@@ -55,6 +56,9 @@ export default function StudyShell({ user }) {
               }
               if (item.key === "games") {
                 return <Route key={item.path} path={item.key} element={<Games canManage={canManageQuiz} />} />;
+              }
+              if (item.key === "blogs") {
+                return <Route key={item.path} path={`${item.key}/*`} element={<Courses user={user} />} />;
               }
               return (
                 <Route

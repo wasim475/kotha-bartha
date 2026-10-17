@@ -1,4 +1,4 @@
-mport { ArrowBack, DarkMode, WbSunny } from "@mui/icons-material";
+import { ArrowBack, DarkMode, WbSunny } from "@mui/icons-material";
 
 export default function StudyTopbar({ theme, setTheme, onBack }) {
   return (

@@ -8,7 +8,7 @@ import {
 } from "@mui/icons-material";
 
 export const studyNavItems = [
-  { label: "Blogs", path: "/study/blogs", icon: Article, key: "blogs" },
+  { label: "Courses", path: "/study/blogs", icon: Article, key: "blogs" },
   { label: "Quiz", path: "/study/quiz", icon: Quiz, key: "quiz" },
   {
     label: "Class Study",

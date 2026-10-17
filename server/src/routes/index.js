@@ -10,6 +10,7 @@ const blocksRoutes = require("./blocks.routes");
 const linkPreviewRoutes = require("./link-preview.routes");
 const storiesRoutes = require("./stories.routes");
 const notesRoutes = require("./notes.routes");
+const coursesRoutes = require("./courses.routes");
 const quizRoutes = require("./quiz.routes");
 const leaderboardRoutes = require("./leaderboard.routes");
 const gameRoutes = require("./game.routes");
@@ -38,6 +39,7 @@ router.use(blocksRoutes);
 router.use(linkPreviewRoutes);
 router.use(storiesRoutes);
 router.use(notesRoutes);
+router.use(coursesRoutes);
 // Staff authoring of Quiz / English-question content is written to the audit log.
 router.use(auditStaffContent);
 router.use(quizRoutes);
