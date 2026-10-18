@@ -68,6 +68,8 @@ test("content block validation keeps supported ordered blocks and rejects unsafe
   assert.equal(normalizeLessonBlocks([{ type: "image", url: "javascript:alert(1)" }], safeUrl).error, "Use a supported secure media URL.");
   assert.equal(normalizeLessonBlocks([{ type: "text", text: "[unsafe](javascript:alert(1))" }], safeUrl).error, "Lesson links must use valid HTTPS URLs.");
   assert.equal(normalizeLessonBlocks([{ type: "text", text: "[safe](https://example.com)" }], safeUrl).error, undefined);
+  assert.equal(normalizeLessonBlocks([{ type: "text", text: "{{color:blue|readable}}" }], safeUrl).error, undefined);
+  assert.equal(normalizeLessonBlocks([{ type: "text", text: "{{color:var(--evil)|unsafe}}" }], safeUrl).error, "Lesson text uses an unsupported color.");
   assert.match(normalizeLessonBlocks([{ type: "table", rows: [["A"], ["B", "uneven"]] }], safeUrl).error, /same number/);
   assert.match(normalizeLessonBlocks([{ type: "table", rows: [["<img src=x onerror=alert(1)>"]] }], safeUrl).blocks[0].rows[0][0], /<img/);
   assert.match(normalizeLessonBlocks([{ type: "table", rows: [[{ html: "<script>" }]] }], safeUrl).error, /same number/);

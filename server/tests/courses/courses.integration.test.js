@@ -72,10 +72,16 @@ test("Courses API integration: CRUD, ordering, publication and roles", { skip: !
     assert.equal((await request("PATCH", `/staff/courses/lessons/${lessonOne._id}`, "user", { title: "Intrusion" })).status, 403);
     assert.equal((await request("POST", "/staff/courses/lessons", "moderator", { title: "Unsafe", courseId: course._id, sectionId: section._id, blocks: [{ type: "video", url: "https://evil.example/embed/x" }] })).status, 400);
     assert.equal((await request("POST", "/staff/courses/lessons", "moderator", { title: "Unsafe link", courseId: course._id, sectionId: section._id, blocks: [{ type: "text", text: "[unsafe](javascript:alert(1))" }] })).status, 400);
+    assert.equal((await request("POST", "/staff/courses/lessons", "moderator", { title: "Unsafe color", courseId: course._id, sectionId: section._id, blocks: [{ type: "text", text: "{{color:expression|text}}" }] })).status, 400);
     assert.equal((await request("POST", "/staff/courses/lessons", "moderator", { title: "Invalid table", courseId: course._id, sectionId: section._id, blocks: [{ type: "table", rows: [["one"], ["two", "extra"]] }] })).status, 400);
 
     assert.equal((await request("PATCH", `/staff/courses/courses/${course._id}`, "moderator", { title: "Published test course", order: 1, status: "published" })).status, 200);
-    assert.equal((await request("PATCH", `/staff/courses/lessons/${lessonOne._id}`, "moderator", { title: "Edited first lesson", order: 1, status: "published", blocks: [{ type: "text", text: "Updated" }] })).status, 200);
+    const editedBlocks = [{ type: "text", title: "Saved heading", text: "## Updated\\n**{{color:blue|formatted}}**" }, { type: "quote", text: "Unchanged quote" }];
+    assert.equal((await request("PATCH", `/staff/courses/lessons/${lessonOne._id}`, "moderator", { title: "Edited first lesson", order: 1, status: "published", blocks: editedBlocks })).status, 200);
+    const staffWorkspace = await request("GET", "/staff/courses", "moderator");
+    assert.deepEqual(staffWorkspace.body.data.lessons.find((lesson) => lesson._id === lessonOne._id).blocks.map((block) => block.text), editedBlocks.map((block) => block.text), "staff edit data includes all saved blocks for reopening");
+    const reopened = await request("PATCH", `/staff/courses/lessons/${lessonOne._id}`, "moderator", { blocks: staffWorkspace.body.data.lessons.find((lesson) => lesson._id === lessonOne._id).blocks });
+    assert.equal(reopened.body.data.blocks.length, 2, "reopening and saving without changes does not duplicate or drop blocks");
     assert.equal((await request("PATCH", `/staff/courses/lessons/${lessonTwo._id}`, "moderator", { order: 0, status: "published" })).status, 200);
     assert.equal((await request("PATCH", `/staff/courses/lessons/${lessonTwo._id}`, "moderator", { blocks: [{ type: "text", text: "Before" }, { type: "table", rows: [["Column", "Value"], ["Term", "Edited"]], firstRowHeader: true }, { type: "divider" }, { type: "text", text: "After" }] })).status, 200);
     assert.equal((await request("PATCH", `/staff/courses/sections/${section._id}`, "moderator", { title: "Edited section", order: 0, visible: true })).status, 200);
@@ -88,7 +94,7 @@ test("Courses API integration: CRUD, ordering, publication and roles", { skip: !
     assert.deepEqual(publicTableLesson.body.data.lesson.blocks[1].rows, [["Column", "Value"], ["Term", "Edited"]]);
     const publicLesson = await request("GET", `/courses/lessons/${lessonOne._id}`);
     assert.equal(publicLesson.status, 200);
-    assert.equal(publicLesson.body.data.lesson.blocks[0].text, "Updated");
+    assert.equal(publicLesson.body.data.lesson.blocks[0].text, editedBlocks[0].text);
 
     assert.equal((await request("PATCH", `/staff/courses/lessons/${lessonTwo._id}/test`, "moderator", { published: true })).status, 409, "a test cannot publish before it has three questions");
     const questionBank = Array.from({ length: 4 }, (_, index) => ({ type: "sentence", prompt: `Question ${index + 1}`, acceptedAnswers: "yes, YES", explanation: "Answer yes." }));

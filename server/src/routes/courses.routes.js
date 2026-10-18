@@ -93,7 +93,7 @@ router.get("/staff/courses", staff, async (req, res, next) => {
   try {
     const [subjects, courses, sections, lessons] = await Promise.all([
       CourseSubject.find().sort({ order: 1 }).lean(), Course.find().sort({ order: 1, createdAt: -1 }).lean(),
-      CourseSection.find().sort({ order: 1 }).lean(), CourseLesson.find().select("title description courseId sectionId status testPublished order authorId updatedAt").sort({ order: 1 }).lean(),
+      CourseSection.find().sort({ order: 1 }).lean(), CourseLesson.find().select("title description blocks courseId sectionId status testPublished order authorId updatedAt").sort({ order: 1 }).lean(),
     ]);
     const questionCounts = await CourseLessonQuestion.aggregate([{ $match: { lessonId: { $in: lessons.map((lesson) => lesson._id) } } }, { $group: { _id: "$lessonId", count: { $sum: 1 } } }]);
     const countByLesson = new Map(questionCounts.map((entry) => [String(entry._id), entry.count]));

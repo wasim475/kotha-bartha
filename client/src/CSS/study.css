@@ -9,11 +9,23 @@
   --study-accent: #5b6ee8;
   --study-accent-deep: #4655c9;
   --study-accent-soft: rgba(91, 110, 232, 0.12);
+  --lesson-color-red: #a61b1b;
+  --lesson-color-orange: #8c3b00;
+  --lesson-color-green: #12623d;
+  --lesson-color-blue: #164da8;
+  --lesson-color-purple: #5932a5;
+  --lesson-color-highlight: #765000;
 }
 :root[data-theme="dark"] .study-shell {
   --study-accent: #8b98ff;
   --study-accent-deep: #a5b0ff;
   --study-accent-soft: rgba(139, 152, 255, 0.16);
+  --lesson-color-red: #ff8a80;
+  --lesson-color-orange: #ffb366;
+  --lesson-color-green: #72d6a0;
+  --lesson-color-blue: #83b7ff;
+  --lesson-color-purple: #c2a4ff;
+  --lesson-color-highlight: #ffd166;
 }
 
 .study-topbar {

@@ -1,7 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { applyLessonFormat, createLessonTable, hasUnsavedLessonChanges, parseInlineLessonText, parseLessonMarkup, presentLessonTable, resizeLessonTable, updateLessonTableCell } from "../../src/pages/Study/courses/lessonMarkup.js";
+import { applyLessonFormat, createLessonTable, hasUnsavedLessonChanges, loadLessonBlocks, parseInlineLessonText, parseLessonMarkup, presentLessonTable, resizeLessonTable, updateLessonTableCell } from "../../src/pages/Study/courses/lessonMarkup.js";
+
+test("existing lesson blocks load every saved text field and safely normalize legacy values", () => {
+  const stored = [{ type: "text", title: "Heading", text: "## Saved\\n**bold**" }, { type: "quote", text: "A quote" }, { type: "table", rows: [["A"]] }];
+  const loaded = loadLessonBlocks(stored);
+  assert.equal(loaded[0].text, stored[0].text);
+  assert.equal(loaded[1].text, "A quote");
+  assert.equal(loaded[2].rows[0][0], "A");
+  assert.notEqual(loaded[2].rows, stored[2].rows);
+  assert.equal(loadLessonBlocks([{ type: "text", text: null }])[0].text, "");
+  assert.deepEqual(loadLessonBlocks([]), [{ type: "text", title: "", text: "" }]);
+});
 
 test("inline editor controls wrap selected text for bold, italic, underline and links", () => {
   assert.equal(applyLessonFormat("hello world", 6, 11, "bold").value, "hello **world**");
@@ -28,11 +39,36 @@ test("learner markup parser produces semantic headings, lists and paragraphs", (
 
 test("inline links reject unsafe schemes while formatting remains plain text", () => {
   assert.deepEqual(parseInlineLessonText("**bold** [safe](https://example.com) [bad](javascript:alert(1))"), [
-    { type: "bold", text: "bold" }, { type: "text", text: " " },
+    { type: "bold", text: "bold", children: [{ type: "text", text: "bold" }] }, { type: "text", text: " " },
     { type: "link", text: "safe", href: "https://example.com/" },
     { type: "text", text: " [bad](javascript:alert(1))" },
   ]);
   assert.equal(parseInlineLessonText("[insecure](http://example.com)")[0].type, "text");
+});
+
+test("text colors wrap selected text without losing it and restore as safe inline tokens", () => {
+  const formatted = applyLessonFormat("Keep this bold **phrase**", 17, 23, "color:blue");
+  assert.equal(formatted.value, "Keep this bold **{{color:blue|phrase}}**");
+  assert.deepEqual(parseInlineLessonText(formatted.value).map((part) => part.type), ["text", "bold"]);
+  const bold = parseInlineLessonText(formatted.value)[1];
+  assert.equal(bold.children[0].type, "color");
+  assert.equal(bold.children[0].children[0].text, "phrase");
+  const colored = parseInlineLessonText("{{color:blue|**phrase**}}");
+  assert.equal(colored[0].type, "color");
+  assert.equal(colored[0].children[0].type, "bold");
+  assert.equal(parseInlineLessonText("{{color:default|text}}")[0].color, "default");
+  assert.equal(applyLessonFormat("phrase", 0, 6, "color:unknown").value, "phrase");
+});
+
+test("preview and learner views share the safe color-aware lesson renderer", async () => {
+  const [blocks, courses] = await Promise.all([
+    readFile(new URL("../../src/pages/Study/courses/LessonBlocks.jsx", import.meta.url), "utf8"),
+    readFile(new URL("../../src/pages/Study/courses/Courses.jsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(blocks, /LESSON_TEXT_COLORS\[part\.color\]/);
+  assert.match(blocks, /function InlinePart/);
+  assert.match(courses, /<LessonBlocks blocks=\{form\.blocks\}/);
+  assert.match(courses, /<LessonBlocks blocks=\{lesson\.blocks\}/);
 });
 
 test("editor dirty state clears after a successful save baseline is recorded", () => {

@@ -1,13 +1,16 @@
-import { parseInlineLessonText, parseLessonMarkup, presentLessonTable } from "./lessonMarkup";
+import { LESSON_TEXT_COLORS, parseInlineLessonText, parseLessonMarkup, presentLessonTable } from "./lessonMarkup";
 
 function InlineText({ value }) {
-  return parseInlineLessonText(value).map((part, index) => {
-    if (part.type === "bold") return <strong key={index}>{part.text}</strong>;
-    if (part.type === "italic") return <em key={index}>{part.text}</em>;
-    if (part.type === "underline") return <u key={index}>{part.text}</u>;
-    if (part.type === "link") return <a key={index} href={part.href} target="_blank" rel="noreferrer">{part.text}</a>;
-    return <span key={index}>{part.text}</span>;
-  });
+  return parseInlineLessonText(value).map((part, index) => <InlinePart key={index} part={part}/>);
+}
+
+function InlinePart({ part }) {
+  if (part.type === "bold") return <strong>{part.children.map((child, index) => <InlinePart key={index} part={child}/>)}</strong>;
+  if (part.type === "italic") return <em>{part.children.map((child, index) => <InlinePart key={index} part={child}/>)}</em>;
+  if (part.type === "underline") return <u>{part.children.map((child, index) => <InlinePart key={index} part={child}/>)}</u>;
+  if (part.type === "link") return <a href={part.href} target="_blank" rel="noreferrer">{part.text}</a>;
+  if (part.type === "color") return <span style={part.color === "default" ? undefined : { color: LESSON_TEXT_COLORS[part.color] }}>{part.children.map((child, index) => <InlinePart key={index} part={child}/>)}</span>;
+  return part.text;
 }
 
 function RichText({ value }) {

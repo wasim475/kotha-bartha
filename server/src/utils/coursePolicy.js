@@ -1,6 +1,7 @@
 const STAFF_ROLES = new Set(["admin", "moderator"]);
 const BLOCK_TYPES = new Set(["text", "image", "video", "quote", "callout", "divider", "table"]);
 const CALLOUTS = new Set(["important", "remember", "example", "warning", "tip"]);
+const LESSON_TEXT_COLORS = new Set(["default", "red", "orange", "green", "blue", "purple", "highlight"]);
 const TABLE_MAX_ROWS = 30;
 const TABLE_MAX_COLUMNS = 12;
 const TABLE_MAX_CELL_LENGTH = 2000;
@@ -41,6 +42,10 @@ function hasUnsafeMarkdownLinks(text) {
   return false;
 }
 
+function hasUnsupportedLessonColors(text) {
+  return [...String(text || "").matchAll(/\{\{color:([^|}]+)\|/g)].some((match) => !LESSON_TEXT_COLORS.has(match[1]));
+}
+
 function normalizeLessonBlocks(input, safeUrl) {
   if (!Array.isArray(input) || input.length > 100 || input.some((block) => !block || !BLOCK_TYPES.has(block.type))) {
     return { error: "Lesson blocks are invalid." };
@@ -73,6 +78,9 @@ function normalizeLessonBlocks(input, safeUrl) {
   }));
   if (blocks.some((block) => ["text", "quote", "callout"].includes(block.type) && hasUnsafeMarkdownLinks(block.text))) {
     return { error: "Lesson links must use valid HTTPS URLs." };
+  }
+  if (blocks.some((block) => ["text", "quote", "callout"].includes(block.type) && hasUnsupportedLessonColors(block.text))) {
+    return { error: "Lesson text uses an unsupported color." };
   }
   if (blocks.some((block) => ["image", "video"].includes(block.type) && !block.url)) {
     return { error: "Use a supported secure media URL." };
