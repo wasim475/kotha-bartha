@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../utility/api";
 import LessonBlocks from "./LessonBlocks";
-import { applyLessonFormat, createLessonTable, hasUnsavedLessonChanges, LESSON_TEXT_COLORS, loadLessonBlocks, resizeLessonTable, updateLessonTableCell } from "./lessonMarkup";
+import LessonFormatToolbar from "./LessonFormatToolbar";
+import { applyLessonFormat, createLessonTable, hasUnsavedLessonChanges, loadLessonBlocks, parseLessonTablePaste, pasteLessonTable, resizeLessonTable, updateLessonTableCell } from "./lessonMarkup";
 import LessonTest from "./LessonTest";
 import QuestionManager from "./QuestionManager";
 import { COURSE_ROUTE_PATHS, COURSES_BASE_PATH, coursePath, lessonPath, lessonTestPath } from "./courseRoutes";
@@ -86,8 +87,12 @@ function ManageCourses({ user }) {
   const [preview, setPreview] = useState(false);
   const [questionLesson, setQuestionLesson] = useState(null);
   const [tableSize, setTableSize] = useState({ rows: "2", columns: "2" });
+  const [colorPaletteBlock, setColorPaletteBlock] = useState(null);
   const [formBaseline, setFormBaseline] = useState(() => JSON.stringify(form));
   const textareas = useRef({});
+  const selectionSnapshots = useRef({});
+  const tableCellRefs = useRef({});
+  const tableStartingCells = useRef({});
   const dirty = hasUnsavedLessonChanges(form, formBaseline);
   const reload = useCallback(async () => { try { const { data } = await api.get("/staff/courses"); setWorkspace(data.data); setError(""); } catch (e) { setError(errorText(e)); } }, []);
   useEffect(() => { let active = true; api.get("/staff/courses").then(({ data }) => active && setWorkspace(data.data)).catch((e) => active && setError(errorText(e))); return () => { active = false; }; }, []);
@@ -114,8 +119,81 @@ function ManageCourses({ user }) {
   const availableSections = useMemo(() => sections.filter((x) => String(x.courseId) === String(form.courseId)), [sections, form.courseId]);
   const updateBlock = (index, field, value) => setForm((old) => ({ ...old, blocks: old.blocks.map((b, i) => i === index ? { ...b, [field]: value } : b) }));
   const resizeTable = (index, rowCount, columnCount) => setForm((old) => ({ ...old, blocks: old.blocks.map((block, i) => i === index ? resizeLessonTable(block, rowCount, columnCount) : block) }));
+  const pasteTable = (event, blockIndex, rowIndex, columnIndex) => {
+    const clipboard = event.clipboardData;
+    const pastedRows = parseLessonTablePaste(clipboard?.getData("text/html") || "", clipboard?.getData("text/plain") || clipboard?.getData("Text") || "");
+    if (!pastedRows) return;
+    event.preventDefault();
+    const updated = pasteLessonTable(form.blocks[blockIndex], rowIndex, columnIndex, pastedRows);
+    tableStartingCells.current[blockIndex] = [rowIndex, columnIndex];
+    setForm((old) => ({ ...old, blocks: old.blocks.map((block, index) => index === blockIndex ? updated : block) }));
+    const firstCellText = String(pastedRows[0]?.[0] || "").slice(0, 2000);
+    requestAnimationFrame(() => {
+      const cell = tableCellRefs.current[`${blockIndex}-${rowIndex}-${columnIndex}`];
+      cell?.focus();
+      cell?.setSelectionRange(firstCellText.length, firstCellText.length);
+    });
+  };
+  const importClipboardTable = async (blockIndex) => {
+    try {
+      let html = "";
+      let plainText = "";
+      if (navigator.clipboard?.read) {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          if (!html && item.types.includes("text/html")) html = await (await item.getType("text/html")).text();
+          if (!plainText && item.types.includes("text/plain")) plainText = await (await item.getType("text/plain")).text();
+        }
+      } else if (navigator.clipboard?.readText) plainText = await navigator.clipboard.readText();
+      const pastedRows = parseLessonTablePaste(html, plainText);
+      if (!pastedRows) { setError("Clipboard content was not recognized as a table. Paste directly into a table cell instead."); return; }
+      const [rowIndex, columnIndex] = tableStartingCells.current[blockIndex] || [0, 0];
+      const updated = pasteLessonTable(form.blocks[blockIndex], rowIndex, columnIndex, pastedRows);
+      setForm((old) => ({ ...old, blocks: old.blocks.map((block, index) => index === blockIndex ? updated : block) }));
+      setError("");
+    } catch {
+      setError("Clipboard access was unavailable. Click a starting cell and paste the table with Ctrl+V.");
+    }
+  };
+  const navigateTableCell = (event, blockIndex, rowIndex, columnIndex) => {
+    if (event.key !== "Tab") return;
+    const currentBlock = form.blocks[blockIndex];
+    const target = event.shiftKey
+      ? columnIndex > 0 ? [rowIndex, columnIndex - 1] : rowIndex > 0 ? [rowIndex - 1, currentBlock.rows[rowIndex - 1].length - 1] : null
+      : columnIndex + 1 < currentBlock.rows[rowIndex].length ? [rowIndex, columnIndex + 1] : rowIndex + 1 < currentBlock.rows.length ? [rowIndex + 1, 0] : null;
+    if (!target) return;
+    const cell = tableCellRefs.current[`${blockIndex}-${target[0]}-${target[1]}`];
+    if (!cell) return;
+    event.preventDefault();
+    cell?.focus();
+    cell?.setSelectionRange(cell.value.length, cell.value.length);
+  };
   const removeBlock = (index) => { if (form.blocks[index]?.type === "table" && !window.confirm("Delete this entire table?")) return; setForm((old) => ({ ...old, blocks: old.blocks.filter((_, i) => i !== index) })); };
-  const formatBlock = (index, format) => { const textarea = textareas.current[index]; const block = form.blocks[index]; let linkUrl; if (format === "link") { linkUrl = window.prompt("Enter a secure link URL", "https://"); if (linkUrl === null) return; try { const parsed = new URL(linkUrl); if (parsed.protocol !== "https:") throw new Error("https required"); } catch { setError("Enter a valid HTTPS link."); return; } } const result = applyLessonFormat(block.text, textarea?.selectionStart ?? block.text.length, textarea?.selectionEnd ?? block.text.length, format, linkUrl); updateBlock(index, "text", result.value); requestAnimationFrame(() => { const current = textareas.current[index]; current?.focus(); current?.setSelectionRange(result.selectionStart, result.selectionEnd); }); };
+  const captureSelection = (index) => {
+    const textarea = textareas.current[index];
+    if (!textarea) return selectionSnapshots.current[index];
+    selectionSnapshots.current[index] = { start: textarea.selectionStart, end: textarea.selectionEnd, direction: textarea.selectionDirection || "none" };
+    return selectionSnapshots.current[index];
+  };
+  const formatBlock = (index, format) => {
+    const block = form.blocks[index];
+    const selection = selectionSnapshots.current[index] || captureSelection(index) || { start: block.text.length, end: block.text.length };
+    let linkUrl;
+    if (format === "link") {
+      linkUrl = window.prompt("Enter a secure link URL", "https://");
+      if (linkUrl === null) return;
+      try { const parsed = new URL(linkUrl); if (parsed.protocol !== "https:") throw new Error("https required"); }
+      catch { setError("Enter a valid HTTPS link."); return; }
+    }
+    const result = applyLessonFormat(block.text, selection.start, selection.end, format, linkUrl);
+    updateBlock(index, "text", result.value);
+    selectionSnapshots.current[index] = { start: result.selectionStart, end: result.selectionEnd, direction: selection.direction || "forward" };
+    requestAnimationFrame(() => {
+      const current = textareas.current[index];
+      current?.focus();
+      current?.setSelectionRange(result.selectionStart, result.selectionEnd, selection.direction || "forward");
+    });
+  };
   const submit = async (e) => { e.preventDefault(); setBusy(true); setError(""); try { const payload = { ...form, order: 0 }; if (form.id) await api.patch(`/staff/courses/${form.kind}/${form.id}`, payload); else await api.post(`/staff/courses/${form.kind}`, payload); const clean = { kind: form.kind, id: "", title: "", description: "", subjectId: "", courseId: "", sectionId: "", blocks: [{ type: "text", title: "", text: "" }] }; setFormBaseline(JSON.stringify(clean)); setForm(clean); setPreview(false); await reload(); } catch (err) { setError(errorText(err)); } finally { setBusy(false); } };
   const edit = (kind, item) => { const nextForm = { kind, id: item._id, title: item.title, description: item.description || "", subjectId: item.subjectId?._id || item.subjectId || "", courseId: item.courseId?._id || item.courseId || "", sectionId: item.sectionId?._id || item.sectionId || "", coverUrl: item.coverUrl || "", blocks: loadLessonBlocks(item.blocks) }; setFormBaseline(JSON.stringify(nextForm)); setForm(nextForm); setPreview(false); };
   const patch = async (kind, item, updates) => { setBusy(true); try { await api.patch(`/staff/courses/${kind}/${item._id}`, updates); await reload(); } catch (e) { setError(errorText(e)); } finally { setBusy(false); } };
@@ -134,9 +212,9 @@ function ManageCourses({ user }) {
           <select aria-label="Block type" value={block.type} onChange={(e) => updateBlock(i, "type", e.target.value)}><option value="text">Text</option><option value="quote">Quote</option><option value="callout">Learning note</option><option value="image">Image</option><option value="video">YouTube video</option><option value="divider">Divider</option><option value="table">Table</option></select>
           {block.type === "table" ? <div className="lesson-table-editor">
             <label className="lesson-table-header-toggle"><input type="checkbox" checked={block.firstRowHeader === true} onChange={(e) => updateBlock(i, "firstRowHeader", e.target.checked)}/> Use first row as header</label>
-            <div className="lesson-table-tools"><button type="button" disabled={block.rows.length >= 30} onClick={() => resizeTable(i, block.rows.length + 1, block.rows[0]?.length || 1)}>Add row</button><button type="button" disabled={block.rows.length <= 1} onClick={() => resizeTable(i, block.rows.length - 1, block.rows[0]?.length || 1)}>Remove last row</button><button type="button" disabled={(block.rows[0]?.length || 0) >= 12} onClick={() => resizeTable(i, block.rows.length, (block.rows[0]?.length || 0) + 1)}>Add column</button><button type="button" disabled={(block.rows[0]?.length || 0) <= 1} onClick={() => resizeTable(i, block.rows.length, (block.rows[0]?.length || 1) - 1)}>Remove last column</button></div>
-            <div className="lesson-table-scroll"><table className="lesson-table"><tbody>{block.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, columnIndex) => { const isHeader = block.firstRowHeader && rowIndex === 0; const Cell = isHeader ? "th" : "td"; return <Cell key={columnIndex} scope={isHeader ? "col" : undefined}><textarea aria-label={`Table row ${rowIndex + 1}, column ${columnIndex + 1}`} rows="2" maxLength="2000" value={cell} onChange={(e) => setForm((old) => ({ ...old, blocks: old.blocks.map((item, blockIndex) => blockIndex === i ? updateLessonTableCell(item, rowIndex, columnIndex, e.target.value) : item) }))}/></Cell>; })}</tr>)}</tbody></table></div>
-          </div> : block.type === "image" || block.type === "video" ? <><input placeholder="Secure media URL" value={block.url || ""} onChange={(e) => updateBlock(i, "url", e.target.value)}/>{block.type === "image" && <><input type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={(e) => uploadImage(e.target.files?.[0], i)}/>{block.url && <img className="editor-image-preview" src={block.url} alt="Uploaded lesson image preview"/>}<input placeholder="Alternative text" value={block.alt || ""} onChange={(e) => updateBlock(i, "alt", e.target.value)}/></>}<input placeholder="Caption" value={block.caption || ""} onChange={(e) => updateBlock(i, "caption", e.target.value)}/></> : block.type !== "divider" && <><input placeholder="Optional heading" value={block.title || ""} onChange={(e) => updateBlock(i, "title", e.target.value)}/>{block.type === "callout" && <select value={block.variant || "important"} onChange={(e) => updateBlock(i, "variant", e.target.value)}><option value="important">Important</option><option value="remember">Remember</option><option value="example">Example</option><option value="warning">Warning</option><option value="tip">Tip</option></select>}{block.type === "text" && <div className="lesson-format-toolbar" role="group" aria-label={`Formatting for block ${i + 1}`}>{[["bold", "Bold"], ["italic", "Italic"], ["underline", "Underline"], ["heading", "Heading"], ["bulleted-list", "Bulleted list"], ["numbered-list", "Numbered list"], ["link", "Link"]].map(([format, label]) => <button type="button" key={format} title={label} aria-label={label} onClick={() => formatBlock(i, format)}>{label}</button>)}<select aria-label="Text color" value="" onMouseDown={(event) => event.preventDefault()} onChange={(event) => { if (event.target.value) formatBlock(i, `color:${event.target.value}`); event.target.value = ""; }}><option value="">Text color…</option>{Object.keys(LESSON_TEXT_COLORS).map((color) => <option key={color} value={color}>{color === "default" ? "Default text" : color === "highlight" ? "Highlight" : color[0].toUpperCase() + color.slice(1)}</option>)}</select></div>}<textarea ref={(node) => { textareas.current[i] = node; }} rows="5" aria-label={`Content for block ${i + 1}`} placeholder="Write text. Use formatting buttons; plain Markdown syntax is also supported." value={block.text || ""} onChange={(e) => updateBlock(i, "text", e.target.value)}/></>}
+            <div className="lesson-table-tools"><button type="button" disabled={block.rows.length >= 30} onClick={() => resizeTable(i, block.rows.length + 1, block.rows[0]?.length || 1)}>Add row</button><button type="button" disabled={block.rows.length <= 1} onClick={() => resizeTable(i, block.rows.length - 1, block.rows[0]?.length || 1)}>Remove last row</button><button type="button" disabled={(block.rows[0]?.length || 0) >= 12} onClick={() => resizeTable(i, block.rows.length, (block.rows[0]?.length || 0) + 1)}>Add column</button><button type="button" disabled={(block.rows[0]?.length || 0) <= 1} onClick={() => resizeTable(i, block.rows.length, (block.rows[0]?.length || 1) - 1)}>Remove last column</button></div><div className="lesson-table-paste-help"><span>Click a starting cell and paste a table from ChatGPT, Docs, or a spreadsheet. Tab and pipe tables expand automatically.</span><button type="button" onClick={() => importClipboardTable(i)}>Import clipboard table</button></div>
+            <div className="lesson-table-scroll"><table className="lesson-table"><tbody>{block.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, columnIndex) => { const isHeader = block.firstRowHeader && rowIndex === 0; const Cell = isHeader ? "th" : "td"; return <Cell key={columnIndex} scope={isHeader ? "col" : undefined}><textarea ref={(node) => { tableCellRefs.current[`${i}-${rowIndex}-${columnIndex}`] = node; }} aria-label={`Table row ${rowIndex + 1}, column ${columnIndex + 1}`} rows="2" maxLength="2000" value={cell} onPaste={(event) => pasteTable(event, i, rowIndex, columnIndex)} onFocus={() => { tableStartingCells.current[i] = [rowIndex, columnIndex]; }} onKeyDown={(event) => navigateTableCell(event, i, rowIndex, columnIndex)} onChange={(e) => setForm((old) => ({ ...old, blocks: old.blocks.map((item, blockIndex) => blockIndex === i ? updateLessonTableCell(item, rowIndex, columnIndex, e.target.value) : item) }))}/></Cell>; })}</tr>)}</tbody></table></div>
+          </div> : block.type === "image" || block.type === "video" ? <><input placeholder="Secure media URL" value={block.url || ""} onChange={(e) => updateBlock(i, "url", e.target.value)}/>{block.type === "image" && <><input type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={(e) => uploadImage(e.target.files?.[0], i)}/>{block.url && <img className="editor-image-preview" src={block.url} alt="Uploaded lesson image preview"/>}<input placeholder="Alternative text" value={block.alt || ""} onChange={(e) => updateBlock(i, "alt", e.target.value)}/></>}<input placeholder="Caption" value={block.caption || ""} onChange={(e) => updateBlock(i, "caption", e.target.value)}/></> : block.type !== "divider" && <><input placeholder="Optional heading" value={block.title || ""} onChange={(e) => updateBlock(i, "title", e.target.value)}/>{block.type === "callout" && <select value={block.variant || "important"} onChange={(e) => updateBlock(i, "variant", e.target.value)}><option value="important">Important</option><option value="remember">Remember</option><option value="example">Example</option><option value="warning">Warning</option><option value="tip">Tip</option></select>}{block.type === "text" && <LessonFormatToolbar blockIndex={i} colorOpen={colorPaletteBlock === i} onFormat={formatBlock} onCaptureSelection={captureSelection} onToggleColors={(index) => setColorPaletteBlock((current) => current === index ? null : index)} onCloseColors={() => setColorPaletteBlock(null)}/>}<textarea ref={(node) => { textareas.current[i] = node; }} rows="5" aria-label={`Content for block ${i + 1}`} placeholder="Write text. Use formatting buttons; plain Markdown syntax is also supported." value={block.text || ""} onSelect={() => captureSelection(i)} onKeyUp={() => captureSelection(i)} onMouseUp={() => captureSelection(i)} onChange={(e) => { updateBlock(i, "text", e.target.value); selectionSnapshots.current[i] = { start: e.target.selectionStart, end: e.target.selectionEnd, direction: e.target.selectionDirection || "none" }; }}/></>}
           <div className="block-actions"><button type="button" disabled={i === 0} onClick={() => setForm({ ...form, blocks: form.blocks.map((x, n) => n === i - 1 ? block : n === i ? form.blocks[i - 1] : x) })}>Move up</button><button type="button" onClick={() => removeBlock(i)}>Remove block</button></div>
         </div>)}
         <div className="lesson-add-table"><label>Rows<input type="number" min="1" max="30" value={tableSize.rows} onChange={(e) => setTableSize((size) => ({ ...size, rows: e.target.value }))}/></label><label>Columns<input type="number" min="1" max="12" value={tableSize.columns} onChange={(e) => setTableSize((size) => ({ ...size, columns: e.target.value }))}/></label><button className="course-button secondary" type="button" onClick={() => setForm((old) => ({ ...old, blocks: [...old.blocks, createLessonTable(tableSize.rows, tableSize.columns)] }))}>Add Table</button><button className="course-button secondary" type="button" onClick={() => setForm({ ...form, blocks: [...form.blocks, { type: "text", title: "", text: "" }] })}>Add content block</button></div>

@@ -49,6 +49,92 @@ export function updateLessonTableCell(table, rowIndex, columnIndex, value) {
   return { ...table, rows: table.rows.map((row, index) => index === rowIndex ? row.map((cell, col) => col === columnIndex ? value : cell) : row) };
 }
 
+function decodeTableEntities(value) {
+  return value.replace(/&(#x[\da-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (entity, code) => {
+    const named = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+    if (code[0] !== "#") return named[code.toLowerCase()] ?? entity;
+    const number = code[1].toLowerCase() === "x" ? Number.parseInt(code.slice(2), 16) : Number.parseInt(code.slice(1), 10);
+    return Number.isFinite(number) && number >= 0 && number <= 0x10ffff ? String.fromCodePoint(number) : entity;
+  });
+}
+
+function htmlCellText(markup) {
+  return decodeTableEntities(markup
+    .replace(/<br\s*\/?\s*>/gi, "\n")
+    .replace(/<\/(?:p|div|li)\s*>/gi, "\n")
+    .replace(/<[^>]*>/g, ""))
+    .replace(/^\n+|\n+$/g, "");
+}
+
+function parseHtmlLessonTable(html) {
+  if (!/<table\b/i.test(html)) return null;
+  const tables = html.match(/<table\b[^>]*>[\s\S]*?<\/table\s*>/gi) || [];
+  const table = tables[0];
+  if (!table) return null;
+  const rows = [...table.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr\s*>/gi)].map(([, rowMarkup]) =>
+    [...rowMarkup.matchAll(/<(td|th)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi)].map(([, , cellMarkup]) => htmlCellText(cellMarkup)));
+  return rows.some((row) => row.length) ? rows.filter((row) => row.length) : null;
+}
+
+function parseDelimitedRows(value, delimiter) {
+  const rows = [[]];
+  let cell = "";
+  let quoted = false;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (character === '"') {
+      if (quoted && value[index + 1] === '"') { cell += '"'; index += 1; }
+      else quoted = !quoted;
+    } else if (!quoted && character === delimiter) {
+      rows[rows.length - 1].push(cell); cell = "";
+    } else if (!quoted && (character === "\n" || character === "\r")) {
+      if (character === "\r" && value[index + 1] === "\n") index += 1;
+      rows[rows.length - 1].push(cell); rows.push([]); cell = "";
+    } else cell += character;
+  }
+  rows[rows.length - 1].push(cell);
+  return rows;
+}
+
+function parsePipeRows(value) {
+  const lines = value.replace(/\r\n?/g, "\n").split("\n").filter((line) => line.trim());
+  if (!lines.length || !lines.some((line) => line.includes("|"))) return null;
+  const rows = lines.map((line) => {
+    let normalized = line.trim();
+    if (normalized.startsWith("|")) normalized = normalized.slice(1);
+    if (normalized.endsWith("|")) normalized = normalized.slice(0, -1);
+    return normalized.split(/(?<!\\)\|/).map((cell) => cell.replace(/\\\|/g, "|").trim());
+  });
+  return rows.filter((row) => !row.every((cell) => /^:?-{3,}:?$/.test(cell))) ;
+}
+
+export function parseLessonTablePaste(html = "", plainText = "") {
+  if (typeof html === "string") {
+    const parsedHtml = parseHtmlLessonTable(html);
+    if (parsedHtml) return parsedHtml;
+  }
+  if (typeof plainText !== "string" || !plainText.trim()) return null;
+  const value = plainText.replace(/\r\n?/g, "\n").replace(/\n+$/, "");
+  if (value.includes("\t")) return parseDelimitedRows(value, "\t");
+  const pipes = parsePipeRows(value);
+  return pipes?.some((row) => row.length > 1) ? pipes : null;
+}
+
+export function pasteLessonTable(table, startRow, startColumn, pastedRows) {
+  if (!Array.isArray(pastedRows) || !pastedRows.length) return table;
+  const maxRows = Math.min(30, Math.max(table.rows?.length || 1, startRow + pastedRows.length));
+  const pastedColumns = Math.max(1, ...pastedRows.map((row) => row.length));
+  const maxColumns = Math.min(12, Math.max(table.rows?.[0]?.length || 1, startColumn + pastedColumns));
+  const expanded = resizeLessonTable(table, maxRows, maxColumns);
+  const rows = expanded.rows.map((row) => [...row]);
+  pastedRows.slice(0, Math.max(0, maxRows - startRow)).forEach((pastedRow, rowOffset) => {
+    pastedRow.slice(0, Math.max(0, maxColumns - startColumn)).forEach((value, columnOffset) => {
+      rows[startRow + rowOffset][startColumn + columnOffset] = String(value).slice(0, 2000);
+    });
+  });
+  return { ...expanded, rows };
+}
+
 export function presentLessonTable(table) {
   if (!Array.isArray(table?.rows) || !table.rows.length || !table.rows.every((row) => Array.isArray(row))) return null;
   return {

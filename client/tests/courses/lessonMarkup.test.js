@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { applyLessonFormat, createLessonTable, hasUnsavedLessonChanges, loadLessonBlocks, parseInlineLessonText, parseLessonMarkup, presentLessonTable, resizeLessonTable, updateLessonTableCell } from "../../src/pages/Study/courses/lessonMarkup.js";
+import { applyLessonFormat, createLessonTable, hasUnsavedLessonChanges, loadLessonBlocks, parseInlineLessonText, parseLessonMarkup, parseLessonTablePaste, pasteLessonTable, presentLessonTable, resizeLessonTable, updateLessonTableCell } from "../../src/pages/Study/courses/lessonMarkup.js";
 
 test("existing lesson blocks load every saved text field and safely normalize legacy values", () => {
   const stored = [{ type: "text", title: "Heading", text: "## Saved\\n**bold**" }, { type: "quote", text: "A quote" }, { type: "table", rows: [["A"]] }];
@@ -20,6 +20,17 @@ test("inline editor controls wrap selected text for bold, italic, underline and 
   assert.equal(applyLessonFormat("hello", 0, 5, "underline").value, "__hello__");
   assert.equal(applyLessonFormat("lesson", 0, 6, "link").value, "[lesson](https://example.com)");
   assert.equal(applyLessonFormat("lesson", 0, 6, "link", "https://example.org/grammar").value, "[lesson](https://example.org/grammar)");
+});
+
+test("bold and italic commands format the saved selection range and keep selected text selected", () => {
+  const value = "Before selected after";
+  const start = value.indexOf("selected");
+  const end = start + "selected".length;
+  for (const format of ["bold", "italic"]) {
+    const result = applyLessonFormat(value, start, end, format);
+    assert.equal(result.value.slice(result.selectionStart, result.selectionEnd), "selected");
+    assert.match(result.value, format === "bold" ? /\*\*selected\*\*/ : /\*selected\*/);
+  }
 });
 
 test("heading and list controls format full selected lines and preserve following content", () => {
@@ -71,6 +82,29 @@ test("preview and learner views share the safe color-aware lesson renderer", asy
   assert.match(courses, /<LessonBlocks blocks=\{lesson\.blocks\}/);
 });
 
+test("color palette stays open for inside clicks, closes outside or on Escape, and supports keyboard state", async () => {
+  const toolbar = await readFile(new URL("../../src/pages/Study/courses/LessonFormatToolbar.jsx", import.meta.url), "utf8");
+  assert.match(toolbar, /paletteRef\.current\?\.contains\(event\.target\)/);
+  assert.match(toolbar, /event\.key === "Escape"/);
+  assert.match(toolbar, /aria-expanded=\{colorOpen\}/);
+  assert.match(toolbar, /onClick=\{\(\) => onToggleColors\(blockIndex\)\}/);
+  assert.match(toolbar, /onFormat\(blockIndex, `color:\$\{color\}`\)/);
+  assert.match(toolbar, /onMouseDown=\{keepEditorSelection\}/);
+});
+
+test("reopening a saved lesson preserves inline markup when formatting and saving again", () => {
+  const saved = [{ type: "text", text: "## Topic\\nKeep **bold** and {{color:blue|blue}}" }];
+  const reopened = loadLessonBlocks(saved);
+  const original = reopened[0].text;
+  const start = original.indexOf("blue}}");
+  const result = applyLessonFormat(original, start, start, "italic");
+  const savedAgain = loadLessonBlocks([{ ...reopened[0], text: result.value }]);
+  assert.equal(savedAgain[0].text, result.value);
+  assert.match(savedAgain[0].text, /\*\*bold\*\*/);
+  assert.match(savedAgain[0].text, /\{\{color:blue\|\*text\*blue\}\}/);
+  assert.match(savedAgain[0].text, /\*text\*/);
+});
+
 test("editor dirty state clears after a successful save baseline is recorded", () => {
   const edited = { title: "Changed", blocks: [{ type: "text", text: "Lesson" }] };
   const savedSnapshot = JSON.stringify(edited);
@@ -90,6 +124,48 @@ test("table editor creates configurable structured rows and columns and preserve
   assert.deepEqual(resizeLessonTable(resized, 1, 1).rows, [[""]]);
   assert.equal(createLessonTable(99, 99).rows.length, 30);
   assert.equal(createLessonTable(99, 99).rows[0].length, 12);
+});
+
+test("HTML table paste extracts text cells and decodes entities without interpreting clipboard markup", () => {
+  assert.deepEqual(parseLessonTablePaste("<table><tr><th>Subject</th><th>Rule</th></tr><tr><td><b>Preposition</b></td><td>Shows &amp; explains<br>relationships</td></tr></table>", "ignored"), [
+    ["Subject", "Rule"], ["Preposition", "Shows & explains\nrelationships"],
+  ]);
+});
+
+test("tab-separated paste keeps commas and quoted multiline cells intact", () => {
+  assert.deepEqual(parseLessonTablePaste("", "Subject\tRule\tExample\r\nBengali\tShows relationships\tবাংলা, English\nNote\t\"line one\nline two\"\tA, B"), [
+    ["Subject", "Rule", "Example"], ["Bengali", "Shows relationships", "বাংলা, English"], ["Note", "line one\nline two", "A, B"],
+  ]);
+});
+
+test("Markdown pipe tables accept outer pipes, skip separator rows, and keep uneven cells", () => {
+  assert.deepEqual(parseLessonTablePaste("", "| Subject | Rule | Example |\n| --- | :---: | ---: |\n| Preposition | Shows relationships | The book is on the table. |\n| Conjunction | Connects words | I was tired, but I continued. |\n| Uneven | only two |"), [
+    ["Subject", "Rule", "Example"], ["Preposition", "Shows relationships", "The book is on the table."],
+    ["Conjunction", "Connects words", "I was tired, but I continued."], ["Uneven", "only two"],
+  ]);
+});
+
+test("table paste expands from the selected cell and preserves content outside the pasted range", () => {
+  const table = { type: "table", rows: [["A", "keep"], ["below", "also keep"]], firstRowHeader: true };
+  const expanded = pasteLessonTable(table, 0, 1, [["pasted", "new column"], ["second row", ""]]);
+  assert.deepEqual(expanded.rows, [["A", "pasted", "new column"], ["below", "second row", "" ]]);
+  assert.equal(expanded.firstRowHeader, true);
+  const bounded = pasteLessonTable(createLessonTable(30, 12), 29, 11, [["last", "ignored column"], ["ignored row"]]);
+  assert.equal(bounded.rows.length, 30);
+  assert.equal(bounded.rows[0].length, 12);
+  assert.equal(bounded.rows[29][11], "last");
+});
+
+test("ordinary non-table paste is left to the native text paste behavior", () => {
+  assert.equal(parseLessonTablePaste("", "This is a sentence, with commas.\nAnd a second line."), null);
+});
+
+test("table cell editor intercepts only recognized grids and exposes clipboard import", async () => {
+  const editor = await readFile(new URL("../../src/pages/Study/courses/Courses.jsx", import.meta.url), "utf8");
+  assert.match(editor, /onPaste=\{\(event\) => pasteTable\(event, i, rowIndex, columnIndex\)\}/);
+  assert.match(editor, /if \(!pastedRows\) return;/);
+  assert.match(editor, /Import clipboard table/);
+  assert.match(editor, /onKeyDown=\{\(event\) => navigateTableCell/);
 });
 
 test("table presentation keeps cell content as text and marks only first-row headers", () => {
