@@ -26,6 +26,7 @@ class AuthRepository(
     private val authApi: AuthApi,
     private val tokenStore: TokenStore,
     private val socketManager: SocketManager,
+    private val connectSocket: (String) -> Unit = socketManager::connect,
 ) : SessionManager {
     override val isSignedIn: Boolean
         get() = !tokenStore.getToken().isNullOrBlank()
@@ -39,8 +40,14 @@ class AuthRepository(
     suspend fun loginWithGoogle(credential: String): ApiResult<UserDto> =
         completeSignIn(safeAuthCall { authApi.google(GoogleLoginRequest(credential)) })
 
-    /** Used by Splash to confirm a stored token still works before trusting it. */
-    suspend fun currentUser(): ApiResult<UserDto> = safeApiCall { authApi.me() }
+    /** Used by Splash to validate and restore a saved session, including its realtime socket. */
+    suspend fun currentUser(): ApiResult<UserDto> {
+        val result = safeApiCall { authApi.me() }
+        if (result is ApiResult.Success) {
+            tokenStore.getToken()?.takeIf(String::isNotBlank)?.let(connectSocket)
+        }
+        return result
+    }
 
     /** A stored token that turned out to be dead (expired/revoked) — no server round trip needed. */
     fun clearLocalSession() {
@@ -57,7 +64,7 @@ class AuthRepository(
     private fun completeSignIn(result: ApiResult<AuthSession>): ApiResult<UserDto> =
         result.map { session ->
             tokenStore.saveToken(session.token)
-            socketManager.connect(session.token)
+            connectSocket(session.token)
             session.user
         }
 }
