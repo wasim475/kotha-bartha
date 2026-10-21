@@ -13,6 +13,64 @@ const { ACTIONS, requireAction, VISIBLE_CONTENT } = require("../utils/moderation
 
 const router = express.Router();
 
+// FCM registration is bound to the authenticated account and a stable per-installation id.
+// Moving a token removes its previous owner first, so tokens cannot be registered on two accounts.
+router.put("/users/me/push-device", async (req, res, next) => {
+  try {
+    const installationId = String(req.body?.installationId || "");
+    const token = String(req.body?.token || "");
+    if (!/^[A-Za-z0-9_-]{16,128}$/.test(installationId) || token.length < 32 || token.length > 4096) {
+      return res.status(400).json({ error: { code: "INVALID_PUSH_DEVICE", message: "Invalid push registration." } });
+    }
+    await User.updateMany({ "pushDevices.token": token }, { $pull: { pushDevices: { token } } });
+    await User.updateOne(
+      { _id: req.user._id },
+      [{
+        $set: {
+          pushDevices: {
+            $slice: [
+              {
+                $concatArrays: [
+                  {
+                    $filter: {
+                      input: { $ifNull: ["$pushDevices", []] },
+                      as: "device",
+                      cond: {
+                        $and: [
+                          { $ne: ["$$device.installationId", installationId] },
+                          { $ne: ["$$device.token", token] },
+                        ],
+                      },
+                    },
+                  },
+                  [{ installationId, token, updatedAt: new Date() }],
+                ],
+              },
+              -8,
+            ],
+          },
+        },
+      }],
+    );
+    res.json({ data: { registered: true } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/users/me/push-device/:installationId", async (req, res, next) => {
+  try {
+    const installationId = String(req.params.installationId || "");
+    if (!/^[A-Za-z0-9_-]{16,128}$/.test(installationId)) {
+      return res.status(400).json({ error: { code: "INVALID_PUSH_DEVICE", message: "Invalid push registration." } });
+    }
+    await User.updateOne({ _id: req.user._id }, { $pull: { pushDevices: { installationId } } });
+    res.json({ data: { removed: true } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Posts/photos are only visible to the owner and their friends — there's
 // no post-level privacy setting in this app, so profile visibility is
 // simply keyed off the existing friendship relationship.

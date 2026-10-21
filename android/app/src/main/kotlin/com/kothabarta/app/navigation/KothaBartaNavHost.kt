@@ -25,7 +25,12 @@ import org.koin.compose.koinInject
  * graph" split rather than one flat graph mixing both.
  */
 @Composable
-fun KothaBartaNavHost(isDarkTheme: Boolean, onToggleTheme: () -> Unit) {
+fun KothaBartaNavHost(
+    isDarkTheme: Boolean,
+    onToggleTheme: () -> Unit,
+    notificationConversationId: String? = null,
+    onNotificationConversationHandled: () -> Unit = {},
+) {
     val navController = rememberNavController()
     val unauthorizedNotifier = koinInject<UnauthorizedNotifier>()
     val sessionManager = koinInject<SessionManager>()
@@ -67,6 +72,8 @@ fun KothaBartaNavHost(isDarkTheme: Boolean, onToggleTheme: () -> Unit) {
                     onSignedOut = handleEvent,
                     isDarkTheme = isDarkTheme,
                     onToggleTheme = onToggleTheme,
+                    notificationConversationId = notificationConversationId,
+                    onNotificationConversationHandled = onNotificationConversationHandled,
                 )
             }
         }

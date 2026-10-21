@@ -16,7 +16,7 @@ import org.koin.dsl.module
  * section B).
  */
 val authFeatureModule = module {
-    single { AuthRepository(authApi = get(), tokenStore = get(), socketManager = get()) }
+    single { AuthRepository(authApi = get(), tokenStore = get(), socketManager = get(), pushDeviceRegistrar = get()) }
     single<SessionManager> { get<AuthRepository>() }
     viewModel { SplashViewModel(get()) }
     viewModel { LoginViewModel(get(), get()) }

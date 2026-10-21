@@ -3,6 +3,7 @@ package com.kothabarta.app.di
 import com.kothabarta.app.BuildConfig
 import com.kothabarta.core.datastore.AppPreferences
 import com.kothabarta.core.network.ApiClientFactory
+import com.kothabarta.core.network.PushDeviceRegistrar
 import com.kothabarta.core.network.UnauthorizedNotifier
 import com.kothabarta.core.network.auth.AuthApi
 import com.kothabarta.core.network.call.CallApi
@@ -16,6 +17,7 @@ import com.kothabarta.core.network.social.FriendsApi
 import com.kothabarta.core.network.social.NotificationsApi
 import com.kothabarta.core.network.social.PostsApi
 import com.kothabarta.core.network.social.UsersApi
+import com.kothabarta.core.network.social.PushDevicesApi
 import com.kothabarta.core.network.tictactoe.TicTacToeApi
 import com.kothabarta.core.security.EncryptedTokenStore
 import com.kothabarta.core.security.TokenStore
@@ -35,6 +37,7 @@ val coreModule = module {
     single<TokenStore> { EncryptedTokenStore(androidContext()) }
     single { UnauthorizedNotifier() }
     single { AppPreferences(androidContext()) }
+    single<PushDeviceRegistrar> { FirebasePushDeviceRegistrar(androidContext(), get(), get()) }
     single { SocketManager(BuildConfig.SOCKET_URL) }
     single {
         ApiClientFactory.create(
@@ -47,6 +50,7 @@ val coreModule = module {
     single { get<Retrofit>().create(AuthApi::class.java) }
     single { get<Retrofit>().create(PostsApi::class.java) }
     single { get<Retrofit>().create(UsersApi::class.java) }
+    single { get<Retrofit>().create(PushDevicesApi::class.java) }
     single { get<Retrofit>().create(FriendsApi::class.java) }
     single { get<Retrofit>().create(NotificationsApi::class.java) }
     single { get<Retrofit>().create(MessagesApi::class.java) }

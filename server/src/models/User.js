@@ -91,6 +91,19 @@ const userSchema = new mongoose.Schema(
       ],
       default: [],
     },
+    // FCM registration tokens are private routing data, never included in API serializers.
+    pushDevices: {
+      type: [
+        {
+          _id: false,
+          installationId: { type: String, required: true },
+          token: { type: String, required: true },
+          updatedAt: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+      select: false,
+    },
   },
   { timestamps: true },
 );

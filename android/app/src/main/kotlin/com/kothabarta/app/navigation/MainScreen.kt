@@ -41,6 +41,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.compose.ui.platform.LocalContext
+import com.google.firebase.FirebaseApp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -108,16 +116,34 @@ fun MainScreen(
     onSignedOut: (NavigationEvent) -> Unit,
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
+    notificationConversationId: String? = null,
+    onNotificationConversationHandled: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     val notificationBadge = koinInject<NotificationBadge>()
     val profileRepository = koinInject<ProfileRepository>()
+    val context = LocalContext.current
     val unreadCount by notificationBadge.unreadCount.collectAsState()
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var searchResults by remember { mutableStateOf(emptyList<SafeUserDto>()) }
     var searchLoading by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf<String?>(null) }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && FirebaseApp.getApps(context).isNotEmpty() &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    LaunchedEffect(notificationConversationId) {
+        val conversationId = notificationConversationId ?: return@LaunchedEffect
+        navController.navigate(Routes.chat(conversationId)) {
+            popUpTo(navController.graph.findStartDestination().id)
+        }
+        onNotificationConversationHandled()
+    }
 
     LaunchedEffect(searchOpen, searchQuery) {
         searchResults = emptyList()
@@ -179,6 +205,7 @@ fun MainScreen(
                 },
                 onHome = { navigateToTopLevel(Routes.HOME) },
                 onStudy = { navigateToTopLevel(Routes.STUDY) },
+                onCalls = { navController.navigate(Routes.CALL_HISTORY) },
                 onProfile = { navigateToTopLevel(Routes.MY_PROFILE) },
                 isDarkTheme = isDarkTheme,
                 onToggleTheme = onToggleTheme,
@@ -248,6 +275,7 @@ fun MainScreen(
                     )
                 }
                 composable(Routes.STUDY) { StudyScreen(onNavigate = onNavigate) }
+                composable(Routes.CALL_HISTORY) { CallHistoryScreen() }
                 composable(Routes.QUIZ) { QuizBrowseScreen(onNavigate = onNavigate) }
                 composable(
                     Routes.QUIZ_PLAY_PATTERN,
@@ -315,6 +343,7 @@ private fun MainTopBar(
     onOpenProfile: (String) -> Unit,
     onHome: () -> Unit,
     onStudy: () -> Unit,
+    onCalls: () -> Unit,
     onProfile: () -> Unit,
     onToggleTheme: () -> Unit,
 ) {
@@ -365,6 +394,9 @@ private fun MainTopBar(
                     }
                     IconButton(onClick = onStudy) {
                         Icon(Icons.Default.AutoStories, contentDescription = "Open Study")
+                    }
+                    IconButton(onClick = onCalls) {
+                        Text("☎", style = MaterialTheme.typography.titleLarge)
                     }
                     IconButton(onClick = onToggleTheme) {
                         Icon(

@@ -129,6 +129,8 @@ class ProfileViewModelTest {
 
     private open class FakeUsersApi : UsersApi {
         var wasCalled = false
+        override suspend fun searchUsers(query: String): Response<ApiEnvelope<List<SafeUserDto>>> =
+            Response.success(ApiEnvelope(data = emptyList()))
         override suspend fun getUser(userId: String): Response<ApiEnvelope<ProfileUserDto>> {
             wasCalled = true
             return Response.success(ApiEnvelope(data = ProfileUserDto(id = "u2", fullName = "Other Person")))

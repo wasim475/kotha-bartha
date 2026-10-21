@@ -11,6 +11,7 @@ const { listOnlineFriends } = require("./ticTacToe.service");
 const { safeUser } = require("../utils/serializers");
 const { clearHiddenFor, bumpUnreadFor } = require("../utils/conversationHelpers");
 const { createNotification } = require("./notification.service");
+const { sendIncomingCallPush } = require("./push.service");
 
 // Server-authoritative 1-to-1 calling. The client never supplies a call id it
 // doesn't own, a participant identity, or a state transition that isn't one
@@ -309,6 +310,13 @@ async function initiateCall(caller, targetId, { video = true } = {}, io) {
   scheduleRingTimeout(io, call._id);
   const summary = await serializeCall(call);
   emit(io, userRoom(target._id), "call:invite", { call: summary });
+  void sendIncomingCallPush({
+    recipientId: target._id,
+    callerName: caller.fullName,
+    callId: call._id,
+    conversationId: conversation._id,
+    video: call.video,
+  }).catch(() => console.error("incoming call push dispatch failed"));
   return summary;
 }
 

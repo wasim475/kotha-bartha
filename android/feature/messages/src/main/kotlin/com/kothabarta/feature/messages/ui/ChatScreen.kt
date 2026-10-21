@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.kothabarta.core.navigation.NavigationEvent
+import com.kothabarta.core.network.call.CallLauncher
 import com.kothabarta.core.network.messages.MessageDto
 import com.kothabarta.core.ui.components.AppTextField
 import com.kothabarta.core.ui.components.FullScreenError
@@ -41,6 +42,7 @@ import com.kothabarta.core.ui.components.FullScreenLoading
 import com.kothabarta.core.ui.theme.Spacing
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
 
 @Composable
@@ -53,6 +55,7 @@ fun ChatScreen(
     viewModel: ChatViewModel = koinViewModel(parameters = { parametersOf(conversationId, peerId, peerName, peerAvatarUrl) }),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val callLauncher = koinInject<CallLauncher>()
     val context = LocalContext.current
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -83,7 +86,13 @@ fun ChatScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        ChatHeader(peerName = viewModel.peerName, isPeerTyping = state.isPeerTyping)
+        ChatHeader(
+            peerName = viewModel.peerName,
+            isPeerTyping = state.isPeerTyping,
+            canCall = !peerId.isNullOrBlank(),
+            onAudioCall = { peerId?.let { callLauncher.startCall(it, peerName.orEmpty(), peerAvatarUrl, false) } },
+            onVideoCall = { peerId?.let { callLauncher.startCall(it, peerName.orEmpty(), peerAvatarUrl, true) } },
+        )
 
         Column(modifier = Modifier.weight(1f)) {
             when {
@@ -169,12 +178,18 @@ fun ChatScreen(
 }
 
 @Composable
-private fun ChatHeader(peerName: String?, isPeerTyping: Boolean) {
+private fun ChatHeader(peerName: String?, isPeerTyping: Boolean, canCall: Boolean, onAudioCall: () -> Unit, onVideoCall: () -> Unit) {
     Surface(tonalElevation = 2.dp) {
-        Column(modifier = Modifier.padding(Spacing.md)) {
-            Text(peerName ?: "Chat", style = MaterialTheme.typography.titleMedium)
-            if (isPeerTyping) {
-                Text("typing…", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(peerName ?: "Chat", style = MaterialTheme.typography.titleMedium)
+                if (isPeerTyping) {
+                    Text("typing…", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+            if (canCall) {
+                TextButton(onClick = onAudioCall) { Text("📞") }
+                TextButton(onClick = onVideoCall) { Text("📹") }
             }
         }
     }

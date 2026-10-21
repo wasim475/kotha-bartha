@@ -4,6 +4,7 @@ import android.content.Context
 import com.kothabarta.core.common.ApiResult
 import com.kothabarta.core.media.IceCandidateData
 import com.kothabarta.core.media.IceServerConfig
+import com.kothabarta.core.media.CallAudioManager
 import com.kothabarta.core.media.RtcPeerConnectionState
 import com.kothabarta.core.media.SdpDescription
 import com.kothabarta.core.media.WebRtcConnection
@@ -69,6 +70,7 @@ data class CallUiState(
     val ringingLive: Boolean = false,
     val cameraOn: Boolean = true,
     val micOn: Boolean = true,
+    val speakerOn: Boolean = false,
     val minimized: Boolean = false,
     val layoutSwapped: Boolean = false,
     val screenShareActive: Boolean = false,
@@ -86,6 +88,7 @@ data class CallUiState(
     val reactions: List<FloatingReaction> = emptyList(),
     val participantInvite: CallInviteParticipantEvent? = null,
     val isBusy: Boolean = false,
+    val awaitingPermissions: Boolean = false,
 ) {
     val isIdle: Boolean get() = status == "idle"
 }
@@ -117,6 +120,7 @@ class CallSessionManager(
     private val webRtcFactory: () -> WebRtcConnection = { WebRtcManager(appContext!!) },
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val callAudioManager = appContext?.let(::CallAudioManager)
 
     private var webRtc: WebRtcConnection? = null
     private var connectionObserverJob: Job? = null
@@ -218,9 +222,22 @@ class CallSessionManager(
 
     fun startCall(peer: SafeUserDto, video: Boolean) {
         if (!_state.value.isIdle) return
-        _state.value = CallUiState(status = "calling", role = "caller", peer = peer, video = video, isBusy = true)
+        // Capture permission must be granted before creating a server call. Otherwise
+        // the callee can answer a call whose caller cannot start WebRTC.
+        _state.value = CallUiState(status = "calling", role = "caller", peer = peer, video = video, awaitingPermissions = true)
+    }
+
+    fun onOutgoingPermissionsResult(granted: Boolean) {
+        val current = _state.value
+        if (!current.awaitingPermissions) return
+        if (!granted) {
+            resetToIdle(error = "Microphone${if (current.video) " and camera" else ""} permission is required to place this call.")
+            return
+        }
+        val peer = current.peer ?: return resetToIdle(error = "Choose a friend to call.")
+        _state.update { it.copy(awaitingPermissions = false, isBusy = true) }
         scope.launch {
-            when (val result = repository.startCall(peer.id, video)) {
+            when (val result = repository.startCall(peer.id, current.video)) {
                 is ApiResult.Success -> {
                     val call = result.data
                     _state.update { it.copy(status = "ringing", callId = call.id, conversationId = call.conversationId, isBusy = false) }
@@ -340,12 +357,14 @@ class CallSessionManager(
         val manager = ensureWebRtc()
         scope.launch {
             runCatching {
+                callAudioManager?.start(speakerDefault = _state.value.video)
+                _state.update { it.copy(speakerOn = it.video) }
                 manager.start(iceServers, _state.value.video)
                 observeConnection(manager)
                 val offer = manager.createOffer()
                 sendOffer(offer, renegotiate = false)
                 reportState(requireCallId(), "connecting")
-            }.onFailure { failure -> _state.update { it.copy(error = failure.message ?: "Couldn't access camera/microphone.") } }
+            }.onFailure(::handleMediaStartFailure)
         }
     }
 
@@ -353,12 +372,14 @@ class CallSessionManager(
         val manager = ensureWebRtc()
         scope.launch {
             runCatching {
+                callAudioManager?.start(speakerDefault = _state.value.video)
+                _state.update { it.copy(speakerOn = it.video) }
                 manager.start(iceServers, _state.value.video)
                 observeConnection(manager)
                 val queued = pendingSignals.toList()
                 pendingSignals.clear()
                 queued.forEach { onSignal(it) }
-            }.onFailure { failure -> _state.update { it.copy(error = failure.message ?: "Couldn't access camera/microphone.") } }
+            }.onFailure(::handleMediaStartFailure)
         }
     }
 
@@ -491,6 +512,12 @@ class CallSessionManager(
         _state.update { it.copy(micOn = enabled) }
     }
 
+    fun toggleSpeaker() {
+        val enabled = !_state.value.speakerOn
+        callAudioManager?.setSpeakerOn(enabled)
+        _state.update { it.copy(speakerOn = enabled) }
+    }
+
     fun toggleCamera() {
         val enabled = !_state.value.cameraOn
         webRtc?.setCameraEnabled(enabled)
@@ -608,6 +635,7 @@ class CallSessionManager(
     }
 
     private fun resetToIdle(error: String? = null) {
+        callAudioManager?.stop()
         connectionObserverJob?.cancel()
         connectionObserverJob = null
         durationJob?.cancel()
@@ -619,4 +647,10 @@ class CallSessionManager(
     }
 
     private fun requireCallId(): String = _state.value.callId ?: error("No active call")
+
+    private fun handleMediaStartFailure(failure: Throwable) {
+        val callId = _state.value.callId
+        resetToIdle(error = failure.message ?: "Couldn't access camera/microphone.")
+        if (callId != null) scope.launch { repository.endCall(callId) }
+    }
 }

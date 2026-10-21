@@ -15,6 +15,7 @@ const { UNSEND_WINDOW_MS } = require("../utils/config");
 const { THEME_IDS } = require("../utils/conversationThemes");
 const { ACTIONS, requireAction } = require("../utils/moderation");
 const { otherParticipants, clearHiddenFor, bumpUnreadFor } = require("../utils/conversationHelpers");
+const { sendNewMessagePush } = require("../services/push.service");
 
 const router = express.Router();
 
@@ -1137,6 +1138,8 @@ router.post(
           : null,
       };
       broadcastToOthers(req, others, "message:new", payload);
+      void sendNewMessagePush({ recipientIds: others, senderName: req.user.fullName, conversationId: conversation._id, messageId: message._id })
+        .catch(() => console.error("message push dispatch failed"));
 
       res.status(201).json({
         data: {
@@ -1283,6 +1286,8 @@ router.post(
       };
 
       broadcastToOthers(req, others, "message:new", payload);
+      void sendNewMessagePush({ recipientIds: others, senderName: req.user.fullName, conversationId: conversation._id, messageId: message._id })
+        .catch(() => console.error("message push dispatch failed"));
 
       res.status(201).json({
         data: {
@@ -1785,6 +1790,8 @@ router.post(
           },
         };
         broadcastToOthers(req, targetOthers, "message:new", payload);
+        void sendNewMessagePush({ recipientIds: targetOthers, senderName: req.user.fullName, conversationId: target._id, messageId: forwarded._id })
+          .catch(() => console.error("message push dispatch failed"));
         results.push(payload);
       }
 

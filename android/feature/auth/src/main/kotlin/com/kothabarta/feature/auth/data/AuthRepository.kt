@@ -3,6 +3,8 @@ package com.kothabarta.feature.auth.data
 import com.kothabarta.core.common.ApiResult
 import com.kothabarta.core.common.map
 import com.kothabarta.core.network.AuthSession
+import com.kothabarta.core.network.NoOpPushDeviceRegistrar
+import com.kothabarta.core.network.PushDeviceRegistrar
 import com.kothabarta.core.network.SessionManager
 import com.kothabarta.core.network.auth.AuthApi
 import com.kothabarta.core.network.auth.GoogleLoginRequest
@@ -27,6 +29,7 @@ class AuthRepository(
     private val tokenStore: TokenStore,
     private val socketManager: SocketManager,
     private val connectSocket: (String) -> Unit = socketManager::connect,
+    private val pushDeviceRegistrar: PushDeviceRegistrar = NoOpPushDeviceRegistrar,
 ) : SessionManager {
     override val isSignedIn: Boolean
         get() = !tokenStore.getToken().isNullOrBlank()
@@ -45,6 +48,7 @@ class AuthRepository(
         val result = safeApiCall { authApi.me() }
         if (result is ApiResult.Success) {
             tokenStore.getToken()?.takeIf(String::isNotBlank)?.let(connectSocket)
+            runCatching { pushDeviceRegistrar.syncCurrentToken() }
         }
         return result
     }
@@ -57,14 +61,18 @@ class AuthRepository(
 
     /** A user-initiated sign-out — also tells the server, best-effort. */
     override suspend fun logout() {
+        runCatching { pushDeviceRegistrar.unregister() }
         runCatching { safeApiCall { authApi.logout() } }
         clearLocalSession()
     }
 
-    private fun completeSignIn(result: ApiResult<AuthSession>): ApiResult<UserDto> =
-        result.map { session ->
+    private suspend fun completeSignIn(result: ApiResult<AuthSession>): ApiResult<UserDto> {
+        val mapped = result.map { session ->
             tokenStore.saveToken(session.token)
             connectSocket(session.token)
             session.user
         }
+        if (mapped is ApiResult.Success) runCatching { pushDeviceRegistrar.syncCurrentToken() }
+        return mapped
+    }
 }

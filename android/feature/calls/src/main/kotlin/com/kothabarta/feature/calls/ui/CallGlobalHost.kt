@@ -1,5 +1,8 @@
 package com.kothabarta.feature.calls.ui
 
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -8,11 +11,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import com.kothabarta.core.ui.theme.Spacing
 import com.kothabarta.feature.calls.domain.CallSessionManager
 import kotlinx.coroutines.delay
@@ -30,6 +36,20 @@ private const val ERROR_TOAST_AUTO_DISMISS_MS = 6000L
 @Composable
 fun CallGlobalHost(callSessionManager: CallSessionManager = koinInject()) {
     val state by callSessionManager.state.collectAsState()
+    val context = LocalContext.current
+    val requiredPermissions = remember(state.video) { CallPermissionPolicy.requiredPermissions(state.video) }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+        callSessionManager.onOutgoingPermissionsResult(requiredPermissions.all { results[it] == true })
+    }
+
+    LaunchedEffect(state.awaitingPermissions) {
+        if (!state.awaitingPermissions) return@LaunchedEffect
+        val missing = requiredPermissions.filter {
+            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isEmpty()) callSessionManager.onOutgoingPermissionsResult(true)
+        else permissionLauncher.launch(missing.toTypedArray())
+    }
 
     val showIncomingCard = state.status == "ringing" && state.role == "callee"
     val showActiveCallUi = (state.status == "ringing" && state.role == "caller") || state.status in ACTIVE_CALL_STATUSES

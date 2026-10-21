@@ -4,6 +4,12 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// Firebase config is project-specific and deliberately not committed. Apply the
+// plugin only after the owner adds the console-generated app/google-services.json.
+if (file("google-services.json").exists()) {
+    pluginManager.apply("com.google.gms.google-services")
+}
+
 val debugApiBaseUrl = providers.gradleProperty("API_BASE_URL")
     .orElse("https://kotha-bartha.onrender.com/api/v1/")
     .get()
@@ -98,4 +104,6 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.koin.android)
     implementation(libs.koin.androidx.compose)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 }

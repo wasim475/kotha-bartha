@@ -91,6 +91,7 @@ fun CallControls(state: CallUiState, callSessionManager: CallSessionManager, mod
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ControlButton(label = if (state.micOn) "🎤" else "🔇", onClick = callSessionManager::toggleMic)
+            ControlButton(label = if (state.speakerOn) "🔊" else "📞", onClick = callSessionManager::toggleSpeaker)
 
             if (state.video) {
                 ControlButton(label = if (state.cameraOn) "📹" else "🚫", onClick = callSessionManager::toggleCamera)
