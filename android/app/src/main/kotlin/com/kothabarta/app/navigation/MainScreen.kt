@@ -210,7 +210,6 @@ fun MainScreen(
                 },
                 onHome = { navigateToTopLevel(Routes.HOME) },
                 onStudy = { navigateToTopLevel(Routes.STUDY) },
-                onCalls = { navController.navigate(Routes.MESSAGES_CALLS) },
                 onProfile = { navigateToTopLevel(Routes.MY_PROFILE) },
                 isDarkTheme = isDarkTheme,
                 onToggleTheme = onToggleTheme,
@@ -387,7 +386,6 @@ private fun MainTopBar(
     onOpenProfile: (String) -> Unit,
     onHome: () -> Unit,
     onStudy: () -> Unit,
-    onCalls: () -> Unit,
     onProfile: () -> Unit,
     onToggleTheme: () -> Unit,
 ) {
@@ -438,9 +436,6 @@ private fun MainTopBar(
                     }
                     IconButton(onClick = onStudy) {
                         Icon(Icons.Default.AutoStories, contentDescription = "Open Study")
-                    }
-                    IconButton(onClick = onCalls) {
-                        Text("☎", style = MaterialTheme.typography.titleLarge)
                     }
                     IconButton(onClick = onToggleTheme) {
                         Icon(

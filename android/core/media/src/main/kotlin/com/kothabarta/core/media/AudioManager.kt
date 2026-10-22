@@ -40,6 +40,9 @@ class CallAudioManager(private val context: Context) {
     private var priorSpeakerphoneOn = false
     private var focusRequest: AudioFocusRequest? = null
     private var deviceCallback: AudioDeviceCallback? = null
+    private val focusChangeListener = AudioManager.OnAudioFocusChangeListener {
+        // WebRTC owns the call tracks; focus changes must never tear down the call.
+    }
 
     private val _currentRoute = MutableStateFlow(AudioRoute.EARPIECE)
     val currentRoute: StateFlow<AudioRoute> = _currentRoute.asStateFlow()
@@ -70,10 +73,11 @@ class CallAudioManager(private val context: Context) {
             .build()
         val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
             .setAudioAttributes(attributes)
-            .setAcceptsDelayedFocusGain(true)
+            .setOnAudioFocusChangeListener(focusChangeListener)
             .build()
         focusRequest = request
-        audioManager.requestAudioFocus(request)
+        // Audio focus is best-effort: losing focus must not fail call acceptance.
+        runCatching { audioManager.requestAudioFocus(request) }
     }
 
     private fun registerDeviceCallback() {
