@@ -1,6 +1,7 @@
 package com.kothabarta.app.di
 
 import com.kothabarta.app.BuildConfig
+import com.kothabarta.app.FirebasePushDeviceRegistrar
 import com.kothabarta.core.datastore.AppPreferences
 import com.kothabarta.core.network.ApiClientFactory
 import com.kothabarta.core.network.PushDeviceRegistrar

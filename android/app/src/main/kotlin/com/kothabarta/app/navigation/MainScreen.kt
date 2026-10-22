@@ -32,6 +32,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,6 +58,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -64,9 +67,11 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.kothabarta.core.common.ApiResult
+import com.kothabarta.app.BuildConfig
 import com.kothabarta.core.navigation.NavigationEvent
 import com.kothabarta.core.navigation.Routes
 import com.kothabarta.core.network.social.SafeUserDto
+import com.kothabarta.core.media.IceServerConfig
 import com.kothabarta.core.ui.components.AvatarImage
 import com.kothabarta.feature.calls.ui.CallGlobalHost
 import com.kothabarta.feature.calls.ui.CallHistoryScreen
@@ -205,7 +210,7 @@ fun MainScreen(
                 },
                 onHome = { navigateToTopLevel(Routes.HOME) },
                 onStudy = { navigateToTopLevel(Routes.STUDY) },
-                onCalls = { navController.navigate(Routes.CALL_HISTORY) },
+                onCalls = { navController.navigate(Routes.MESSAGES_CALLS) },
                 onProfile = { navigateToTopLevel(Routes.MY_PROFILE) },
                 isDarkTheme = isDarkTheme,
                 onToggleTheme = onToggleTheme,
@@ -216,7 +221,8 @@ fun MainScreen(
             val currentRoute = backStackEntry?.destination
             NavigationBar {
                 BOTTOM_NAV_ITEMS.forEach { item ->
-                    val selected = currentRoute?.hierarchy?.any { it.route == item.route } == true
+                    val selected = currentRoute?.hierarchy?.any { it.route == item.route } == true ||
+                        (item.route == Routes.MESSAGES && currentRoute?.route == Routes.MESSAGES_CALLS)
                     NavigationBarItem(
                         selected = selected,
                         onClick = { navigateToTopLevel(item.route) },
@@ -237,7 +243,8 @@ fun MainScreen(
             ) {
                 composable(Routes.HOME) { FeedScreen(onNavigate = onNavigate) }
                 composable(Routes.FRIENDS) { FriendsScreen(onNavigate = onNavigate) }
-                composable(Routes.MESSAGES) { ConversationsScreen(onNavigate = onNavigate) }
+                composable(Routes.MESSAGES) { MessagesHubScreen(showCalls = false, navController = navController, onNavigate = onNavigate) }
+                composable(Routes.MESSAGES_CALLS) { MessagesHubScreen(showCalls = true, navController = navController, onNavigate = onNavigate) }
                 composable(Routes.NOTIFICATIONS) { NotificationsScreen(onNavigate = onNavigate) }
                 composable(Routes.MY_PROFILE) { ProfileScreen(userId = null, onNavigate = onNavigate) }
                 composable(
@@ -275,7 +282,6 @@ fun MainScreen(
                     )
                 }
                 composable(Routes.STUDY) { StudyScreen(onNavigate = onNavigate) }
-                composable(Routes.CALL_HISTORY) { CallHistoryScreen() }
                 composable(Routes.QUIZ) { QuizBrowseScreen(onNavigate = onNavigate) }
                 composable(
                     Routes.QUIZ_PLAY_PATTERN,
@@ -323,8 +329,46 @@ fun MainScreen(
                     LudoGameScreen(gameId = gameId, onNavigate = onNavigate)
                 }
             }
-            CallGlobalHost()
+            CallGlobalHost(configuredCallIceServers())
         }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun MessagesHubScreen(
+    showCalls: Boolean,
+    navController: NavController,
+    onNavigate: (NavigationEvent) -> Unit,
+) {
+    Column(Modifier.fillMaxSize()) {
+        TabRow(selectedTabIndex = if (showCalls) 1 else 0) {
+            Tab(
+                selected = !showCalls,
+                onClick = { navController.navigate(Routes.MESSAGES) { popUpTo(Routes.MESSAGES); launchSingleTop = true } },
+                text = { Text("Chats") },
+            )
+            Tab(
+                selected = showCalls,
+                onClick = { navController.navigate(Routes.MESSAGES_CALLS) { popUpTo(Routes.MESSAGES); launchSingleTop = true } },
+                text = { Text("Calls") },
+            )
+        }
+        if (showCalls) CallHistoryScreen() else ConversationsScreen(onNavigate = onNavigate)
+    }
+}
+
+private fun configuredCallIceServers(): List<IceServerConfig> = buildList {
+    val stunUrls = BuildConfig.CALL_STUN_URLS.split(',').map(String::trim).filter(String::isNotEmpty)
+    if (stunUrls.isNotEmpty()) add(IceServerConfig(stunUrls))
+    if (BuildConfig.CALL_TURN_URL.isNotBlank()) {
+        add(
+            IceServerConfig(
+                urls = listOf(BuildConfig.CALL_TURN_URL),
+                username = BuildConfig.CALL_TURN_USERNAME.takeIf(String::isNotBlank),
+                credential = BuildConfig.CALL_TURN_CREDENTIAL.takeIf(String::isNotBlank),
+            ),
+        )
     }
 }
 

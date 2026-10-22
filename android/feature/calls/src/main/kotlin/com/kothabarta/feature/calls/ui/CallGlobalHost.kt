@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.kothabarta.core.ui.theme.Spacing
+import com.kothabarta.core.media.IceServerConfig
 import com.kothabarta.feature.calls.domain.CallSessionManager
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
@@ -34,10 +35,17 @@ private const val ERROR_TOAST_AUTO_DISMISS_MS = 6000L
  * to the app's `NavHost` (see `MainScreen.kt`), never per-screen.
  */
 @Composable
-fun CallGlobalHost(callSessionManager: CallSessionManager = koinInject()) {
+fun CallGlobalHost(
+    callIceServers: List<IceServerConfig> = emptyList(),
+    callSessionManager: CallSessionManager = koinInject(),
+) {
     val state by callSessionManager.state.collectAsState()
     val context = LocalContext.current
     val requiredPermissions = remember(state.video) { CallPermissionPolicy.requiredPermissions(state.video) }
+
+    LaunchedEffect(callIceServers) {
+        if (callIceServers.isNotEmpty()) callSessionManager.configureIceServers(callIceServers)
+    }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
         callSessionManager.onOutgoingPermissionsResult(requiredPermissions.all { results[it] == true })
     }

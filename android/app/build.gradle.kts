@@ -19,6 +19,14 @@ val debugSocketUrl = providers.gradleProperty("SOCKET_URL")
 val googleWebClientId = providers.gradleProperty("GOOGLE_WEB_CLIENT_ID")
     .orElse("758733508959-4ptqjr4o27lg073pulpen7rd4frd17vm.apps.googleusercontent.com")
     .get()
+val callStunUrls = providers.gradleProperty("CALL_STUN_URLS")
+    .orElse("stun:stun.l.google.com:19302")
+    .get()
+val callTurnUrl = providers.gradleProperty("CALL_TURN_URL").orElse("").get()
+val callTurnUsername = providers.gradleProperty("CALL_TURN_USERNAME").orElse("").get()
+val callTurnCredential = providers.gradleProperty("CALL_TURN_CREDENTIAL").orElse("").get()
+
+fun String.asBuildConfigString(): String = "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 android {
     namespace = "com.kothabarta.app"
@@ -31,6 +39,10 @@ android {
         versionCode = 1
         versionName = "0.1.0-foundation"
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
+        buildConfigField("String", "CALL_STUN_URLS", callStunUrls.asBuildConfigString())
+        buildConfigField("String", "CALL_TURN_URL", callTurnUrl.asBuildConfigString())
+        buildConfigField("String", "CALL_TURN_USERNAME", callTurnUsername.asBuildConfigString())
+        buildConfigField("String", "CALL_TURN_CREDENTIAL", callTurnCredential.asBuildConfigString())
     }
 
     buildTypes {
@@ -75,6 +87,7 @@ dependencies {
     implementation(project(":core:websocket"))
     implementation(project(":core:navigation"))
     implementation(project(":core:ui"))
+    implementation(project(":core:media"))
     implementation(project(":feature:auth"))
     implementation(project(":feature:home"))
     implementation(project(":feature:profile"))

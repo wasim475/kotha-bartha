@@ -27,6 +27,7 @@ object Routes {
     const val NOTIFICATIONS = "notifications"
     const val MY_PROFILE = "profile/me"
     const val MESSAGES = "messages"
+    const val MESSAGES_CALLS = "messages/calls"
 
     // Pushed on top of MAIN, not part of the bottom nav
     const val PROFILE_ARG = "userId"
@@ -93,11 +94,8 @@ object Routes {
     const val LUDO_GAME_PATTERN = "ludo/game/{$LUDO_GAME_ARG}"
     fun ludoGame(gameId: String) = "ludo/game/$gameId"
 
-    // Calls — the incoming/active/floating call UI is a global overlay driven
-    // by CallSessionManager, not a NavHost route (it must survive navigation
-    // to any tab, mirroring the web's CallProvider/CallGlobalHost mounted
-    // once at the router root). Only call history is a real pushed screen.
-    const val CALL_HISTORY = "calls/history"
+    // Active calls are a global overlay; history lives in the Messages hub.
+    const val CALL_HISTORY = MESSAGES_CALLS
 }
 
 /**
