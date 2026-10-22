@@ -1,0 +1,1 @@
+Material Symbols Rounded Android vector assets\nCopyright Google LLC\nSource: https://github.com/google/material-design-icons/tree/master/symbols/android\nLicensed under the Apache License, Version 2.0. See MATERIAL_SYMBOLS_APACHE_LICENSE.txt.
