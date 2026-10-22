@@ -270,6 +270,7 @@ function scheduleConnectTimeout(io, callId) {
     try {
       const call = await Call.findOneAndUpdate({ _id: callId, status: { $in: ["accepted", "connecting"] } }, { $set: { status: "failed", endedAt: new Date() } }, { new: true });
       if (!call) return; // it reached "connected" (or ended some other way) before the timeout fired
+      console.warn(`[call] callId=${call._id} state=${call.status} reason=connect_timeout`);
       finalizeDuration(call);
       await call.save();
       await recordCallMessage(io, call, "completed");
@@ -347,6 +348,7 @@ async function acceptCall(user, callId, io) {
   }
   clearCallTimers(call._id.toString());
   scheduleConnectTimeout(io, call._id);
+  console.info(`[call] callId=${call._id} state=ringing->accepted actor=callee`);
   const summary = await serializeCall(call);
   emit(io, userRoom(call.callerId), "call:accepted", { call: summary });
   // My own other tabs/devices: close their copy of the incoming-call popup.
@@ -440,6 +442,8 @@ async function reportState(user, callId, io, nextState) {
     connectTimers.delete(updated._id.toString());
   }
 
+  console.info(`[call] callId=${updated._id} state=${call.status}->${updated.status} actor=${user._id}`);
+
   emit(io, callRoom(updated._id), "call:state", { callId: updated._id.toString(), status: updated.status, by: user._id.toString(), connectedAt: updated.connectedAt || null });
   return serializeCall(updated);
 }
@@ -450,6 +454,7 @@ async function relaySignal(user, callId, io, signal) {
   if (!call) throw notFound();
   assertParticipant(call, user._id);
   if (!ANSWERED_STATUSES.includes(call.status)) throw new GameError(409, "CALL_NOT_ACTIVE", "This call isn't active.");
+  console.debug(`[call] callId=${call._id} signal=${signal.type} from=${user._id} state=${call.status}`);
   emit(io, userRoom(otherPartyId(call, user._id)), "call:signal", { callId: call._id.toString(), from: user._id.toString(), signal });
 }
 

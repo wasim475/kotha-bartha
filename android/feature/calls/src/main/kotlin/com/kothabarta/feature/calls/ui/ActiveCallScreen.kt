@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.clickable
 import com.kothabarta.core.ui.components.AvatarImage
+import com.kothabarta.core.ui.components.AppIcon
+import com.kothabarta.core.ui.components.AppSymbol
 import com.kothabarta.core.ui.theme.Spacing
 import com.kothabarta.feature.calls.domain.CallSessionManager
 import com.kothabarta.feature.calls.domain.CallUiState
@@ -102,10 +104,10 @@ fun ActiveCallScreen(state: CallUiState, callSessionManager: CallSessionManager,
                 }
                 Row {
                     IconButton(onClick = { callSessionManager.setMinimized(true) }) {
-                        Text("–", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+                        AppIcon(AppSymbol.MINIMIZE, contentDescription = "Minimize call", tint = Color.White)
                     }
                     IconButton(onClick = callSessionManager::endCall) {
-                        Text("☎️", color = Color.White)
+                        AppIcon(AppSymbol.CALL_END, contentDescription = "End call", tint = Color.White)
                     }
                 }
             }

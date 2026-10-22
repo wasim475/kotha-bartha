@@ -26,6 +26,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.kothabarta.core.network.messages.MessageDto
 import com.kothabarta.core.ui.components.NetworkImage
+import com.kothabarta.core.ui.components.AppIcon
+import com.kothabarta.core.ui.components.AppSymbol
 import com.kothabarta.core.ui.theme.Spacing
 import java.time.Instant
 
@@ -84,7 +86,10 @@ fun MessageBubble(
                                 .clip(RoundedCornerShape(12.dp)),
                         )
                     } else {
-                        Text("📎 ${attachment.fileName ?: "File"}", style = MaterialTheme.typography.bodyMedium)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            AppIcon(AppSymbol.ATTACHMENT, contentDescription = null, modifier = Modifier.padding(end = Spacing.xs))
+                            Text(attachment.fileName ?: "File", style = MaterialTheme.typography.bodyMedium)
+                        }
                     }
                 }
                 val bodyText = if (message.encrypted) "🔒 Encrypted message" else message.body.orEmpty()

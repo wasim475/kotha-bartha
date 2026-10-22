@@ -28,9 +28,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.core.content.ContextCompat
 import com.kothabarta.core.network.call.CALL_REACTION_TYPES
 import com.kothabarta.core.ui.theme.Spacing
+import com.kothabarta.core.ui.components.AppIcon
+import com.kothabarta.core.ui.components.AppSymbol
 import com.kothabarta.feature.calls.domain.CallSessionManager
 import com.kothabarta.feature.calls.domain.CallUiState
 
@@ -90,19 +94,20 @@ fun CallControls(state: CallUiState, callSessionManager: CallSessionManager, mod
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ControlButton(label = if (state.micOn) "🎤" else "🔇", onClick = callSessionManager::toggleMic)
-            ControlButton(label = if (state.speakerOn) "🔊" else "📞", onClick = callSessionManager::toggleSpeaker)
+            ControlButton(symbol = if (state.micOn) AppSymbol.MIC else AppSymbol.MIC_OFF, description = if (state.micOn) "Mute microphone" else "Unmute microphone", onClick = callSessionManager::toggleMic)
+            ControlButton(symbol = if (state.speakerOn) AppSymbol.VOLUME else AppSymbol.AUDIO_CALL, description = if (state.speakerOn) "Use speaker" else "Use earpiece", onClick = callSessionManager::toggleSpeaker)
 
             if (state.video) {
-                ControlButton(label = if (state.cameraOn) "📹" else "🚫", onClick = callSessionManager::toggleCamera)
+                ControlButton(symbol = if (state.cameraOn) AppSymbol.VIDEO_CALL else AppSymbol.VIDEO_OFF, description = if (state.cameraOn) "Turn camera off" else "Turn camera on", onClick = callSessionManager::toggleCamera)
             }
 
             if (cameraCount > 1) {
-                ControlButton(label = "🔄", onClick = callSessionManager::switchCamera)
+                ControlButton(symbol = AppSymbol.FLIP_CAMERA, description = "Switch camera", onClick = callSessionManager::switchCamera)
             }
 
             ControlButton(
-                label = if (state.screenShareMine) "🖥️✖️" else "🖥️",
+                symbol = if (state.screenShareMine) AppSymbol.SCREEN_SHARE_STOP else AppSymbol.SCREEN_SHARE,
+                description = if (state.screenShareMine) "Stop screen sharing" else "Share screen",
                 onClick = {
                     if (state.screenShareMine) {
                         callSessionManager.stopScreenShare()
@@ -116,40 +121,47 @@ fun CallControls(state: CallUiState, callSessionManager: CallSessionManager, mod
                 },
             )
 
-            BadgedControlButton(label = "💬", badge = state.chatUnread, onClick = callSessionManager::toggleChat)
+            BadgedControlButton(badge = state.chatUnread, onClick = callSessionManager::toggleChat)
 
-            ControlButton(label = "😀", onClick = { reactionPickerOpen = !reactionPickerOpen })
+            ControlButton(symbol = AppSymbol.REACTIONS, description = "Choose a reaction", onClick = { reactionPickerOpen = !reactionPickerOpen })
 
             val isCancelable = (state.status == "calling" || state.status == "ringing") && state.role == "caller"
-            TextButton(onClick = { if (isCancelable) callSessionManager.cancelOutgoingCall() else callSessionManager.endCall() }) {
-                Text(
-                    if (isCancelable) "Cancel call" else "End call",
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
+            ControlButton(
+                symbol = AppSymbol.CALL_END,
+                description = if (isCancelable) "Cancel call" else "End call",
+                onClick = { if (isCancelable) callSessionManager.cancelOutgoingCall() else callSessionManager.endCall() },
+                destructive = true,
+            )
         }
     }
 }
 
 @Composable
-private fun ControlButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun ControlButton(
+    symbol: AppSymbol,
+    description: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    destructive: Boolean = false,
+) {
     Surface(
-        modifier = modifier
-            .size(48.dp),
+        modifier = modifier.size(48.dp).semantics { contentDescription = description },
         shape = CircleShape,
+        color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (destructive) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSurfaceVariant,
         tonalElevation = 2.dp,
         onClick = onClick,
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-            Text(label, style = MaterialTheme.typography.titleLarge)
+            AppIcon(symbol, contentDescription = null)
         }
     }
 }
 
 @Composable
-private fun BadgedControlButton(label: String, badge: Int, onClick: () -> Unit) {
+private fun BadgedControlButton(badge: Int, onClick: () -> Unit) {
     Box {
-        ControlButton(label = label, onClick = onClick)
+        ControlButton(symbol = AppSymbol.CHAT, description = "Open call chat", onClick = onClick)
         if (badge > 0) {
             Surface(
                 shape = CircleShape,

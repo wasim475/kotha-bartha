@@ -37,6 +37,8 @@ import com.kothabarta.core.navigation.NavigationEvent
 import com.kothabarta.core.network.call.CallLauncher
 import com.kothabarta.core.network.messages.MessageDto
 import com.kothabarta.core.ui.components.AppTextField
+import com.kothabarta.core.ui.components.AppIcon
+import com.kothabarta.core.ui.components.AppSymbol
 import com.kothabarta.core.ui.components.FullScreenError
 import com.kothabarta.core.ui.components.FullScreenLoading
 import com.kothabarta.core.ui.theme.Spacing
@@ -162,7 +164,7 @@ fun ChatScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { imagePicker.launch("image/*") }) {
-                Text("📷")
+                AppIcon(AppSymbol.CAMERA, contentDescription = "Attach a photo")
             }
             AppTextField(
                 value = state.composerText,
@@ -188,8 +190,8 @@ private fun ChatHeader(peerName: String?, isPeerTyping: Boolean, canCall: Boolea
                 }
             }
             if (canCall) {
-                TextButton(onClick = onAudioCall) { Text("📞") }
-                TextButton(onClick = onVideoCall) { Text("📹") }
+                IconButton(onClick = onAudioCall) { AppIcon(AppSymbol.AUDIO_CALL, contentDescription = "Start audio call") }
+                IconButton(onClick = onVideoCall) { AppIcon(AppSymbol.VIDEO_CALL, contentDescription = "Start video call") }
             }
         }
     }

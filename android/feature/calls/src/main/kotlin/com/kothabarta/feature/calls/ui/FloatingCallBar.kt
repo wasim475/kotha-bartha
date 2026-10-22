@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.kothabarta.core.ui.theme.Spacing
+import com.kothabarta.core.ui.components.AppIcon
+import com.kothabarta.core.ui.components.AppSymbol
 import com.kothabarta.feature.calls.domain.CallSessionManager
 import com.kothabarta.feature.calls.domain.CallUiState
 import org.webrtc.SurfaceViewRenderer
@@ -72,13 +74,13 @@ fun FloatingCallBar(state: CallUiState, callSessionManager: CallSessionManager, 
                 Text(callStatusLabel(state), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             IconButton(onClick = callSessionManager::toggleMic) {
-                Text(if (state.micOn) "🎤" else "🔇")
+                AppIcon(if (state.micOn) AppSymbol.MIC else AppSymbol.MIC_OFF, contentDescription = if (state.micOn) "Mute microphone" else "Unmute microphone")
             }
             IconButton(onClick = { callSessionManager.setMinimized(false) }) {
-                Text("⤢")
+                AppIcon(AppSymbol.EXPAND, contentDescription = "Open call")
             }
             IconButton(onClick = callSessionManager::endCall) {
-                Text("☎️")
+                AppIcon(AppSymbol.CALL_END, contentDescription = "End call")
             }
         }
     }

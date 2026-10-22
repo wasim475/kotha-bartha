@@ -1,5 +1,6 @@
 package com.kothabarta.feature.calls.domain
 
+import android.util.Log
 import android.content.Context
 import com.kothabarta.core.common.ApiResult
 import com.kothabarta.core.media.IceCandidateData
@@ -11,6 +12,7 @@ import com.kothabarta.core.media.WebRtcConnection
 import com.kothabarta.core.media.WebRtcManager
 import com.kothabarta.core.network.auth.AuthApi
 import com.kothabarta.core.network.call.CallAcceptedEvent
+import com.kothabarta.core.network.call.CallAckDto
 import com.kothabarta.core.network.call.CallAnswerRequest
 import com.kothabarta.core.network.call.CallCancelledEvent
 import com.kothabarta.core.network.call.CallDeclinedEvent
@@ -43,6 +45,7 @@ import com.kothabarta.core.websocket.SocketConnectionState
 import com.kothabarta.core.websocket.SocketManager
 import com.kothabarta.feature.calls.data.CallRepository
 import io.socket.emitter.Emitter
+import io.socket.client.Ack
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -164,6 +167,7 @@ class CallSessionManager(
     init {
         scope.launch {
             socketManager.connectionState.collect { connState ->
+                Log.i(TAG, "socket state=$connState")
                 if (connState == SocketConnectionState.CONNECTED) onSocketConnected()
             }
         }
@@ -173,6 +177,7 @@ class CallSessionManager(
     internal suspend fun onSocketConnected() {
         registerListeners()
         ensureMyUserId() // must complete before rehydrate() derives caller-vs-callee role from it
+        Log.i(TAG, "socket connected; call event listeners registered")
         rehydrate()
     }
 
@@ -241,7 +246,7 @@ class CallSessionManager(
                 is ApiResult.Success -> {
                     val call = result.data
                     _state.update { it.copy(status = "ringing", callId = call.id, conversationId = call.conversationId, isBusy = false) }
-                    socketManager.emit("call:join", CallJoinRequest(call.id).encodeSocketPayload())
+                    emitCallSocketEvent("call:join", CallJoinRequest(call.id).encodeSocketPayload())
                 }
                 is ApiResult.Failure -> {
                     resetToIdle()
@@ -257,7 +262,8 @@ class CallSessionManager(
             when (val result = repository.acceptCall(callId)) {
                 is ApiResult.Success -> {
                     _state.update { it.copy(status = "accepted") }
-                    socketManager.emit("call:join", CallJoinRequest(callId).encodeSocketPayload())
+                    Log.i(TAG, "callId=$callId accepted by REST; starting callee WebRTC")
+                    emitCallSocketEvent("call:join", CallJoinRequest(callId).encodeSocketPayload())
                     startAsCallee()
                     reportState(callId, "connecting")
                 }
@@ -296,6 +302,7 @@ class CallSessionManager(
 
     private fun onInvite(event: CallInviteEvent) {
         val call = event.call
+        Log.i(TAG, "event=call:invite callId=${call.id} state=${_state.value.status}")
         if (!_state.value.isIdle) {
             scope.launch { repository.declineCall(call.id) } // already on a call — decline cleanly instead of stacking popups
             return
@@ -304,7 +311,7 @@ class CallSessionManager(
         // device is always the callee here, so the peer is always the caller, unconditionally
         // (unlike `rehydrate()`, which must derive role/peer since it doesn't know in advance).
         _state.value = CallUiState(status = "ringing", callId = call.id, role = "callee", peer = call.caller, video = call.video, conversationId = call.conversationId)
-        socketManager.emit("call:join", CallJoinRequest(call.id).encodeSocketPayload())
+        emitCallSocketEvent("call:join", CallJoinRequest(call.id).encodeSocketPayload())
     }
 
     private fun onRinging(event: CallRingingEvent) {
@@ -314,6 +321,7 @@ class CallSessionManager(
 
     private fun onAccepted(event: CallAcceptedEvent) {
         val summary = event.call
+        Log.i(TAG, "event=call:accepted callId=${summary.id} role=${_state.value.role} state=${_state.value.status}")
         if (summary.id != _state.value.callId) return
         if (_state.value.role != "caller") return // my own other device already answered it — nothing to do here
         _state.update { it.copy(status = "accepted", conversationId = summary.conversationId) }
@@ -355,6 +363,7 @@ class CallSessionManager(
 
     private fun startAsCaller() {
         val manager = ensureWebRtc()
+        Log.i(TAG, "callId=${_state.value.callId} starting caller WebRTC")
         scope.launch {
             runCatching {
                 callAudioManager?.start(speakerDefault = _state.value.video)
@@ -362,6 +371,7 @@ class CallSessionManager(
                 manager.start(iceServers, _state.value.video)
                 observeConnection(manager)
                 val offer = manager.createOffer()
+                Log.d(TAG, "callId=${_state.value.callId} local offer ready; emitting call:offer")
                 sendOffer(offer, renegotiate = false)
                 reportState(requireCallId(), "connecting")
             }.onFailure(::handleMediaStartFailure)
@@ -370,6 +380,7 @@ class CallSessionManager(
 
     private fun startAsCallee() {
         val manager = ensureWebRtc()
+        Log.i(TAG, "callId=${_state.value.callId} starting callee WebRTC")
         scope.launch {
             runCatching {
                 callAudioManager?.start(speakerDefault = _state.value.video)
@@ -385,6 +396,7 @@ class CallSessionManager(
 
     private fun onSignal(event: CallSignalEvent) {
         if (event.callId != _state.value.callId) return
+        Log.d(TAG, "event=call:signal callId=${event.callId} type=${event.signal.type} from=${event.from}")
         val manager = webRtc
         if (manager == null) {
             pendingSignals.add(event)
@@ -392,30 +404,40 @@ class CallSessionManager(
         }
         val signal = event.signal
         scope.launch {
-            when (signal.type) {
-                "offer" -> {
-                    val sdp = signal.sdp ?: return@launch
-                    manager.setRemoteDescription(SdpDescription(sdp.type, sdp.sdp))
-                    val answer = manager.createAnswer()
-                    sendAnswer(answer)
+            runCatching {
+                when (signal.type) {
+                    "offer" -> {
+                        val sdp = signal.sdp ?: return@launch
+                        manager.setRemoteDescription(SdpDescription(sdp.type, sdp.sdp))
+                        Log.d(TAG, "callId=${event.callId} remote offer applied")
+                        val answer = manager.createAnswer()
+                        Log.d(TAG, "callId=${event.callId} local answer ready; emitting call:answer")
+                        sendAnswer(answer)
+                    }
+                    "answer" -> {
+                        val sdp = signal.sdp ?: return@launch
+                        manager.setRemoteDescription(SdpDescription(sdp.type, sdp.sdp))
+                        Log.d(TAG, "callId=${event.callId} remote answer applied")
+                    }
+                    "ice" -> {
+                        val candidate = signal.candidate ?: return@launch
+                        manager.addRemoteIceCandidate(
+                            IceCandidateData(candidate.sdpMid, candidate.sdpMLineIndex ?: 0, candidate.candidate.orEmpty()),
+                        )
+                        Log.d(TAG, "callId=${event.callId} remote ICE candidate accepted by WebRTC")
+                    }
                 }
-                "answer" -> {
-                    val sdp = signal.sdp ?: return@launch
-                    manager.setRemoteDescription(SdpDescription(sdp.type, sdp.sdp))
-                }
-                "ice" -> {
-                    val candidate = signal.candidate ?: return@launch
-                    manager.addRemoteIceCandidate(
-                        IceCandidateData(candidate.sdpMid, candidate.sdpMLineIndex ?: 0, candidate.candidate.orEmpty()),
-                    )
-                }
+            }.onFailure { failure ->
+                Log.e(TAG, "callId=${event.callId} signal=${event.signal.type} failed: ${failure.javaClass.simpleName}")
+                handleMediaStartFailure(failure)
             }
         }
     }
 
     private fun onLocalIceCandidate(candidate: IceCandidateData) {
         val callId = _state.value.callId ?: return
-        socketManager.emit(
+        Log.d(TAG, "callId=$callId local ICE candidate ready; emitting call:ice-candidate")
+        emitCallSocketEvent(
             "call:ice-candidate",
             CallIceCandidateRequest(callId, RtcIceCandidateDto(candidate.candidate, candidate.sdpMid, candidate.sdpMLineIndex)).encodeSocketPayload(),
         )
@@ -423,16 +445,34 @@ class CallSessionManager(
 
     private fun sendOffer(offer: SdpDescription, renegotiate: Boolean) {
         val callId = requireCallId()
-        socketManager.emit("call:offer", CallOfferRequest(callId, RtcSessionDescriptionDto(offer.type, offer.sdp), renegotiate).encodeSocketPayload())
+        emitCallSocketEvent("call:offer", CallOfferRequest(callId, RtcSessionDescriptionDto(offer.type, offer.sdp), renegotiate).encodeSocketPayload())
     }
 
     private fun sendAnswer(answer: SdpDescription) {
         val callId = requireCallId()
-        socketManager.emit("call:answer", CallAnswerRequest(callId, RtcSessionDescriptionDto(answer.type, answer.sdp)).encodeSocketPayload())
+        emitCallSocketEvent("call:answer", CallAnswerRequest(callId, RtcSessionDescriptionDto(answer.type, answer.sdp)).encodeSocketPayload())
     }
 
     private fun reportState(callId: String, status: String) {
-        socketManager.emit("call:state", CallStateRequest(callId, status).encodeSocketPayload())
+        emitCallSocketEvent("call:state", CallStateRequest(callId, status).encodeSocketPayload())
+    }
+
+    private fun emitCallSocketEvent(event: String, payload: Any) {
+        val callId = _state.value.callId
+        socketManager.emitWithAck(event, payload, Ack { args ->
+            val response = args.firstOrNull().decodeSocketPayload<CallAckDto>()
+            if (response?.ok == true) {
+                Log.d(TAG, "event=$event callId=$callId ack=ok")
+            } else {
+                val code = response?.error?.code ?: "NO_ACK"
+                Log.e(TAG, "event=$event callId=$callId ack=failed code=$code")
+                if (_state.value.callId == callId && (event == "call:join" || event == "call:offer" || event == "call:answer")) {
+                    scope.launch {
+                        handleMediaStartFailure(IllegalStateException("Call signaling failed ($code)."))
+                    }
+                }
+            }
+        })
     }
 
     private fun onRemoteState(event: CallStateEvent) {
@@ -459,6 +499,7 @@ class CallSessionManager(
         connectionObserverJob = scope.launch {
             manager.connectionState.collect { rtcState ->
                 val callId = _state.value.callId ?: return@collect
+                    Log.i(TAG, "callId=$callId PeerConnection state=$rtcState")
                 when (rtcState) {
                     RtcPeerConnectionState.CONNECTED -> {
                         reconnectSince = 0L
@@ -650,7 +691,12 @@ class CallSessionManager(
 
     private fun handleMediaStartFailure(failure: Throwable) {
         val callId = _state.value.callId
+        Log.e(TAG, "callId=$callId media/signaling failed: ${failure.javaClass.simpleName}")
         resetToIdle(error = failure.message ?: "Couldn't access camera/microphone.")
         if (callId != null) scope.launch { repository.endCall(callId) }
+    }
+
+    private companion object {
+        const val TAG = "CallSession"
     }
 }

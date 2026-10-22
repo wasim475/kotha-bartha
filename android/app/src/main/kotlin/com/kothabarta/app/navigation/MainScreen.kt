@@ -13,15 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.AutoStories
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -73,6 +65,8 @@ import com.kothabarta.core.navigation.Routes
 import com.kothabarta.core.network.social.SafeUserDto
 import com.kothabarta.core.media.IceServerConfig
 import com.kothabarta.core.ui.components.AvatarImage
+import com.kothabarta.core.ui.components.AppIcon
+import com.kothabarta.core.ui.components.AppSymbol
 import com.kothabarta.feature.calls.ui.CallGlobalHost
 import com.kothabarta.feature.calls.ui.CallHistoryScreen
 import com.kothabarta.feature.friends.ui.FriendsScreen
@@ -100,13 +94,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import org.koin.compose.koinInject
 
-private data class BottomNavItem(val route: String, val label: String, val emoji: String)
+private data class BottomNavItem(val route: String, val label: String, val symbol: AppSymbol)
 
 private val BOTTOM_NAV_ITEMS = listOf(
-    BottomNavItem(Routes.HOME, "Feed", "🏠"),
-    BottomNavItem(Routes.FRIENDS, "Friends", "👥"),
-    BottomNavItem(Routes.MESSAGES, "Messages", "💬"),
-    BottomNavItem(Routes.NOTIFICATIONS, "Alerts", "🔔"),
+    BottomNavItem(Routes.HOME, "Feed", AppSymbol.FEED),
+    BottomNavItem(Routes.FRIENDS, "Friends", AppSymbol.FRIENDS),
+    BottomNavItem(Routes.MESSAGES, "Messages", AppSymbol.CHAT),
+    BottomNavItem(Routes.NOTIFICATIONS, "Alerts", AppSymbol.NOTIFICATIONS),
 )
 
 /**
@@ -225,7 +219,7 @@ fun MainScreen(
                     NavigationBarItem(
                         selected = selected,
                         onClick = { navigateToTopLevel(item.route) },
-                        icon = { Text(item.emoji) },
+                        icon = { AppIcon(item.symbol, contentDescription = null) },
                         label = {
                             Text(if (item.route == Routes.NOTIFICATIONS && unreadCount > 0) "${item.label} ($unreadCount)" else item.label)
                         },
@@ -399,7 +393,7 @@ private fun MainTopBar(
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         placeholder = { Text("Search people") },
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        leadingIcon = { AppIcon(AppSymbol.SEARCH, contentDescription = null) },
                     )
                 } else {
                     TextButton(onClick = onHome) {
@@ -428,23 +422,23 @@ private fun MainTopBar(
             actions = {
                 if (searchOpen) {
                     IconButton(onClick = onSearchClose) {
-                        Icon(Icons.Default.Close, contentDescription = "Close search")
+                        AppIcon(AppSymbol.CLOSE, contentDescription = "Close search")
                     }
                 } else {
                     IconButton(onClick = onSearchOpen) {
-                        Icon(Icons.Default.Search, contentDescription = "Search people")
+                        AppIcon(AppSymbol.SEARCH, contentDescription = "Search people")
                     }
                     IconButton(onClick = onStudy) {
-                        Icon(Icons.Default.AutoStories, contentDescription = "Open Study")
+                        AppIcon(AppSymbol.STUDY, contentDescription = "Open Study")
                     }
                     IconButton(onClick = onToggleTheme) {
-                        Icon(
-                            imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                        AppIcon(
+                            symbol = if (isDarkTheme) AppSymbol.LIGHT_MODE else AppSymbol.DARK_MODE,
                             contentDescription = if (isDarkTheme) "Switch to light theme" else "Switch to dark theme",
                         )
                     }
                     IconButton(onClick = onProfile) {
-                        Icon(Icons.Default.AccountCircle, contentDescription = "Open profile")
+                        AppIcon(AppSymbol.ACCOUNT, contentDescription = "Open profile")
                     }
                 }
             },

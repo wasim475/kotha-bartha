@@ -1,6 +1,7 @@
 package com.kothabarta.core.media
 
 import android.content.Context
+import android.util.Log
 import android.os.Handler
 import android.os.Looper
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -228,8 +229,22 @@ class WebRtcManager(private val appContext: Context) : WebRtcConnection {
                         continuation.resumeWithException(IllegalStateException("createOffer returned no description"))
                         return
                     }
-                    peerConnection?.setLocalDescription(SdpObserverAdapter(), description)
-                    continuation.resume(SdpDescription(description.type.canonicalForm(), description.description))
+                    val connection = peerConnection
+                    if (connection == null) {
+                        continuation.resumeWithException(IllegalStateException("Peer connection closed before local offer was set"))
+                        return
+                    }
+                    applyLocalDescription(
+                        apply = { observer -> connection.setLocalDescription(observer, description) },
+                        onSuccess = {
+                            Log.d(TAG, "local offer applied")
+                            continuation.resume(SdpDescription(description.type.canonicalForm(), description.description))
+                        },
+                        onFailure = { error ->
+                            Log.e(TAG, "local offer failed: ${error ?: "unknown error"}")
+                            continuation.resumeWithException(IllegalStateException("setLocalDescription(offer) failed: $error"))
+                        },
+                    )
                 }
                 override fun onCreateFailure(error: String?) {
                     continuation.resumeWithException(IllegalStateException("createOffer failed: $error"))
@@ -247,8 +262,22 @@ class WebRtcManager(private val appContext: Context) : WebRtcConnection {
                         continuation.resumeWithException(IllegalStateException("createAnswer returned no description"))
                         return
                     }
-                    peerConnection?.setLocalDescription(SdpObserverAdapter(), description)
-                    continuation.resume(SdpDescription(description.type.canonicalForm(), description.description))
+                    val connection = peerConnection
+                    if (connection == null) {
+                        continuation.resumeWithException(IllegalStateException("Peer connection closed before local answer was set"))
+                        return
+                    }
+                    applyLocalDescription(
+                        apply = { observer -> connection.setLocalDescription(observer, description) },
+                        onSuccess = {
+                            Log.d(TAG, "local answer applied")
+                            continuation.resume(SdpDescription(description.type.canonicalForm(), description.description))
+                        },
+                        onFailure = { error ->
+                            Log.e(TAG, "local answer failed: ${error ?: "unknown error"}")
+                            continuation.resumeWithException(IllegalStateException("setLocalDescription(answer) failed: $error"))
+                        },
+                    )
                 }
                 override fun onCreateFailure(error: String?) {
                     continuation.resumeWithException(IllegalStateException("createAnswer failed: $error"))
@@ -264,13 +293,19 @@ class WebRtcManager(private val appContext: Context) : WebRtcConnection {
         peerConnection?.setRemoteDescription(
             object : SdpObserverAdapter() {
                 override fun onSetSuccess() {
+                    Log.d(TAG, "remote ${description.type} applied")
                     remoteDescriptionSet = true
                     val queued = pendingRemoteCandidates.toList()
                     pendingRemoteCandidates.clear()
-                    queued.forEach { peerConnection?.addIceCandidate(it) }
+                    var added = 0
+                    queued.forEach { if (peerConnection?.addIceCandidate(it) == true) added++ }
+                    if (queued.isNotEmpty()) Log.d(TAG, "queued remote ICE candidates applied=$added/${queued.size}")
                     continuation.resume(Unit)
                 }
-                override fun onSetFailure(error: String?) = continuation.resumeWithException(IllegalStateException("setRemoteDescription failed: $error"))
+                override fun onSetFailure(error: String?) {
+                    Log.e(TAG, "remote ${description.type} failed: ${error ?: "unknown error"}")
+                    continuation.resumeWithException(IllegalStateException("setRemoteDescription failed: $error"))
+                }
             },
             sdp,
         ) ?: continuation.resumeWithException(IllegalStateException("No peer connection"))
@@ -278,7 +313,13 @@ class WebRtcManager(private val appContext: Context) : WebRtcConnection {
 
     override fun addRemoteIceCandidate(candidate: IceCandidateData) {
         val iceCandidate = IceCandidate(candidate.sdpMid, candidate.sdpMLineIndex, candidate.candidate)
-        if (remoteDescriptionSet) peerConnection?.addIceCandidate(iceCandidate) else pendingRemoteCandidates.add(iceCandidate)
+        if (remoteDescriptionSet) {
+            val added = peerConnection?.addIceCandidate(iceCandidate) == true
+            Log.d(TAG, "remote ICE candidate added=$added")
+        } else {
+            pendingRemoteCandidates.add(iceCandidate)
+            Log.d(TAG, "remote ICE candidate queued count=${pendingRemoteCandidates.size}")
+        }
     }
 
     override fun attachLocalRenderer(renderer: SurfaceViewRenderer) {
@@ -370,12 +411,14 @@ class WebRtcManager(private val appContext: Context) : WebRtcConnection {
             mainHandler.post {
                 when (val track = receiver?.track()) {
                     is VideoTrack -> {
+                        Log.i(TAG, "remote video track received")
                         remoteVideoTrack = track
                         remoteRenderer?.let(track::addSink)
                         track.setEnabled(true)
                         _remoteVideoTrackAvailable.value = true
                     }
                     is AudioTrack -> {
+                        Log.i(TAG, "remote audio track received")
                         remoteAudioTrack = track
                         track.setEnabled(true)
                         _remoteAudioActive.value = true
@@ -403,6 +446,22 @@ class WebRtcManager(private val appContext: Context) : WebRtcConnection {
             }
         }
     }
+
+    companion object {
+        private const val TAG = "CallWebRTC"
+    }
+}
+
+/** Keep signaling behind WebRTC's asynchronous local-description result. */
+internal fun applyLocalDescription(
+    apply: (SdpObserver) -> Unit,
+    onSuccess: () -> Unit,
+    onFailure: (String?) -> Unit,
+) {
+    apply(object : SdpObserverAdapter() {
+        override fun onSetSuccess() = onSuccess()
+        override fun onSetFailure(error: String?) = onFailure(error)
+    })
 }
 
 private open class SdpObserverAdapter : SdpObserver {

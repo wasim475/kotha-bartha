@@ -22,6 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kothabarta.core.network.call.CallHistoryRowDto
 import com.kothabarta.core.ui.components.AvatarImage
+import com.kothabarta.core.ui.components.AppIcon
+import com.kothabarta.core.ui.components.AppSymbol
 import com.kothabarta.core.ui.components.EmptyState
 import com.kothabarta.core.ui.components.FullScreenError
 import com.kothabarta.core.ui.components.FullScreenLoading
@@ -72,9 +74,9 @@ fun CallHistoryScreen(
 private fun CallHistoryRow(row: CallHistoryRowDto, onCallBack: () -> Unit) {
     val missedStyle = isCallHistoryMissedStyle(row.status, row.direction)
     val directionIcon = when {
-        missedStyle -> "✖️"
-        row.direction == "outgoing" -> "↗️"
-        else -> "↙️"
+        missedStyle -> AppSymbol.CALL_MISSED
+        row.direction == "outgoing" -> AppSymbol.CALL_OUTGOING
+        else -> AppSymbol.CALL_INCOMING
     }
 
     Row(
@@ -87,8 +89,8 @@ private fun CallHistoryRow(row: CallHistoryRowDto, onCallBack: () -> Unit) {
         Column(modifier = Modifier.padding(start = Spacing.sm).weight(1f)) {
             Text(row.with?.fullName ?: "Unknown", style = MaterialTheme.typography.titleMedium)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(directionIcon, modifier = Modifier.padding(end = Spacing.xs))
-                Text(if (row.video) "📹" else "📞", modifier = Modifier.padding(end = Spacing.xs))
+                AppIcon(directionIcon, contentDescription = null, modifier = Modifier.padding(end = Spacing.xs))
+                AppIcon(if (row.video) AppSymbol.VIDEO_CALL else AppSymbol.AUDIO_CALL, contentDescription = null, modifier = Modifier.padding(end = Spacing.xs))
                 Text(
                     callHistoryStatusLabel(row.status, row.direction, row.durationSec),
                     style = MaterialTheme.typography.bodyMedium,

@@ -37,7 +37,8 @@ data class CallScreenShareRequest(val callId: String)
 data class CallReactionRequest(val callId: String, val type: String)
 
 /** `{ ok, call? }` on success, `{ ok:false, error:{code,message,...extra} }` on failure — see `call.socket.js`'s `guarded()`/`toError()`. */
-data class CallAckDto(val ok: Boolean = false, val call: CallDto? = null)
+data class CallAckErrorDto(val code: String? = null, val message: String? = null)
+data class CallAckDto(val ok: Boolean = false, val call: CallDto? = null, val error: CallAckErrorDto? = null)
 
 /** Exact allowed values from `call.service.js`'s `REACTIONS` set — anything else is rejected server-side (`INVALID_REACTION`). */
 val CALL_REACTION_TYPES = listOf("heart", "thumbsup", "laugh", "wow", "sad", "fire")
