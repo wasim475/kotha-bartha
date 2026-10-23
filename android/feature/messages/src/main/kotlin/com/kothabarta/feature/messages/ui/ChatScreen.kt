@@ -53,6 +53,7 @@ fun ChatScreen(
     peerId: String?,
     peerName: String?,
     peerAvatarUrl: String?,
+    targetMessageId: String? = null,
     onNavigate: (NavigationEvent) -> Unit,
     viewModel: ChatViewModel = koinViewModel(parameters = { parametersOf(conversationId, peerId, peerName, peerAvatarUrl) }),
 ) {
@@ -62,10 +63,18 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
+    LaunchedEffect(state.isLoading, targetMessageId, state.messages) {
+        if (state.isLoading || targetMessageId.isNullOrBlank()) return@LaunchedEffect
+        val targetIndex = state.messages.asReversed().indexOfFirst { it.id == targetMessageId }
+        if (targetIndex >= 0) listState.animateScrollToItem(targetIndex)
+    }
+
     val isNearBottom by remember { derivedStateOf { listState.firstVisibleItemIndex <= 1 } }
+    val targetMessageMissing = !state.isLoading && !targetMessageId.isNullOrBlank() && state.messages.none { it.id == targetMessageId }
     var newMessageBannerVisible by remember { mutableStateOf(false) }
     LaunchedEffect(state.messages.size) {
         if (state.messages.isEmpty()) return@LaunchedEffect
+        if (!targetMessageId.isNullOrBlank()) return@LaunchedEffect
         if (isNearBottom) {
             listState.animateScrollToItem(0)
         } else {
@@ -97,6 +106,9 @@ fun ChatScreen(
         )
 
         Column(modifier = Modifier.weight(1f)) {
+            if (targetMessageMissing) {
+                Text("That message is no longer available. Showing the conversation instead.", modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             when {
                 state.isLoading -> FullScreenLoading()
                 state.error != null && state.messages.isEmpty() -> FullScreenError(state.error!!, onRetry = viewModel::retry)

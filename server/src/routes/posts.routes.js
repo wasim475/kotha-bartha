@@ -228,6 +228,11 @@ router.put("/posts/:postId/like", requireAction(ACTIONS.REACT), async (req, res,
       });
     }
 
+    const previousLike = req.body.liked ? await Reaction.findOne({
+        userId: req.user._id,
+        targetType: "post",
+        targetId: post._id,
+      }).select("type").lean() : null;
     if (req.body.liked) {
       await Reaction.updateOne(
         {
@@ -258,7 +263,8 @@ router.put("/posts/:postId/like", requireAction(ACTIONS.REACT), async (req, res,
 
     if (
       req.body.liked &&
-      post.authorId.toString() !== req.user._id.toString()
+      post.authorId.toString() !== req.user._id.toString() &&
+      previousLike?.type !== "like"
     ) {
       await createNotification(req, {
         recipientId: post.authorId,
@@ -323,13 +329,18 @@ router.put("/posts/:postId/reaction", requireAction(ACTIONS.REACT), async (req, 
         targetId: post._id,
       });
     } else {
+      const previousReaction = await Reaction.findOne({
+        userId: req.user._id,
+        targetType: "post",
+        targetId: post._id,
+      }).select("type").lean();
       await Reaction.updateOne(
         { userId: req.user._id, targetType: "post", targetId: post._id },
         { $set: { type } },
         { upsert: true },
       );
 
-      if (post.authorId.toString() !== req.user._id.toString()) {
+      if (post.authorId.toString() !== req.user._id.toString() && previousReaction?.type !== type) {
         await createNotification(req, {
           recipientId: post.authorId,
           actorId: req.user._id,
@@ -339,6 +350,7 @@ router.put("/posts/:postId/reaction", requireAction(ACTIONS.REACT), async (req, 
           postId: post._id,
           payload: {
             message: `${req.user.fullName} reacted to your post.`,
+            reactionType: type,
           },
           uniqueEventId: `post-reaction:${post._id}:${req.user._id}`,
         });

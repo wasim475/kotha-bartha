@@ -1138,7 +1138,12 @@ router.post(
           : null,
       };
       broadcastToOthers(req, others, "message:new", payload);
-      void sendNewMessagePush({ recipientIds: others, senderName: req.user.fullName, conversationId: conversation._id, messageId: message._id })
+      const safePreview = message.encrypted
+        ? "New encrypted message"
+        : message.type === "text"
+          ? message.body.replace(/[\r\n]+/g, " ").slice(0, 140)
+          : "Sent an attachment";
+      void sendNewMessagePush({ recipientIds: others, senderName: req.user.fullName, conversationId: conversation._id, messageId: message._id, preview: safePreview })
         .catch(() => console.error("message push dispatch failed"));
 
       res.status(201).json({
@@ -1286,7 +1291,7 @@ router.post(
       };
 
       broadcastToOthers(req, others, "message:new", payload);
-      void sendNewMessagePush({ recipientIds: others, senderName: req.user.fullName, conversationId: conversation._id, messageId: message._id })
+      void sendNewMessagePush({ recipientIds: others, senderName: req.user.fullName, conversationId: conversation._id, messageId: message._id, preview: "Sent an attachment" })
         .catch(() => console.error("message push dispatch failed"));
 
       res.status(201).json({
@@ -1790,7 +1795,12 @@ router.post(
           },
         };
         broadcastToOthers(req, targetOthers, "message:new", payload);
-        void sendNewMessagePush({ recipientIds: targetOthers, senderName: req.user.fullName, conversationId: target._id, messageId: forwarded._id })
+        const safePreview = forwarded.encrypted
+          ? "New encrypted message"
+          : forwarded.type === "text"
+            ? forwarded.body.replace(/[\r\n]+/g, " ").slice(0, 140)
+            : "Sent an attachment";
+        void sendNewMessagePush({ recipientIds: targetOthers, senderName: req.user.fullName, conversationId: target._id, messageId: forwarded._id, preview: safePreview })
           .catch(() => console.error("message push dispatch failed"));
         results.push(payload);
       }

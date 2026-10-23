@@ -9,6 +9,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.kothabarta.app.BuildConfig
+import com.kothabarta.app.NotificationTarget
 import com.kothabarta.core.navigation.NavigationEvent
 import com.kothabarta.core.navigation.Routes
 import com.kothabarta.core.network.SessionManager
@@ -28,8 +29,8 @@ import org.koin.compose.koinInject
 fun KothaBartaNavHost(
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
-    notificationConversationId: String? = null,
-    onNotificationConversationHandled: () -> Unit = {},
+    notificationTarget: NotificationTarget? = null,
+    onNotificationHandled: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     val unauthorizedNotifier = koinInject<UnauthorizedNotifier>()
@@ -72,8 +73,8 @@ fun KothaBartaNavHost(
                     onSignedOut = handleEvent,
                     isDarkTheme = isDarkTheme,
                     onToggleTheme = onToggleTheme,
-                    notificationConversationId = notificationConversationId,
-                    onNotificationConversationHandled = onNotificationConversationHandled,
+                    notificationTarget = notificationTarget,
+                    onNotificationHandled = onNotificationHandled,
                 )
             }
         }

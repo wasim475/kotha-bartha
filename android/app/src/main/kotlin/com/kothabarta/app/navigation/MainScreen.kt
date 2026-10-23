@@ -60,6 +60,7 @@ import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.kothabarta.core.common.ApiResult
 import com.kothabarta.app.BuildConfig
+import com.kothabarta.app.NotificationTarget
 import com.kothabarta.core.navigation.NavigationEvent
 import com.kothabarta.core.navigation.Routes
 import com.kothabarta.core.network.social.SafeUserDto
@@ -115,8 +116,8 @@ fun MainScreen(
     onSignedOut: (NavigationEvent) -> Unit,
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
-    notificationConversationId: String? = null,
-    onNotificationConversationHandled: () -> Unit = {},
+    notificationTarget: NotificationTarget? = null,
+    onNotificationHandled: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     val notificationBadge = koinInject<NotificationBadge>()
@@ -136,12 +137,17 @@ fun MainScreen(
         ) notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
-    LaunchedEffect(notificationConversationId) {
-        val conversationId = notificationConversationId ?: return@LaunchedEffect
-        navController.navigate(Routes.chat(conversationId)) {
-            popUpTo(navController.graph.findStartDestination().id)
+    LaunchedEffect(notificationTarget) {
+        val target = notificationTarget ?: return@LaunchedEffect
+        when {
+            !target.conversationId.isNullOrBlank() -> navController.navigate(
+                Routes.chat(target.conversationId, messageId = target.messageId),
+            ) { popUpTo(navController.graph.findStartDestination().id) }
+            !target.postId.isNullOrBlank() -> navController.navigate(Routes.post(target.postId)) {
+                popUpTo(navController.graph.findStartDestination().id)
+            }
         }
-        onNotificationConversationHandled()
+        onNotificationHandled()
     }
 
     LaunchedEffect(searchOpen, searchQuery) {
@@ -261,6 +267,7 @@ fun MainScreen(
                         navArgument(Routes.CHAT_PEER_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
                         navArgument(Routes.CHAT_PEER_NAME_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
                         navArgument(Routes.CHAT_PEER_AVATAR_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+                        navArgument(Routes.CHAT_MESSAGE_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
                     ),
                 ) { backStackEntry ->
                     val args = backStackEntry.arguments
@@ -271,6 +278,7 @@ fun MainScreen(
                         peerId = decoded(Routes.CHAT_PEER_ID_ARG),
                         peerName = decoded(Routes.CHAT_PEER_NAME_ARG),
                         peerAvatarUrl = decoded(Routes.CHAT_PEER_AVATAR_ARG),
+                        targetMessageId = decoded(Routes.CHAT_MESSAGE_ARG),
                         onNavigate = onNavigate,
                     )
                 }

@@ -41,16 +41,41 @@ async function sendDataPush(recipientIds, data) {
   }
 }
 
-/** The message body is intentionally omitted for plaintext and E2E-encrypted messages alike. */
-const messagePushData = ({ senderName, conversationId, messageId }) => ({
+/** Message previews are passed only after the caller has applied encryption/privacy rules. */
+const messagePushData = ({ senderName, conversationId, messageId, preview }) => ({
   type: "message",
+  notificationId: String(messageId),
   conversationId: String(conversationId),
   messageId: String(messageId),
   title: senderName || "New message",
-  body: "You have a new message.",
+  body: String(preview || "You have a new message.").slice(0, 160),
 });
 
 const sendNewMessagePush = ({ recipientIds, ...details }) => sendDataPush(recipientIds, messagePushData(details));
+
+function notificationPushData(notification) {
+  const payload = notification.payload || {};
+  const reactionLabels = { like: "Like", love: "Love", haha: "Haha", sad: "Sad", angry: "Angry" };
+  const body = payload.preview || (payload.reactionType
+    ? `${payload.message || "Reacted"} · ${reactionLabels[payload.reactionType] || "Reaction"}`
+    : payload.message) || "You have a new notification.";
+  const data = {
+    notificationId: String(notification._id || notification.id || ""),
+    type: String(notification.type || "notification"),
+    title: String(payload.title || notification.actorName || "Kotha-Barta"),
+    body: String(body),
+  };
+  for (const key of ["postId", "commentId", "replyId"]) {
+    if (notification[key]) data[key] = String(notification[key]);
+  }
+  if (payload.reactionType) data.reactionType = String(payload.reactionType);
+  if (payload.conversationId) data.conversationId = String(payload.conversationId);
+  if (payload.messageId) data.messageId = String(payload.messageId);
+  return data;
+}
+
+const sendNotificationPush = (recipientId, notification) =>
+  sendDataPush([recipientId], notificationPushData(notification));
 
 const incomingCallPushData = ({ callerName, callId, conversationId, video }) => ({
   type: "call",
@@ -63,4 +88,4 @@ const incomingCallPushData = ({ callerName, callId, conversationId, video }) => 
 
 const sendIncomingCallPush = ({ recipientId, ...details }) => sendDataPush([recipientId], incomingCallPushData(details));
 
-module.exports = { sendNewMessagePush, sendIncomingCallPush, messagePushData, incomingCallPushData };
+module.exports = { sendNewMessagePush, sendIncomingCallPush, sendNotificationPush, messagePushData, incomingCallPushData, notificationPushData };

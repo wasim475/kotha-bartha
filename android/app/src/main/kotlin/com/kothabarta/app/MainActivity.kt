@@ -16,13 +16,22 @@ import com.kothabarta.core.ui.theme.KothaBartaTheme
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
+data class NotificationTarget(
+    val type: String? = null,
+    val conversationId: String? = null,
+    val messageId: String? = null,
+    val postId: String? = null,
+    val commentId: String? = null,
+    val replyId: String? = null,
+)
+
 class MainActivity : ComponentActivity() {
-    private var pendingConversationId by mutableStateOf<String?>(null)
+    private var pendingNotification by mutableStateOf<NotificationTarget?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        pendingConversationId = intent.getStringExtra(PushMessagingService.EXTRA_CONVERSATION_ID)
+        pendingNotification = intent.toNotificationTarget()
         setContent {
             val preferences = koinInject<AppPreferences>()
             val savedDarkTheme by preferences.darkTheme.collectAsState(initial = null)
@@ -32,8 +41,8 @@ class MainActivity : ComponentActivity() {
             KothaBartaTheme(darkTheme = darkTheme) {
                 KothaBartaNavHost(
                     isDarkTheme = darkTheme,
-                    notificationConversationId = pendingConversationId,
-                    onNotificationConversationHandled = { pendingConversationId = null },
+                    notificationTarget = pendingNotification,
+                    onNotificationHandled = { pendingNotification = null },
                     onToggleTheme = {
                         coroutineScope.launch { preferences.setDarkTheme(!darkTheme) }
                     },
@@ -45,6 +54,15 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        pendingConversationId = intent.getStringExtra(PushMessagingService.EXTRA_CONVERSATION_ID)
+        pendingNotification = intent.toNotificationTarget()
     }
 }
+
+private fun android.content.Intent.toNotificationTarget() = NotificationTarget(
+    type = getStringExtra("type"),
+    conversationId = getStringExtra("conversationId"),
+    messageId = getStringExtra("messageId"),
+    postId = getStringExtra("postId"),
+    commentId = getStringExtra("commentId"),
+    replyId = getStringExtra("replyId"),
+).takeIf { listOf(it.conversationId, it.postId).any { id -> !id.isNullOrBlank() } }

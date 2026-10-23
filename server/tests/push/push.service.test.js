@@ -13,6 +13,7 @@ test("message push has the conversation deep link and never includes message con
 
   assert.deepEqual(data, {
     type: "message",
+    notificationId: "message-1",
     conversationId: "conversation-1",
     messageId: "message-1",
     title: "A friend",

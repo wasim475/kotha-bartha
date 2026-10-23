@@ -1,6 +1,5 @@
 package com.kothabarta.app
 
-import android.app.ActivityManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -31,20 +30,23 @@ class PushMessagingService : FirebaseMessagingService(), KoinComponent {
     override fun onMessageReceived(message: RemoteMessage) {
         val data = message.data
         val type = data["type"]
-        if (type !in setOf("message", "call") || isAppForeground()) return
+        if (type !in setOf("message", "call", "post_like", "post_reaction", "post_comment", "comment_reaction", "friend_request", "friend_accepted", "missed_call")) return
         val conversationId = data["conversationId"]?.takeIf(String::isNotBlank)
-        if (type == "message" && conversationId == null) return
+        val isPostTarget = type in setOf("post_like", "post_reaction", "post_comment", "comment_reaction")
+        if ((type == "message" || type == "call" || type == "missed_call") && conversationId == null) return
+        if (isPostTarget && data["postId"].isNullOrBlank()) return
         val channelId = if (type == "call") CALL_CHANNEL_ID else MESSAGE_CHANNEL_ID
         ensureChannel(channelId, if (type == "call") "Calls" else "Messages")
         val intent = Intent(this, MainActivity::class.java).apply {
-            action = ACTION_OPEN_CONVERSATION
-            conversationId?.let { putExtra(EXTRA_CONVERSATION_ID, it) }
+            action = ACTION_OPEN_NOTIFICATION
+            for (key in ROUTING_EXTRAS) data[key]?.let { putExtra(key, it) }
             data["callId"]?.let { putExtra(EXTRA_CALL_ID, it) }
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
+        val destinationId = data["messageId"] ?: data["replyId"] ?: data["commentId"] ?: data["postId"] ?: conversationId ?: data["notificationId"] ?: type
         val pendingIntent = PendingIntent.getActivity(
             this,
-            (conversationId ?: data["callId"] ?: type).hashCode(),
+            destinationId.hashCode(),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -57,14 +59,7 @@ class PushMessagingService : FirebaseMessagingService(), KoinComponent {
             .setAutoCancel(true)
             .setPriority(if (type == "call") NotificationCompat.PRIORITY_MAX else NotificationCompat.PRIORITY_HIGH)
             .build()
-        runCatching { NotificationManagerCompat.from(this).notify((conversationId ?: data["callId"] ?: type).hashCode(), notification) }
-    }
-
-    private fun isAppForeground(): Boolean {
-        val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        return activityManager.runningAppProcesses.orEmpty().any {
-            it.processName == packageName && it.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
-        }
+        runCatching { NotificationManagerCompat.from(this).notify((data["notificationId"] ?: destinationId).hashCode(), notification) }
     }
 
     private fun ensureChannel(channelId: String, name: String) {
@@ -76,7 +71,8 @@ class PushMessagingService : FirebaseMessagingService(), KoinComponent {
     companion object {
         const val EXTRA_CONVERSATION_ID = "conversationId"
         const val EXTRA_CALL_ID = "callId"
-        const val ACTION_OPEN_CONVERSATION = "com.kothabarta.app.OPEN_CONVERSATION"
+        const val ACTION_OPEN_NOTIFICATION = "com.kothabarta.app.OPEN_NOTIFICATION"
+        val ROUTING_EXTRAS = listOf("notificationId", "type", "conversationId", "messageId", "postId", "commentId", "replyId")
         private const val MESSAGE_CHANNEL_ID = "messages"
         private const val CALL_CHANNEL_ID = "calls"
     }

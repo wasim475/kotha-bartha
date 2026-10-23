@@ -129,6 +129,8 @@ router.post(
         entityId: post._id,
         ...notificationTarget,
         payload: {
+          title: req.user.fullName,
+          preview: body.slice(0, 140),
           message: isReply
             ? `${req.user.fullName} replied to a comment on your post.`
             : `${req.user.fullName} commented on your post.`,
@@ -154,6 +156,8 @@ router.post(
         entityId: post._id,
         ...notificationTarget,
         payload: {
+          title: req.user.fullName,
+          preview: body.slice(0, 140),
           message: isReply
             ? `${req.user.fullName} also replied in a thread you're part of.`
             : `${req.user.fullName} also commented on a post you joined.`,
@@ -245,6 +249,11 @@ router.put("/comments/:commentId/reaction", requireAction(ACTIONS.REACT), async 
         targetId: comment._id,
       });
     } else {
+      const previousReaction = await Reaction.findOne({
+        userId: req.user._id,
+        targetType: "comment",
+        targetId: comment._id,
+      }).select("type").lean();
       await Reaction.updateOne(
         {
           userId: req.user._id,
@@ -255,7 +264,7 @@ router.put("/comments/:commentId/reaction", requireAction(ACTIONS.REACT), async 
         { upsert: true },
       );
 
-      if (comment.authorId.toString() !== req.user._id.toString()) {
+      if (comment.authorId.toString() !== req.user._id.toString() && previousReaction?.type !== type) {
         const isReply = Boolean(comment.parentId);
         const threadRootId = isReply
           ? await resolveTopLevelId(comment.parentId)
@@ -271,6 +280,7 @@ router.put("/comments/:commentId/reaction", requireAction(ACTIONS.REACT), async 
           commentId: threadRootId,
           replyId: isReply ? comment._id : null,
           payload: {
+            reactionType: type,
             message: isReply
               ? `${req.user.fullName} reacted to your reply.`
               : `${req.user.fullName} reacted to your comment.`,

@@ -1,6 +1,8 @@
 const Notification = require("../models/Notification");
 const { safeUser } = require("../utils/serializers");
 const { emitToUser } = require("../utils/realtime");
+const { sendNotificationPush } = require("./push.service");
+const { isBlockedEitherWay } = require("../utils/blocks");
 
 async function createNotification(
   req,
@@ -17,7 +19,7 @@ async function createNotification(
     uniqueEventId,
   },
 ) {
-  const notification = await Notification.findOneAndUpdate(
+  const writeResult = await Notification.findOneAndUpdate(
     { uniqueEventId },
     {
       $set: {
@@ -34,8 +36,10 @@ async function createNotification(
       },
       $setOnInsert: { uniqueEventId },
     },
-    { new: true, upsert: true, setDefaultsOnInsert: true },
+    { new: true, upsert: true, setDefaultsOnInsert: true, includeResultMetadata: true },
   );
+  const notification = writeResult.value || writeResult;
+  const isNew = Boolean(writeResult.lastErrorObject?.upserted);
 
   await notification.populate("actorId");
 
@@ -52,6 +56,13 @@ async function createNotification(
   };
 
   emitToUser(req, recipientId, "notification:new", data);
+  // Data-only FCM lets Android render across app states without Firebase auto-display duplicates.
+  if (isNew && (!actorId || !(await isBlockedEitherWay(actorId, recipientId)))) {
+    void sendNotificationPush(recipientId, {
+      ...data,
+      actorName: data.actor?.fullName,
+    }).catch(() => console.error("notification push dispatch failed"));
+  }
 
   return data;
 }
