@@ -1,7 +1,6 @@
 package com.kothabarta.feature.home.ui
 
 import android.net.Uri
-import android.webkit.MimeTypeMap
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
@@ -209,6 +208,7 @@ private fun FeedComposer(
     val context = LocalContext.current
     var open by remember { mutableStateOf(false) }
     var body by remember { mutableStateOf("") }
+    var photoPreparationError by remember { mutableStateOf<String?>(null) }
     val selected = remember { mutableStateListOf<Uri>() }
     val scope = rememberCoroutineScope()
     var submitRequested by remember { mutableStateOf(false) }
@@ -224,8 +224,10 @@ private fun FeedComposer(
         }
     }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(6)) { uris ->
-        selected.clear()
-        selected.addAll(uris.take(6))
+        if (uris.isNotEmpty()) {
+            photoPreparationError = null
+            selected.addAll((selected.toList() + uris).distinct().take(6))
+        }
     }
 
     Surface(
@@ -274,6 +276,7 @@ private fun FeedComposer(
                         }
                     }
                 }
+                photoPreparationError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     TextButton(enabled = !isSubmitting && selected.size < 6, onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("Add photos (${selected.size}/6)") }
                     Button(
@@ -284,10 +287,11 @@ private fun FeedComposer(
                                     readUploadPhoto(context, uri, "photo")
                                 }
                                 if (photos.size == selected.size) {
+                                    photoPreparationError = null
                                     postIdBeforeSubmit = latestPostId
                                     submitRequested = true
                                     onSubmit(body, photos)
-                                }
+                                } else photoPreparationError = "Couldn't prepare one or more photos. Remove them and try again."
                             }
                         },
                     ) {
@@ -319,8 +323,9 @@ private fun SocialUpdates(
     var storyText by remember { mutableStateOf("") }
     var noteText by remember { mutableStateOf("") }
     var storyPhoto by remember { mutableStateOf<Uri?>(null) }
+    var storyPhotoError by remember { mutableStateOf<String?>(null) }
     var submittedVersion by remember { mutableStateOf<Long?>(null) }
-    val storyPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { storyPhoto = it }
+    val storyPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> if (uri != null) { storyPhoto = uri; storyPhotoError = null } }
     LaunchedEffect(socialUpdateVersion, socialUpdateError, submittedVersion) {
         if (submittedVersion != null && socialUpdateVersion > submittedVersion!!) {
             submittedVersion = null
@@ -386,6 +391,7 @@ private fun SocialUpdates(
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     OutlinedTextField(value = storyText, onValueChange = { if (it.length <= 500) storyText = it }, label = { Text(if (storyPhoto == null) "Your story" else "Caption (optional)") }, modifier = Modifier.fillMaxWidth())
                     storyPhoto?.let { NetworkImage(it.toString(), "Story preview", Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(14.dp))) }
+                    storyPhotoError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                     TextButton(onClick = { storyPicker.launch("image/*") }) { Text(if (storyPhoto == null) "Add photo" else "Change photo") }
                 }
             },
@@ -395,7 +401,10 @@ private fun SocialUpdates(
                     submittedVersion = socialUpdateVersion
                     if (photo == null) onCreateTextStory(storyText) else {
                         val selectedFile = readUploadPhoto(context, photo, "story")
-                        if (selectedFile != null) onCreateImageStory(storyText, selectedFile) else submittedVersion = null
+                        if (selectedFile != null) onCreateImageStory(storyText, selectedFile) else {
+                            submittedVersion = null
+                            storyPhotoError = "Couldn't prepare this photo. Choose another image and try again."
+                        }
                     }
                 }) { Text("Share") }
             },
