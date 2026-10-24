@@ -39,9 +39,14 @@ class WebE2eeDecryptor {
                 doPhase(senderPublicKey, true)
                 generateSecret()
             }
-            if (sharedSecret.size != AES_256_BYTES) return DecryptionResult.InvalidSenderKey
+            if (sharedSecret.size != AES_256_BYTES) {
+                sharedSecret.fill(0)
+                return DecryptionResult.InvalidSenderKey
+            }
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(sharedSecret, "AES"), GCMParameterSpec(GCM_TAG_BITS, iv))
+            val aesKey = SecretKeySpec(sharedSecret, "AES")
+            sharedSecret.fill(0)
+            cipher.init(Cipher.DECRYPT_MODE, aesKey, GCMParameterSpec(GCM_TAG_BITS, iv))
             val clear = cipher.doFinal(ciphertext)
             val text = Charsets.UTF_8.newDecoder()
                 .onMalformedInput(CodingErrorAction.REPORT)

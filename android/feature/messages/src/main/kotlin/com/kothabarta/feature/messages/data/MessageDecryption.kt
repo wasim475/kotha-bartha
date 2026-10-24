@@ -12,6 +12,7 @@ sealed interface MessageDecryptionState {
     data class Unavailable(val reason: Reason) : MessageDecryptionState
 
     enum class Reason {
+        ACCOUNT_UNAVAILABLE,
         DEVICE_KEY_UNAVAILABLE,
         PLATFORM_UNSUPPORTED,
         NO_DEVICE_ENVELOPE,
@@ -37,7 +38,9 @@ class AndroidMessageDecryptor(
             return@withContext unavailable(MessageDecryptionState.Reason.DEVICE_KEY_UNAVAILABLE)
         }
         val payloads = message.encryptedPayloads.orEmpty()
-        val payload = payloads.firstOrNull { it.deviceId == deviceId }
+        val addressed = payloads.filter { it.deviceId == deviceId }
+        if (addressed.size > 1) return@withContext unavailable(MessageDecryptionState.Reason.INVALID_ENVELOPE)
+        val payload = addressed.singleOrNull()
         if (payload == null) {
             val reason = if (payloads.isEmpty() && message.encryptedBody != null) {
                 MessageDecryptionState.Reason.LEGACY_FORMAT_UNSUPPORTED

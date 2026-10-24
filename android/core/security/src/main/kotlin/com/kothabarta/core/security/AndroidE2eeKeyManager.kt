@@ -9,9 +9,9 @@ import androidx.security.crypto.MasterKey
 import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.KeyStore
+import java.security.AlgorithmParameters
 import java.security.MessageDigest
 import java.security.PrivateKey
-import java.security.interfaces.ECPrivateKey
 import java.security.interfaces.ECPublicKey
 import java.security.spec.ECGenParameterSpec
 import java.util.UUID
@@ -41,9 +41,9 @@ class AndroidE2eeKeyManager(context: Context) : E2eeKeyProvider {
                 val keyStore = androidKeyStore()
                 val alias = aliasFor(accountId)
                 if (!keyStore.containsAlias(alias)) return@synchronized KeyLookup.Missing
-                val privateKey = keyStore.getKey(alias, null) as? ECPrivateKey ?: return@synchronized KeyLookup.Invalid
+                val privateKey = keyStore.getKey(alias, null) as? PrivateKey ?: return@synchronized KeyLookup.Invalid
                 val publicKey = keyStore.getCertificate(alias)?.publicKey as? ECPublicKey ?: return@synchronized KeyLookup.Invalid
-                if (publicKey.params.curve.field.fieldSize != 256) return@synchronized KeyLookup.Invalid
+                if (!isP256(publicKey)) return@synchronized KeyLookup.Invalid
                 KeyLookup.Available(KeyPair(publicKey, privateKey))
             } catch (_: Exception) {
                 KeyLookup.Invalid
@@ -93,12 +93,21 @@ class AndroidE2eeKeyManager(context: Context) : E2eeKeyProvider {
 
     private fun androidKeyStore() = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
 
+    private fun isP256(publicKey: ECPublicKey): Boolean {
+        val expectedParams = AlgorithmParameters.getInstance("EC").run {
+            init(ECGenParameterSpec("secp256r1"))
+            getParameterSpec(java.security.spec.ECParameterSpec::class.java)
+        }
+        val actual = publicKey.params
+        return actual.curve.field.fieldSize == 256 && actual.order == expectedParams.order && actual.generator == expectedParams.generator
+    }
+
     private fun aliasFor(accountId: String) = "kb-e2ee-p256-${accountId.sha256()}"
     private fun provisionedKey(accountId: String) = "e2ee-provisioned-${accountId.sha256()}"
 
     private fun String.sha256(): String = MessageDigest.getInstance("SHA-256")
         .digest(toByteArray(Charsets.UTF_8))
-        .joinToString("") { "%02x".format(it) }
+        .joinToString("") { "%02x".format(it.toInt() and 0xff) }
 
     sealed interface KeyLookup {
         data class Available(val key: KeyPair) : KeyLookup

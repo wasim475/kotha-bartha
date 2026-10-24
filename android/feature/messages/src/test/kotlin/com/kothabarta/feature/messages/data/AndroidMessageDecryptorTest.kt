@@ -24,6 +24,17 @@ class AndroidMessageDecryptorTest {
         assertEquals(MessageDecryptionState.Unavailable(MessageDecryptionState.Reason.LEGACY_FORMAT_UNSUPPORTED), result)
     }
 
+    @Test fun `duplicate payloads for this device fail closed`() = runBlocking {
+        val keys = FakeKeyProvider("android-this-device")
+        val duplicate = EncryptedPayloadDto("android-this-device", "cipher-a", "iv-a")
+        val result = AndroidMessageDecryptor(keys).decrypt(
+            encryptedMessage().copy(encryptedPayloads = listOf(duplicate, duplicate)),
+            "account-a",
+        )
+        assertEquals(MessageDecryptionState.Unavailable(MessageDecryptionState.Reason.INVALID_ENVELOPE), result)
+        assertNull(keys.requestedAccount)
+    }
+
     @Test fun `matching device uses only the authenticated account key namespace`() = runBlocking {
         val keys = FakeKeyProvider("android-this-device")
         val result = AndroidMessageDecryptor(keys).decrypt(

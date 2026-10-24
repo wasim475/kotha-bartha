@@ -151,6 +151,7 @@ private fun encryptedDisplayText(state: MessageDecryptionState?): String = when 
     is MessageDecryptionState.Decrypted -> state.plaintext
     MessageDecryptionState.Pending -> "🔒 Decrypting…"
     is MessageDecryptionState.Unavailable -> when (state.reason) {
+        MessageDecryptionState.Reason.ACCOUNT_UNAVAILABLE -> "🔒 Account unavailable"
         MessageDecryptionState.Reason.DEVICE_KEY_UNAVAILABLE -> "🔒 Device key unavailable"
         MessageDecryptionState.Reason.PLATFORM_UNSUPPORTED -> "🔒 Secure decryption unavailable on this Android version"
         MessageDecryptionState.Reason.NO_DEVICE_ENVELOPE -> "🔒 Message not addressed to this device"

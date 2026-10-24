@@ -171,6 +171,11 @@ class ChatViewModel(
             if (result is ApiResult.Success) {
                 _uiState.update { it.copy(myUserId = result.data.id) }
                 _uiState.value.messages.forEach(::scheduleDecryption)
+            } else {
+                _uiState.update { state ->
+                    val unresolved = state.messages.filter { it.isEncryptedForDisplay() }
+                    state.copy(decryptionStates = state.decryptionStates + unresolved.associate { it.id to MessageDecryptionState.Unavailable(MessageDecryptionState.Reason.ACCOUNT_UNAVAILABLE) })
+                }
             }
         }
     }
@@ -215,7 +220,10 @@ class ChatViewModel(
             _uiState.update { it.copy(decryptionStates = it.decryptionStates - message.id) }
             return
         }
-        val accountId = _uiState.value.myUserId ?: return
+        val accountId = _uiState.value.myUserId ?: run {
+            _uiState.update { it.copy(decryptionStates = it.decryptionStates + (message.id to MessageDecryptionState.Pending)) }
+            return
+        }
         val fingerprint = DecryptionFingerprint(message.encrypted, message.encryptedBody, message.encryptedPayloads, message.senderPublicKey)
         if (decryptionFingerprints[message.id] == fingerprint) return
         decryptionFingerprints[message.id] = fingerprint
