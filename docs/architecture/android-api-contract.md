@@ -1,6 +1,6 @@
 # Android REST API contract
 
-Every endpoint below already exists and is unchanged by this pass — this is a map of what Android consumes, not a new API. Source files are the field-level ground truth; this document records the conventions and groups the surface so Android's `core/network` layer can be modeled once and reused everywhere, rather than transcribing every field of ~120 routes (that would drift from the code the moment either changes — read the linked route file for exact body/response fields when implementing a given feature).
+This is a map of what Android consumes. Source files are the field-level ground truth; this document records the conventions and groups the surface so Android's `core/network` layer can be modeled once and reused everywhere, rather than transcribing every field of ~120 routes (that would drift from the code the moment either changes — read the linked route file for exact body/response fields when implementing a given feature).
 
 ## Global conventions
 
@@ -30,7 +30,7 @@ Every endpoint below already exists and is unchanged by this pass — this is a 
 
 ## Comments
 
-`GET /posts/:postId/comments`, `POST .../comments` (gated by `COMMENT`/`REPLY` depending on body), `PATCH /comments/:commentId` (gated by `EDIT_POST`), `DELETE /comments/:commentId`, `PUT /comments/:commentId/reaction` (gated by `REACT`) — `server/src/routes/comments.routes.js`.
+`GET /posts/:postId/comments`, `POST .../comments` (gated by `COMMENT`/`REPLY` depending on body), `PATCH /comments/:commentId` (gated by `EDIT_POST`), `DELETE /comments/:commentId`, `PUT /comments/:commentId/reaction` (gated by `REACT`) — `server/src/routes/comments.routes.js`. Comment reads remain oldest-first and include server-resolved `isFriend` and visible direct-reply counts for previews; replies have one supported level. Post feed items include one friend-priority comment preview. Reaction values include `like`, `love` (legacy), `haha`, `care`, `sad` and `angry`.
 
 ## Messages
 

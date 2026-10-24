@@ -27,7 +27,7 @@ function safeUser(user) {
   };
 }
 
-async function serializePost(post, viewerId) {
+async function serializePost(post, viewerId, friendIds = new Set(), blockedIds = new Set()) {
   const reactionDocs = await Reaction.find({
     targetType: "post",
     targetId: post._id,
@@ -38,6 +38,16 @@ async function serializePost(post, viewerId) {
   const mine = reactionDocs.find(
     (reaction) => reaction.userId.toString() === viewerId.toString(),
   );
+
+  const visibleCommentFilter = { postId: post._id, parentId: null, authorId: { $nin: [...blockedIds] }, ...VISIBLE_CONTENT };
+  const friendPreview = friendIds.size
+    ? await Comment.findOne({ ...visibleCommentFilter, authorId: { $in: [...friendIds], $nin: [...blockedIds] } }).populate("authorId").sort({ createdAt: 1 })
+    : null;
+  const previewComment = friendPreview || await Comment.findOne(visibleCommentFilter).populate("authorId").sort({ createdAt: 1 });
+  const serializedPreview = previewComment ? {
+    ...await serializeComment(previewComment, viewerId),
+    isFriend: friendIds.has(previewComment.authorId._id.toString()),
+  } : null;
 
   return {
     id: post._id.toString(),
@@ -61,8 +71,11 @@ async function serializePost(post, viewerId) {
     liked: Boolean(mine),
     comments: await Comment.countDocuments({
       postId: post._id,
+      parentId: null,
+      authorId: { $nin: [...blockedIds] },
       ...VISIBLE_CONTENT,
     }),
+    commentPreview: serializedPreview,
   };
 }
 
@@ -92,6 +105,8 @@ async function serializeComment(comment, viewerId) {
       }),
       {},
     ),
+    isFriend: Boolean(comment.isFriend),
+    repliesCount: Number(comment.repliesCount || 0),
   };
 }
 

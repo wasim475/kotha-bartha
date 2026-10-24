@@ -62,16 +62,18 @@ data class PostDto(
     val likes: Int = 0,
     val liked: Boolean = false,
     val comments: Int = 0,
+    val commentPreview: CommentDto? = null,
 )
 
 /** The 5 reaction types the server accepts — see server/src/utils/reactionTypes.js. */
 object ReactionTypes {
     const val LIKE = "like"
     const val LOVE = "love"
+    const val CARE = "care"
     const val HAHA = "haha"
     const val SAD = "sad"
     const val ANGRY = "angry"
-    val ALL = listOf(LIKE, LOVE, HAHA, SAD, ANGRY)
+    val ALL = listOf(LIKE, HAHA, CARE, ANGRY, SAD)
 }
 
 data class ReactionRequest(val type: String?)
@@ -132,6 +134,8 @@ data class CommentDto(
     val editable: Boolean = false,
     val reaction: String? = null,
     val reactions: Map<String, Int> = emptyMap(),
+    val isFriend: Boolean = false,
+    val repliesCount: Int = 0,
 )
 data class CreateCommentBody(val body: String, val parentId: String? = null)
 data class CreateReportBody(val targetType: String = "post", val targetId: String, val reason: String, val description: String? = null)

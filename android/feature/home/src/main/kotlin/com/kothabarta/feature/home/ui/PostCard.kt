@@ -1,6 +1,8 @@
 package com.kothabarta.feature.home.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,8 +18,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -50,12 +52,14 @@ private const val TRUNCATE_AT = 320
 private val REACTION_EMOJI = mapOf(
     ReactionTypes.LIKE to "👍",
     ReactionTypes.LOVE to "❤️",
+    ReactionTypes.CARE to "🤗",
     ReactionTypes.HAHA to "😂",
     ReactionTypes.SAD to "😢",
     ReactionTypes.ANGRY to "😠",
 )
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun PostCard(
     post: PostDto,
     onOpenPost: (String) -> Unit,
@@ -77,6 +81,7 @@ fun PostCard(
     var reportReason by remember(post.id) { mutableStateOf("inappropriate") }
     var reportDescription by remember(post.id) { mutableStateOf("") }
     var editedBody by remember(post.id) { mutableStateOf(post.body) }
+    var reactionPickerExpanded by remember(post.id) { mutableStateOf(false) }
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
@@ -165,19 +170,39 @@ fun PostCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                    ReactionTypes.ALL.forEach { type ->
-                        val active = post.reaction == type
+                Box {
+                    val selectedReaction = post.reaction ?: ReactionTypes.LIKE
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = REACTION_EMOJI.getValue(type),
+                            text = "${REACTION_EMOJI.getValue(selectedReaction)} ${selectedReaction.replaceFirstChar(Char::uppercase)}",
                             modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(50))
-                                .clickable(enabled = reactionEnabled) { onReact(type) }
-                                .padding(Spacing.xs)
-                                .semantics { contentDescription = "React with $type" },
-                            style = if (active) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
+                                .clip(RoundedCornerShape(20.dp))
+                                .combinedClickable(
+                                    enabled = reactionEnabled,
+                                    onClick = { onReact(selectedReaction) },
+                                    onLongClick = { reactionPickerExpanded = true },
+                                )
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                .semantics { contentDescription = "${selectedReaction.replaceFirstChar(Char::uppercase)} reaction. Tap to toggle or long press to choose" },
+                            color = if (post.reaction != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelLarge,
                         )
+                        Text(
+                            "⌄",
+                            modifier = Modifier.clickable { reactionPickerExpanded = true }.semantics { contentDescription = "Choose reaction" }.padding(horizontal = 4.dp, vertical = 8.dp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = reactionPickerExpanded,
+                        onDismissRequest = { reactionPickerExpanded = false },
+                    ) {
+                        ReactionTypes.ALL.forEach { type ->
+                            DropdownMenuItem(
+                                text = { Text("${REACTION_EMOJI.getValue(type)}  ${type.replaceFirstChar(Char::uppercase)}") },
+                                onClick = { reactionPickerExpanded = false; onReact(type) },
+                            )
+                        }
                     }
                 }
                 Text(
@@ -186,6 +211,19 @@ fun PostCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.clickable { onOpenPost(post.id) },
                 )
+            }
+            post.commentPreview?.let { preview ->
+                androidx.compose.foundation.layout.Spacer(Modifier.height(Spacing.xs))
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { onOpenPost(post.id) }.padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    AvatarImage(preview.author.avatar?.secureUrl, preview.author.initials ?: preview.author.fullName, size = 28.dp)
+                    Column(Modifier.padding(start = 8.dp).weight(1f)) {
+                        Text(preview.author.fullName, style = MaterialTheme.typography.labelMedium)
+                        Text(preview.body, style = MaterialTheme.typography.bodySmall, maxLines = 2)
+                    }
+                }
             }
         }
     }

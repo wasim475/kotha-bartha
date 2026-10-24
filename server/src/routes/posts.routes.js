@@ -63,7 +63,7 @@ router.get("/posts/feed", async (req, res, next) => {
 
     res.json({
       data: await Promise.all(
-        posts.map((post) => serializePost(post, req.user._id)),
+        posts.map((post) => serializePost(post, req.user._id, new Set(friendIds.filter((id) => !blockedIds.has(id))), blockedIds)),
       ),
       meta: {
         hasMore,
@@ -369,11 +369,13 @@ router.put("/posts/:postId/reaction", requireAction(ACTIONS.REACT), async (req, 
         targetType: "post",
         targetId: post._id,
       }).select("type").lean();
-      await Reaction.updateOne(
-        { userId: req.user._id, targetType: "post", targetId: post._id },
-        { $set: { type } },
-        { upsert: true },
-      );
+      const reactionFilter = { userId: req.user._id, targetType: "post", targetId: post._id };
+      try {
+        await Reaction.updateOne(reactionFilter, { $set: { type } }, { upsert: true });
+      } catch (error) {
+        if (error.code !== 11000) throw error;
+        await Reaction.updateOne(reactionFilter, { $set: { type } });
+      }
 
       if (post.authorId.toString() !== req.user._id.toString() && previousReaction?.type !== type) {
         await createNotification(req, {

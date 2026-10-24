@@ -72,6 +72,14 @@ class FeedRepository(
         safeApiCall { it.createComment(postId, CreateCommentBody(body)) }
     } ?: missingApi()
 
+    suspend fun createReply(postId: String, parentId: String, body: String): ApiResult<CommentDto> = commentsApi?.let {
+        safeApiCall { it.createComment(postId, CreateCommentBody(body, parentId)) }
+    } ?: missingApi()
+
+    suspend fun reactToComment(commentId: String, type: String?): ApiResult<ReactionResponse> = commentsApi?.let {
+        safeApiCall { it.reactToComment(commentId, ReactionRequest(type)) }
+    } ?: missingApi()
+
     suspend fun reportPost(postId: String, reason: String, description: String): ApiResult<ReportCreatedDto> = reportsApi?.let {
         safeApiCall { it.createReport(CreateReportBody(targetId = postId, reason = reason, description = description)) }
     } ?: missingApi()

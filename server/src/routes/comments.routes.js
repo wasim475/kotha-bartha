@@ -8,6 +8,8 @@ const { REACTION_TYPES } = require("../utils/reactionTypes");
 const { ACTIONS, requireAction, VISIBLE_CONTENT } = require("../utils/moderation");
 const { deleteCommentThread } = require("../services/contentModeration.service");
 const { canViewPost } = require("../utils/postVisibility");
+const Friendship = require("../models/Friendship");
+const { blockedPairIds } = require("../utils/blocks");
 
 const router = express.Router();
 
@@ -37,8 +39,10 @@ router.get("/posts/:postId/comments", async (req, res, next) => {
     if (!post || !(await canViewPost(req.user._id, post.authorId))) {
       return res.status(404).json({ error: { code: "NOT_FOUND", message: "Post not found." } });
     }
+    const hiddenAuthorIds = await blockedPairIds(req.user._id);
     const comments = await Comment.find({
       postId: req.params.postId,
+      authorId: { $nin: [...hiddenAuthorIds] },
       ...VISIBLE_CONTENT,
     })
       .populate("authorId")
@@ -46,9 +50,22 @@ router.get("/posts/:postId/comments", async (req, res, next) => {
         createdAt: 1,
       });
 
+    const [friendships, replyCounts] = await Promise.all([
+      Friendship.find({ userIds: req.user._id }).select("userIds").lean(),
+      Comment.aggregate([
+        { $match: { postId: post._id, parentId: { $ne: null }, authorId: { $nin: [...hiddenAuthorIds] }, ...VISIBLE_CONTENT } },
+        { $group: { _id: "$parentId", count: { $sum: 1 } } },
+      ]),
+    ]);
+    const friendIds = new Set(friendships.flatMap((friendship) => friendship.userIds.map(String)).filter((id) => id !== req.user._id.toString()));
+    const countsByParent = new Map(replyCounts.map((entry) => [entry._id.toString(), entry.count]));
     res.json({
       data: await Promise.all(
-        comments.map((comment) => serializeComment(comment, req.user._id)),
+        comments.map(async (comment) => ({
+          ...await serializeComment(comment, req.user._id),
+          isFriend: friendIds.has(comment.authorId._id.toString()),
+          repliesCount: countsByParent.get(comment._id.toString()) || 0,
+        })),
       ),
     });
   } catch (error) {
@@ -94,7 +111,7 @@ router.post(
         ...VISIBLE_CONTENT,
       });
 
-      if (!parent) {
+      if (!parent || parent.parentId) {
         return res.status(400).json({
           error: {
             code: "INVALID_PARENT",

@@ -188,10 +188,12 @@ fun MainScreen(
     }
 
     val navigateToTopLevel: (String) -> Unit = { route ->
-        navController.navigate(route) {
-            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-            launchSingleTop = true
-            restoreState = true
+        if (navController.currentDestination?.route != route) {
+            navController.navigate(route) {
+                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
         }
     }
 
@@ -243,7 +245,8 @@ fun MainScreen(
             NavigationBar {
                 BOTTOM_NAV_ITEMS.forEach { item ->
                     val selected = currentRoute?.hierarchy?.any { it.route == item.route } == true ||
-                        (item.route == Routes.MESSAGES && currentRoute?.route == Routes.MESSAGES_CALLS)
+                        (item.route == Routes.MESSAGES && currentRoute?.route == Routes.MESSAGES_CALLS) ||
+                        (item.route == Routes.HOME && currentRoute?.route?.startsWith("post/") == true)
                     NavigationBarItem(
                         selected = selected,
                         onClick = { navigateToTopLevel(item.route) },

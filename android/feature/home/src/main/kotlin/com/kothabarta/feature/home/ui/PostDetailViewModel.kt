@@ -25,6 +25,9 @@ data class PostDetailUiState(
     val comments: List<CommentDto> = emptyList(),
     val isLoadingComments: Boolean = true,
     val isSendingComment: Boolean = false,
+    val replyTarget: CommentDto? = null,
+    val expandedReplyIds: Set<String> = emptySet(),
+    val reactingCommentIds: Set<String> = emptySet(),
 )
 
 class PostDetailViewModel(
@@ -38,6 +41,7 @@ class PostDetailViewModel(
     private val _navigationEvents = MutableSharedFlow<NavigationEvent>(extraBufferCapacity = 1)
     val navigationEvents: SharedFlow<NavigationEvent> = _navigationEvents.asSharedFlow()
     private val commentActionInFlight = AtomicBoolean(false)
+    private val reactionRequests = java.util.Collections.synchronizedSet(mutableSetOf<String>())
 
     init {
         load()
@@ -48,17 +52,41 @@ class PostDetailViewModel(
 
     fun retryComments() = loadComments()
 
-    fun createComment(body: String) {
+    fun createComment(body: String) = createComment(body, _uiState.value.replyTarget?.id)
+
+    fun createComment(body: String, parentId: String?) {
         if (body.isBlank() || !commentActionInFlight.compareAndSet(false, true)) return
         viewModelScope.launch {
             _uiState.update { it.copy(isSendingComment = true, error = null) }
-            when (val result = repository.createComment(postId, body.trim())) {
+            when (val result = if (parentId == null) repository.createComment(postId, body.trim()) else repository.createReply(postId, parentId, body.trim())) {
                 is ApiResult.Success -> _uiState.update { state ->
-                    state.copy(isSendingComment = false, comments = state.comments + result.data, post = state.post?.let { it.copy(comments = it.comments + 1) })
+                    state.copy(isSendingComment = false, comments = state.comments + result.data, replyTarget = null, post = state.post?.let { it.copy(comments = if (parentId == null) it.comments + 1 else it.comments) })
                 }
                 is ApiResult.Failure -> _uiState.update { it.copy(isSendingComment = false, error = result.error.message) }
             }
             commentActionInFlight.set(false)
+        }
+    }
+
+    fun setReplyTarget(comment: CommentDto?) = _uiState.update { it.copy(replyTarget = comment) }
+
+    fun toggleReplies(commentId: String) = _uiState.update {
+        it.copy(expandedReplyIds = if (commentId in it.expandedReplyIds) it.expandedReplyIds - commentId else it.expandedReplyIds + commentId)
+    }
+
+    fun toggleCommentReaction(comment: CommentDto, type: String) {
+        if (!reactionRequests.add(comment.id)) return
+        _uiState.update { it.copy(reactingCommentIds = it.reactingCommentIds + comment.id) }
+        val nextType = if (comment.reaction == type) null else type
+        viewModelScope.launch {
+            when (val result = repository.reactToComment(comment.id, nextType)) {
+                is ApiResult.Success -> _uiState.update { state -> state.copy(comments = state.comments.map { current ->
+                    if (current.id == comment.id) current.copy(reaction = result.data.reaction, reactions = result.data.reactions) else current
+                }) }
+                is ApiResult.Failure -> _uiState.update { it.copy(error = result.error.message) }
+            }
+            reactionRequests.remove(comment.id)
+            _uiState.update { it.copy(reactingCommentIds = it.reactingCommentIds - comment.id) }
         }
     }
 
