@@ -16,6 +16,7 @@ import com.kothabarta.core.websocket.SocketManager
 import com.kothabarta.feature.messages.data.MessagesRepository
 import com.kothabarta.feature.messages.data.MessageDecrypting
 import com.kothabarta.feature.messages.data.MessageDecryptionState
+import com.kothabarta.feature.messages.data.MessageDeviceKeyRegistrar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -47,7 +48,10 @@ class ChatViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun newViewModel(api: FakeMessagesApi) = ChatViewModel(
+    private fun newViewModel(
+        api: FakeMessagesApi,
+        keyRegistrar: MessageDeviceKeyRegistrar = MessageDeviceKeyRegistrar { true },
+    ) = ChatViewModel(
         conversationId = "conv-1",
         peerId = "peer-1",
         peerName = "Peer",
@@ -56,6 +60,7 @@ class ChatViewModelTest {
         authApi = FakeAuthApi(),
         socketManager = SocketManager("http://localhost"),
         messageDecryptor = MessageDecrypting { _, _ -> MessageDecryptionState.Unavailable(MessageDecryptionState.Reason.NO_DEVICE_ENVELOPE) },
+        messageDeviceKeyRegistrar = keyRegistrar,
     )
 
     @Test
@@ -66,6 +71,20 @@ class ChatViewModelTest {
 
         assertEquals(listOf("m1", "m2"), viewModel.uiState.value.messages.map { it.id })
         assertEquals("me", viewModel.uiState.value.myUserId)
+    }
+
+    @Test
+    fun `registers local ECDH key after authenticated account is resolved`() = runTest {
+        var registeredAccount: String? = null
+        val registrar = MessageDeviceKeyRegistrar { accountId ->
+            registeredAccount = accountId
+            true
+        }
+
+        newViewModel(FakeMessagesApi(history = emptyList()), registrar)
+        advanceUntilIdle()
+
+        assertEquals("me", registeredAccount)
     }
 
     @Test

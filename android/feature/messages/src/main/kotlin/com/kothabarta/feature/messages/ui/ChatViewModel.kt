@@ -18,6 +18,7 @@ import com.kothabarta.core.websocket.SocketConnectionState
 import com.kothabarta.core.websocket.SocketManager
 import com.kothabarta.feature.messages.data.MessageDecrypting
 import com.kothabarta.feature.messages.data.MessageDecryptionState
+import com.kothabarta.feature.messages.data.MessageDeviceKeyRegistrar
 import com.kothabarta.feature.messages.data.isEncryptedForDisplay
 import com.kothabarta.feature.messages.data.MessagesRepository
 import io.socket.emitter.Emitter
@@ -68,6 +69,7 @@ class ChatViewModel(
     private val authApi: AuthApi,
     private val socketManager: SocketManager,
     private val messageDecryptor: MessageDecrypting,
+    private val messageDeviceKeyRegistrar: MessageDeviceKeyRegistrar,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -170,6 +172,7 @@ class ChatViewModel(
             val result = safeApiCall { authApi.me() }
             if (result is ApiResult.Success) {
                 _uiState.update { it.copy(myUserId = result.data.id) }
+                messageDeviceKeyRegistrar.registerForAccount(result.data.id)
                 _uiState.value.messages.forEach(::scheduleDecryption)
             } else {
                 _uiState.update { state ->
