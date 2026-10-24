@@ -7,8 +7,14 @@ const { createNotification } = require("../services/notification.service");
 const { REACTION_TYPES } = require("../utils/reactionTypes");
 const { ACTIONS, requireAction, VISIBLE_CONTENT } = require("../utils/moderation");
 const { deleteCommentThread } = require("../services/contentModeration.service");
+const { canViewPost } = require("../utils/postVisibility");
 
 const router = express.Router();
+
+async function canViewCommentThread(viewerId, comment) {
+  const post = await Post.findOne({ _id: comment.postId, deletedAt: null, ...VISIBLE_CONTENT }).select("authorId");
+  return Boolean(post && await canViewPost(viewerId, post.authorId));
+}
 
 // Walks parentId links up to the thread root. Used so every notification
 // about a comment or reply can carry a consistent commentId (always the
@@ -27,6 +33,10 @@ async function resolveTopLevelId(startId) {
 
 router.get("/posts/:postId/comments", async (req, res, next) => {
   try {
+    const post = await Post.findOne({ _id: req.params.postId, deletedAt: null, ...VISIBLE_CONTENT }).select("authorId");
+    if (!post || !(await canViewPost(req.user._id, post.authorId))) {
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Post not found." } });
+    }
     const comments = await Comment.find({
       postId: req.params.postId,
       ...VISIBLE_CONTENT,
@@ -72,6 +82,9 @@ router.post(
           message: "Comment text is required.",
         },
       });
+    }
+    if (!(await canViewPost(req.user._id, post.authorId))) {
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Post not found." } });
     }
 
     if (parentId) {
@@ -190,6 +203,9 @@ router.patch("/comments/:commentId", requireAction(ACTIONS.EDIT_POST), async (re
         },
       });
     }
+    if (!(await canViewCommentThread(req.user._id, comment))) {
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Comment not found." } });
+    }
 
     comment.body = body;
     await comment.save();
@@ -210,6 +226,9 @@ router.delete("/comments/:commentId", async (req, res, next) => {
       return res.status(404).json({
         error: { code: "NOT_FOUND", message: "Comment not found." },
       });
+    }
+    if (!(await canViewCommentThread(req.user._id, existing))) {
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Comment not found." } });
     }
 
     // Comment, its replies, reactions and notifications: the shared cascade
@@ -240,6 +259,9 @@ router.put("/comments/:commentId/reaction", requireAction(ACTIONS.REACT), async 
           message: "Invalid comment reaction.",
         },
       });
+    }
+    if (!(await canViewCommentThread(req.user._id, comment))) {
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Comment not found." } });
     }
 
     if (!type) {

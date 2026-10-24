@@ -35,4 +35,7 @@ interface FriendsApi {
 
     @DELETE("friends/{userId}")
     suspend fun unfriend(@Path("userId") userId: String): Response<ApiEnvelope<UnfriendedResponse>>
+
+    @POST("blocks/{userId}")
+    suspend fun block(@Path("userId") userId: String): Response<ApiEnvelope<BlockedResponse>>
 }

@@ -14,7 +14,7 @@ enum class AppSymbol {
     ACCOUNT, ATTACHMENT, AUDIO_CALL, CALCULATOR, CALL_END, CALL_INCOMING, CALL_MISSED, CALL_OUTGOING,
     CAMERA, CHAT, CLOSE, DARK_MODE, EXPAND, FEED, FLIP_CAMERA, FRIENDS, GAMES, LEADERBOARD, LIGHT_MODE,
     MIC, MIC_OFF, MINIMIZE, NOTIFICATIONS, QUIZ, REACTIONS, SCREEN_SHARE, SCREEN_SHARE_STOP, SEARCH, STUDY,
-    TIC_TAC_TOE, VIDEO_CALL, VIDEO_OFF, VOLUME,
+    BLOCK, LOGOUT, MORE_VERT, PERSON_REMOVE, SETTINGS, TIC_TAC_TOE, VIDEO_CALL, VIDEO_OFF, VOLUME,
 }
 
 @Composable
@@ -43,6 +43,7 @@ private fun AppSymbol.drawableRes(): Int = when (this) {
     AppSymbol.CALL_MISSED -> R.drawable.ic_call_missed
     AppSymbol.CALL_OUTGOING -> R.drawable.ic_call_made
     AppSymbol.CAMERA -> R.drawable.ic_camera_alt
+    AppSymbol.BLOCK -> R.drawable.ic_block
     AppSymbol.CHAT -> R.drawable.ic_chat_bubble
     AppSymbol.CLOSE -> R.drawable.ic_close
     AppSymbol.DARK_MODE -> R.drawable.ic_dark_mode
@@ -53,15 +54,19 @@ private fun AppSymbol.drawableRes(): Int = when (this) {
     AppSymbol.GAMES -> R.drawable.ic_sports_esports
     AppSymbol.LEADERBOARD -> R.drawable.ic_emoji_events
     AppSymbol.LIGHT_MODE -> R.drawable.ic_light_mode
+    AppSymbol.LOGOUT -> R.drawable.ic_logout
     AppSymbol.MIC -> R.drawable.ic_mic
     AppSymbol.MIC_OFF -> R.drawable.ic_mic_off
     AppSymbol.MINIMIZE -> R.drawable.ic_keyboard_arrow_down
+    AppSymbol.MORE_VERT -> R.drawable.ic_more_vert
     AppSymbol.NOTIFICATIONS -> R.drawable.ic_notifications
+    AppSymbol.PERSON_REMOVE -> R.drawable.ic_person_remove
     AppSymbol.QUIZ -> R.drawable.ic_menu_book
     AppSymbol.REACTIONS -> R.drawable.ic_sentiment_satisfied
     AppSymbol.SCREEN_SHARE -> R.drawable.ic_screen_share
     AppSymbol.SCREEN_SHARE_STOP -> R.drawable.ic_stop_screen_share
     AppSymbol.SEARCH -> R.drawable.ic_search
+    AppSymbol.SETTINGS -> R.drawable.ic_settings
     AppSymbol.STUDY -> R.drawable.ic_auto_stories
     AppSymbol.TIC_TAC_TOE -> R.drawable.ic_grid_3x3
     AppSymbol.VIDEO_CALL -> R.drawable.ic_videocam

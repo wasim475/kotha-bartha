@@ -14,6 +14,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -22,6 +25,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Tab
@@ -32,6 +36,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -45,6 +50,8 @@ import androidx.compose.ui.platform.LocalContext
 import com.google.firebase.FirebaseApp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -64,6 +71,7 @@ import com.kothabarta.app.NotificationTarget
 import com.kothabarta.core.navigation.NavigationEvent
 import com.kothabarta.core.navigation.Routes
 import com.kothabarta.core.network.social.SafeUserDto
+import com.kothabarta.core.network.SessionManager
 import com.kothabarta.core.media.IceServerConfig
 import com.kothabarta.core.ui.components.AvatarImage
 import com.kothabarta.core.ui.components.AppIcon
@@ -75,6 +83,7 @@ import com.kothabarta.feature.games.ui.ChallengePlayScreen
 import com.kothabarta.feature.games.ui.GamePlayScreen
 import com.kothabarta.feature.games.ui.GamesCatalogScreen
 import com.kothabarta.feature.home.ui.FeedScreen
+import com.kothabarta.feature.home.ui.FeedViewer
 import com.kothabarta.feature.home.ui.PostDetailScreen
 import com.kothabarta.feature.leaderboard.ui.LeaderboardScreen
 import com.kothabarta.feature.ludo.ui.LudoGameScreen
@@ -84,6 +93,7 @@ import com.kothabarta.feature.messages.ui.ConversationsScreen
 import com.kothabarta.feature.notifications.data.NotificationBadge
 import com.kothabarta.feature.notifications.ui.NotificationsScreen
 import com.kothabarta.feature.profile.data.ProfileRepository
+import com.kothabarta.feature.profile.data.ProfileUiModel
 import com.kothabarta.feature.profile.ui.ProfileScreen
 import com.kothabarta.feature.quiz.ui.QuizBrowseScreen
 import com.kothabarta.feature.quiz.ui.QuizPlayScreen
@@ -94,6 +104,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import org.koin.compose.koinInject
+import kotlinx.coroutines.launch
 
 private data class BottomNavItem(val route: String, val label: String, val symbol: AppSymbol)
 
@@ -122,13 +133,23 @@ fun MainScreen(
     val navController = rememberNavController()
     val notificationBadge = koinInject<NotificationBadge>()
     val profileRepository = koinInject<ProfileRepository>()
+    val sessionManager = koinInject<SessionManager>()
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val unreadCount by notificationBadge.unreadCount.collectAsState()
+    var ownProfile by remember { mutableStateOf<ProfileUiModel?>(null) }
+    var showLogoutConfirmation by remember { mutableStateOf(false) }
+    var isLoggingOut by remember { mutableStateOf(false) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var searchResults by remember { mutableStateOf(emptyList<SafeUserDto>()) }
     var searchLoading by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(profileRepository) {
+        val result = profileRepository.getOwnProfile()
+        if (result is ApiResult.Success) ownProfile = result.data
+    }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(Unit) {
@@ -211,8 +232,9 @@ fun MainScreen(
                 onHome = { navigateToTopLevel(Routes.HOME) },
                 onStudy = { navigateToTopLevel(Routes.STUDY) },
                 onProfile = { navigateToTopLevel(Routes.MY_PROFILE) },
-                isDarkTheme = isDarkTheme,
-                onToggleTheme = onToggleTheme,
+                ownProfile = ownProfile,
+                onSettings = { navigateToTopLevel(Routes.SETTINGS) },
+                onRequestLogout = { showLogoutConfirmation = true },
             )
         },
         bottomBar = {
@@ -240,12 +262,18 @@ fun MainScreen(
                 startDestination = Routes.HOME,
                 modifier = Modifier.fillMaxSize(),
             ) {
-                composable(Routes.HOME) { FeedScreen(onNavigate = onNavigate) }
+                composable(Routes.HOME) {
+                    FeedScreen(
+                        onNavigate = onNavigate,
+                        viewer = FeedViewer(name = ownProfile?.fullName.orEmpty(), avatarUrl = ownProfile?.avatarUrl, initials = ownProfile?.initials ?: "Me"),
+                    )
+                }
                 composable(Routes.FRIENDS) { FriendsScreen(onNavigate = onNavigate) }
                 composable(Routes.MESSAGES) { MessagesHubScreen(showCalls = false, navController = navController, onNavigate = onNavigate) }
                 composable(Routes.MESSAGES_CALLS) { MessagesHubScreen(showCalls = true, navController = navController, onNavigate = onNavigate) }
                 composable(Routes.NOTIFICATIONS) { NotificationsScreen(onNavigate = onNavigate) }
                 composable(Routes.MY_PROFILE) { ProfileScreen(userId = null, onNavigate = onNavigate) }
+                composable(Routes.SETTINGS) { SettingsScreen(isDarkTheme = isDarkTheme, onToggleTheme = onToggleTheme) }
                 composable(
                     Routes.PROFILE_PATTERN,
                     arguments = listOf(navArgument(Routes.PROFILE_ARG) {}),
@@ -333,6 +361,31 @@ fun MainScreen(
             CallGlobalHost(configuredCallIceServers())
         }
     }
+
+    if (showLogoutConfirmation) {
+        AlertDialog(
+            onDismissRequest = { if (!isLoggingOut) showLogoutConfirmation = false },
+            title = { Text("Log out?") },
+            text = { Text("You will need to sign in again to use Kotha-Barta.") },
+            confirmButton = {
+                TextButton(
+                    enabled = !isLoggingOut,
+                    onClick = {
+                        isLoggingOut = true
+                        coroutineScope.launch {
+                            sessionManager.logout()
+                            isLoggingOut = false
+                            showLogoutConfirmation = false
+                            onSignedOut(NavigationEvent.NavigateTo(Routes.LOGIN, popUpToInclusive = Routes.MAIN))
+                        }
+                    },
+                ) { Text(if (isLoggingOut) "Logging out…" else "Log out") }
+            },
+            dismissButton = {
+                TextButton(enabled = !isLoggingOut, onClick = { showLogoutConfirmation = false }) { Text("Cancel") }
+            },
+        )
+    }
 }
 
 @Composable
@@ -381,7 +434,6 @@ private fun MainTopBar(
     searchResults: List<SafeUserDto>,
     searchLoading: Boolean,
     searchError: String?,
-    isDarkTheme: Boolean,
     onSearchOpen: () -> Unit,
     onSearchClose: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
@@ -389,7 +441,9 @@ private fun MainTopBar(
     onHome: () -> Unit,
     onStudy: () -> Unit,
     onProfile: () -> Unit,
-    onToggleTheme: () -> Unit,
+    ownProfile: ProfileUiModel?,
+    onSettings: () -> Unit,
+    onRequestLogout: () -> Unit,
 ) {
     Column {
         TopAppBar(
@@ -415,14 +469,6 @@ private fun MainTopBar(
                             ) {
                                 Text("K", color = Color.White, fontWeight = FontWeight.Bold)
                             }
-                            Text(
-                                text = "Kotha-Barta",
-                                modifier = Modifier.padding(start = 10.dp),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                            )
                         }
                     }
                 }
@@ -439,14 +485,47 @@ private fun MainTopBar(
                     IconButton(onClick = onStudy) {
                         AppIcon(AppSymbol.STUDY, contentDescription = "Open Study")
                     }
-                    IconButton(onClick = onToggleTheme) {
-                        AppIcon(
-                            symbol = if (isDarkTheme) AppSymbol.LIGHT_MODE else AppSymbol.DARK_MODE,
-                            contentDescription = if (isDarkTheme) "Switch to light theme" else "Switch to dark theme",
-                        )
-                    }
-                    IconButton(onClick = onProfile) {
-                        AppIcon(AppSymbol.ACCOUNT, contentDescription = "Open profile")
+                    var profileMenuExpanded by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(
+                            onClick = { profileMenuExpanded = true },
+                            modifier = Modifier.size(48.dp).semantics { contentDescription = "Open profile menu" },
+                        ) {
+                            if (ownProfile == null) {
+                                AppIcon(AppSymbol.ACCOUNT, contentDescription = null, modifier = Modifier.size(36.dp))
+                            } else {
+                                AvatarImage(
+                                    avatarUrl = ownProfile.avatarUrl,
+                                    initials = ownProfile.initials,
+                                    size = 36.dp,
+                                )
+                            }
+                        }
+                        DropdownMenu(
+                            expanded = profileMenuExpanded,
+                            onDismissRequest = { profileMenuExpanded = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Profile") },
+                                leadingIcon = { AppIcon(AppSymbol.ACCOUNT, contentDescription = null) },
+                                onClick = { profileMenuExpanded = false; onProfile() },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Kotha-Study") },
+                                leadingIcon = { AppIcon(AppSymbol.STUDY, contentDescription = null) },
+                                onClick = { profileMenuExpanded = false; onStudy() },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Settings") },
+                                leadingIcon = { AppIcon(AppSymbol.SETTINGS, contentDescription = null) },
+                                onClick = { profileMenuExpanded = false; onSettings() },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Logout") },
+                                leadingIcon = { AppIcon(AppSymbol.LOGOUT, contentDescription = null) },
+                                onClick = { profileMenuExpanded = false; onRequestLogout() },
+                            )
+                        }
                     }
                 }
             },
@@ -491,6 +570,27 @@ private fun MainTopBar(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsScreen(isDarkTheme: Boolean, onToggleTheme: () -> Unit) {
+    Column(Modifier.fillMaxSize().padding(com.kothabarta.core.ui.theme.Spacing.lg)) {
+        Text("Settings", style = MaterialTheme.typography.headlineSmall)
+        Surface(
+            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onToggleTheme).padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppIcon(AppSymbol.DARK_MODE, contentDescription = null)
+                Text("Dark theme", modifier = Modifier.weight(1f).padding(start = 16.dp), style = MaterialTheme.typography.bodyLarge)
+                Switch(checked = isDarkTheme, onCheckedChange = { onToggleTheme() })
             }
         }
     }

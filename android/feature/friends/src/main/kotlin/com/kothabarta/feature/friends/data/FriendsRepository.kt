@@ -4,6 +4,7 @@ import com.kothabarta.core.common.ApiResult
 import com.kothabarta.core.common.map
 import com.kothabarta.core.network.safeApiCall
 import com.kothabarta.core.network.social.AcceptedResponse
+import com.kothabarta.core.network.social.BlockedResponse
 import com.kothabarta.core.network.social.CancelledResponse
 import com.kothabarta.core.network.social.FriendEntryDto
 import com.kothabarta.core.network.social.FriendsApi
@@ -30,4 +31,6 @@ class FriendsRepository(private val friendsApi: FriendsApi) {
         safeApiCall { friendsApi.acceptFriendRequest(requestId) }
 
     suspend fun unfriend(userId: String): ApiResult<UnfriendedResponse> = safeApiCall { friendsApi.unfriend(userId) }
+
+    suspend fun block(userId: String): ApiResult<BlockedResponse> = safeApiCall { friendsApi.block(userId) }
 }

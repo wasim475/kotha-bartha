@@ -18,12 +18,17 @@ import coil.compose.AsyncImage
 
 /** A plain rectangular network image — no placeholder chrome, callers size/clip it themselves. */
 @Composable
-fun NetworkImage(url: String?, contentDescription: String?, modifier: Modifier = Modifier) {
+fun NetworkImage(
+    url: String?,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Crop,
+) {
     AsyncImage(
         model = url,
         contentDescription = contentDescription,
         modifier = modifier,
-        contentScale = ContentScale.Crop,
+        contentScale = contentScale,
     )
 }
 

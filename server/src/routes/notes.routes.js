@@ -5,6 +5,7 @@ const Friendship = require("../models/Friendship");
 const { safeUser, serializeNote } = require("../utils/serializers");
 const { emitToUser } = require("../utils/realtime");
 const { isBlockedEitherWay } = require("../utils/blocks");
+const { blockedPairIds } = require("../utils/blocks");
 const { sendContextMessage } = require("../utils/contextMessages");
 
 const router = express.Router();
@@ -16,9 +17,10 @@ const MAX_NOTE_LENGTH = 150;
 // audience a story is (friends, plus the author themself).
 async function friendIdsFor(userId) {
   const friendships = await Friendship.find({ userIds: userId }).select("userIds").lean();
+  const blockedIds = await blockedPairIds(userId);
   return friendships
     .flatMap((friendship) => friendship.userIds.map(String))
-    .filter((id) => id !== userId.toString());
+    .filter((id) => id !== userId.toString() && !blockedIds.has(id));
 }
 
 // ============================================================

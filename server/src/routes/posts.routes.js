@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const User = require("../models/User");
 const Post = require("../models/Post");
 const Friendship = require("../models/Friendship");
@@ -11,11 +12,20 @@ const { upload } = require("../middleware/upload");
 const { uploadBuffer } = require("../utils/cloudinary");
 const { ACTIONS, requireAction, VISIBLE_CONTENT } = require("../utils/moderation");
 const { softDeletePost } = require("../services/contentModeration.service");
+const { blockedPairIds } = require("../utils/blocks");
+const { canViewPost } = require("../utils/postVisibility");
 
 const router = express.Router();
 
 router.get("/posts/feed", async (req, res, next) => {
   try {
+    const limit = 30;
+    const cursorParts = req.query.before ? String(req.query.before).split("|") : [];
+    const before = cursorParts.length ? new Date(cursorParts[0]) : null;
+    const beforeId = cursorParts[1] || null;
+    if (before && (Number.isNaN(before.getTime()) || (beforeId && !mongoose.isValidObjectId(beforeId)))) {
+      return res.status(400).json({ error: { code: "INVALID_CURSOR", message: "Invalid feed cursor." } });
+    }
     const friendships = await Friendship.find({
       userIds: req.user._id,
     })
@@ -26,27 +36,40 @@ router.get("/posts/feed", async (req, res, next) => {
       .flatMap((friendship) => friendship.userIds.map(String))
       .filter((id) => id !== req.user._id.toString());
 
-    const allowedAuthors = [req.user._id, ...friendIds];
+    const blockedIds = await blockedPairIds(req.user._id);
+    const allowedAuthors = [req.user._id, ...friendIds.filter((id) => !blockedIds.has(id))];
 
-    const posts = await Post.find({
+    const filter = {
       authorId: {
         $in: allowedAuthors,
       },
       deletedAt: null,
       ...VISIBLE_CONTENT,
-    })
+    };
+    if (before) {
+      filter.$or = beforeId
+        ? [{ createdAt: { $lt: before } }, { createdAt: before, _id: { $lt: beforeId } }]
+        : [{ createdAt: { $lt: before } }];
+    }
+
+    const found = await Post.find(filter)
       .populate("authorId")
       .sort({
         createdAt: -1,
       })
-      .limit(30);
+      .limit(limit + 1);
+    const hasMore = found.length > limit;
+    const posts = found.slice(0, limit);
 
     res.json({
       data: await Promise.all(
         posts.map((post) => serializePost(post, req.user._id)),
       ),
       meta: {
-        hasMore: false,
+        hasMore,
+        nextCursor: hasMore && posts.length
+          ? `${posts[posts.length - 1].createdAt.toISOString()}|${posts[posts.length - 1]._id.toString()}`
+          : null,
       },
     });
   } catch (error) {
@@ -66,6 +89,10 @@ router.get("/posts/:postId", async (req, res, next) => {
       return res.status(404).json({
         error: { code: "NOT_FOUND", message: "Post not found." },
       });
+    }
+
+    if (!(await canViewPost(req.user._id, post.authorId._id))) {
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Post not found." } });
     }
 
     res.json({ data: await serializePost(post, req.user._id) });
@@ -228,6 +255,10 @@ router.put("/posts/:postId/like", requireAction(ACTIONS.REACT), async (req, res,
       });
     }
 
+    if (!(await canViewPost(req.user._id, post.authorId))) {
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Post not found." } });
+    }
+
     const previousLike = req.body.liked ? await Reaction.findOne({
         userId: req.user._id,
         targetType: "post",
@@ -320,6 +351,10 @@ router.put("/posts/:postId/reaction", requireAction(ACTIONS.REACT), async (req, 
       return res.status(404).json({
         error: { code: "NOT_FOUND", message: "Post not found." },
       });
+    }
+
+    if (!(await canViewPost(req.user._id, post.authorId))) {
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Post not found." } });
     }
 
     if (!type) {

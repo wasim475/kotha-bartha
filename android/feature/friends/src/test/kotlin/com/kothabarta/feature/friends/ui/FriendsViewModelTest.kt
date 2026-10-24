@@ -4,6 +4,7 @@ import com.kothabarta.core.network.ApiEnvelope
 import com.kothabarta.core.network.messages.ChatTarget
 import com.kothabarta.core.network.messages.ConversationLauncher
 import com.kothabarta.core.network.social.AcceptedResponse
+import com.kothabarta.core.network.social.BlockedResponse
 import com.kothabarta.core.network.social.CancelledResponse
 import com.kothabarta.core.network.social.FriendEntryDto
 import com.kothabarta.core.network.social.FriendRequestCreated
@@ -104,6 +105,26 @@ class FriendsViewModelTest {
         assertEquals("sender9", api.lastCancelledUserId)
     }
 
+    @Test
+    fun `unfriend uses the selected friend's stable id`() = runTest {
+        val api = FakeFriendsApi()
+        val viewModel = newViewModel(api)
+        advanceUntilIdle()
+        viewModel.unfriend(SafeUserDto(id = "friend-id", fullName = "Alice"))
+        advanceUntilIdle()
+        assertEquals("friend-id", api.lastUnfriendedUserId)
+    }
+
+    @Test
+    fun `block uses the selected friend's stable id`() = runTest {
+        val api = FakeFriendsApi()
+        val viewModel = newViewModel(api)
+        advanceUntilIdle()
+        viewModel.block(SafeUserDto(id = "blocked-id", fullName = "Alice"))
+        advanceUntilIdle()
+        assertEquals("blocked-id", api.lastBlockedUserId)
+    }
+
     private class FakeFriendsApi(
         private val friends: List<SafeUserDto> = emptyList(),
         private val requests: List<FriendEntryDto> = emptyList(),
@@ -112,6 +133,8 @@ class FriendsViewModelTest {
         var lastTabRequested: String? = null
         var lastAcceptedRequestId: String? = null
         var lastCancelledUserId: String? = null
+        var lastUnfriendedUserId: String? = null
+        var lastBlockedUserId: String? = null
         var entriesCallCount = 0
 
         override suspend fun getFriends(tab: String): Response<ApiEnvelope<List<SafeUserDto>>> {
@@ -138,7 +161,14 @@ class FriendsViewModelTest {
             return Response.success(ApiEnvelope(data = AcceptedResponse(true)))
         }
 
-        override suspend fun unfriend(userId: String): Response<ApiEnvelope<UnfriendedResponse>> =
-            Response.success(ApiEnvelope(data = UnfriendedResponse(true)))
+        override suspend fun unfriend(userId: String): Response<ApiEnvelope<UnfriendedResponse>> {
+            lastUnfriendedUserId = userId
+            return Response.success(ApiEnvelope(data = UnfriendedResponse(true)))
+        }
+
+        override suspend fun block(userId: String): Response<ApiEnvelope<BlockedResponse>> {
+            lastBlockedUserId = userId
+            return Response.success(ApiEnvelope(data = BlockedResponse(true)))
+        }
     }
 }

@@ -7,7 +7,7 @@ import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
 
 val homeFeatureModule = module {
-    single { FeedRepository(postsApi = get()) }
+    single { FeedRepository(postsApi = get(), storiesApi = get(), notesApi = get(), commentsApi = get(), reportsApi = get()) }
     viewModel { FeedViewModel(get()) }
     viewModel { (postId: String) -> PostDetailViewModel(postId, get()) }
 }

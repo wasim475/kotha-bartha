@@ -19,15 +19,15 @@ data class ApiEnvelope<T>(
 /**
  * The handful of `meta` fields actually used across the endpoints in
  * docs/architecture/android-api-contract.md — one shared shape with every
- * field optional, rather than a bespoke meta class per endpoint. Notably
- * `hasMore` is permanently `false` on both `/posts/feed` and `/notifications`
- * today (no cursor pagination exists yet) — do not build infinite-scroll
- * logic against it actually flipping true.
+ * field optional, rather than a bespoke meta class per endpoint. The feed's
+ * cursor fields are consumed by the feed feature; notifications remain a
+ * single page today.
  */
 data class ApiMeta(
     val hasMore: Boolean? = null,
     val restricted: Boolean? = null,
     val count: Int? = null,
+    val nextCursor: String? = null,
     /** Only present on `GET /games` — the games catalog's category list. */
     val categories: List<com.kothabarta.core.network.games.GameCategoryDto>? = null,
     /** Only present on `GET /leaderboard/archive/:year/:month` when no archive exists yet. */

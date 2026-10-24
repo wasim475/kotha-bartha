@@ -7,19 +7,28 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
@@ -45,6 +54,7 @@ fun LoginScreen(
     val context = LocalContext.current
     val credentialManager = remember(context) { CredentialManager.create(context) }
     val coroutineScope = rememberCoroutineScope()
+    var isGooglePickerLoading by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.navigationEvents.collect(onNavigate)
@@ -53,6 +63,7 @@ fun LoginScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(Spacing.lg),
         verticalArrangement = Arrangement.Center,
     ) {
@@ -81,7 +92,7 @@ fun LoginScreen(
         AppPrimaryButton(
             text = "Log in",
             onClick = viewModel::submit,
-            loading = state.isLoading,
+            loading = state.isLoading || isGooglePickerLoading,
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(modifier = Modifier.height(Spacing.sm))
@@ -93,15 +104,16 @@ fun LoginScreen(
                     return@OutlinedButton
                 }
                 coroutineScope.launch {
-                    val option = GetGoogleIdOption.Builder()
-                        .setFilterByAuthorizedAccounts(false)
-                        .setServerClientId(googleWebClientId)
-                        .setAutoSelectEnabled(false)
-                        .build()
-                    val request = GetCredentialRequest.Builder()
-                        .addCredentialOption(option)
-                        .build()
+                    isGooglePickerLoading = true
                     try {
+                        val option = GetGoogleIdOption.Builder()
+                            .setFilterByAuthorizedAccounts(false)
+                            .setServerClientId(googleWebClientId)
+                            .setAutoSelectEnabled(false)
+                            .build()
+                        val request = GetCredentialRequest.Builder()
+                            .addCredentialOption(option)
+                            .build()
                         val result = credentialManager.getCredential(context, request)
                         val credential = result.credential
                         if (credential is CustomCredential &&
@@ -118,13 +130,28 @@ fun LoginScreen(
                         viewModel.showGoogleSignInError("Google sign-in failed. Check Google Play services and try again.")
                     } catch (error: GoogleIdTokenParsingException) {
                         viewModel.showGoogleSignInError("Google sign-in returned an invalid credential. Please try again.")
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        viewModel.showGoogleSignInError("Google sign-in failed. Please try again.")
+                    } finally {
+                        isGooglePickerLoading = false
                     }
                 }
             },
-            enabled = !state.isLoading,
+            enabled = !state.isLoading && !isGooglePickerLoading,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Continue with Google")
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                if (isGooglePickerLoading || state.isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(modifier = Modifier.size(10.dp))
+                } else {
+                    Text("G", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.size(10.dp))
+                }
+                Text(if (isGooglePickerLoading || state.isLoading) "Connecting to Google…" else "Continue with Google")
+            }
         }
         Spacer(modifier = Modifier.height(Spacing.sm))
 

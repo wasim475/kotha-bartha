@@ -75,6 +75,7 @@ object ReactionTypes {
 }
 
 data class ReactionRequest(val type: String?)
+data class EditPostBody(val body: String)
 
 data class ReactionResponse(
     val reaction: String?,
@@ -99,6 +100,42 @@ data class FriendRequestCreated(val id: String, val status: String)
 data class CancelledResponse(val cancelled: Boolean)
 data class AcceptedResponse(val accepted: Boolean)
 data class UnfriendedResponse(val unfriended: Boolean)
+data class BlockedResponse(val blocked: Boolean)
+
+data class StoryDto(
+    val id: String,
+    val authorId: String,
+    val type: String,
+    val text: String = "",
+    val textColor: String? = null,
+    val backgroundColor: String? = null,
+    val media: MediaRefDto? = null,
+    val createdAt: String,
+    val expiresAt: String,
+)
+data class StoryGroupDto(val author: SafeUserDto, val isMine: Boolean, val stories: List<StoryDto> = emptyList())
+data class CreateStoryBody(
+    val type: String = "text",
+    val text: String,
+    val textColor: String? = null,
+    val backgroundColor: String? = null,
+)
+data class NoteDto(val id: String, val authorId: String, val text: String, val createdAt: String, val expiresAt: String)
+data class NoteEntryDto(val author: SafeUserDto, val isMine: Boolean, val note: NoteDto)
+data class CreateNoteBody(val text: String)
+data class CommentDto(
+    val id: String,
+    val parentId: String? = null,
+    val body: String,
+    val createdAt: String,
+    val author: SafeUserDto,
+    val editable: Boolean = false,
+    val reaction: String? = null,
+    val reactions: Map<String, Int> = emptyMap(),
+)
+data class CreateCommentBody(val body: String, val parentId: String? = null)
+data class CreateReportBody(val targetType: String = "post", val targetId: String, val reason: String, val description: String? = null)
+data class ReportCreatedDto(val id: String?, val status: String, val duplicate: Boolean = false)
 
 data class UnreadCountsDto(
     val feed: Int = 0,

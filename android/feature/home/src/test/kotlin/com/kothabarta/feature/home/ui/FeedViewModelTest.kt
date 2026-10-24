@@ -1,13 +1,18 @@
 package com.kothabarta.feature.home.ui
 
 import com.kothabarta.core.network.ApiEnvelope
+import com.kothabarta.core.network.ApiMeta
 import com.kothabarta.core.network.social.FeedReadResponse
+import com.kothabarta.core.network.social.DeletedResponse
+import com.kothabarta.core.network.social.EditPostBody
 import com.kothabarta.core.network.social.PostDto
 import com.kothabarta.core.network.social.PostsApi
 import com.kothabarta.core.network.social.ReactionRequest
 import com.kothabarta.core.network.social.ReactionResponse
 import com.kothabarta.core.network.social.ReactionTypes
 import com.kothabarta.core.network.social.SafeUserDto
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import com.kothabarta.feature.home.data.FeedRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -85,13 +90,41 @@ class FeedViewModelTest {
         assertEquals("The feed server is on fire.", viewModel.uiState.value.error)
     }
 
-    private class FakePostsApi(private val feed: List<PostDto>?) : PostsApi {
+    @Test
+    fun `successful post creation prepends the server response to the feed`() = runTest {
+        val api = FakePostsApi(feed = emptyList())
+        val viewModel = FeedViewModel(FeedRepository(api))
+        advanceUntilIdle()
+        viewModel.createPost("new post", emptyList())
+        advanceUntilIdle()
+        assertEquals(listOf("created"), viewModel.uiState.value.posts.map { it.id })
+        assertEquals(false, viewModel.uiState.value.isCreatingPost)
+    }
+
+    @Test
+    fun `loading the next page appends posts and drops duplicate ids`() = runTest {
+        val api = FakePostsApi(feed = listOf(post("p1")), nextPage = listOf(post("p1"), post("p2")), hasMore = true, cursor = "older")
+        val viewModel = FeedViewModel(FeedRepository(api))
+        advanceUntilIdle()
+        viewModel.loadMore()
+        advanceUntilIdle()
+        assertEquals(listOf("p1", "p2"), viewModel.uiState.value.posts.map { it.id })
+        assertEquals(false, viewModel.uiState.value.hasMore)
+    }
+
+    private class FakePostsApi(
+        private val feed: List<PostDto>?,
+        private val nextPage: List<PostDto> = emptyList(),
+        private val hasMore: Boolean = false,
+        private val cursor: String? = null,
+    ) : PostsApi {
         var lastReactedPostId: String? = null
         var lastReactionType: String? = null
 
-        override suspend fun getFeed(): Response<ApiEnvelope<List<PostDto>>> =
+        override suspend fun getFeed(before: String?): Response<ApiEnvelope<List<PostDto>>> =
             if (feed != null) {
-                Response.success(ApiEnvelope(data = feed))
+                if (before == null) Response.success(ApiEnvelope(data = feed, meta = ApiMeta(hasMore = hasMore, nextCursor = cursor)))
+                else Response.success(ApiEnvelope(data = nextPage, meta = ApiMeta(hasMore = false)))
             } else {
                 val body = "{\"error\":{\"code\":\"SERVER_ERROR\",\"message\":\"The feed server is on fire.\"}}"
                     .toResponseBody("application/json".toMediaType())
@@ -119,5 +152,14 @@ class FeedViewModelTest {
                 ),
             )
         }
+
+        override suspend fun createPost(body: RequestBody, files: List<MultipartBody.Part>): Response<ApiEnvelope<PostDto>> =
+            Response.success(ApiEnvelope(data = PostDto(id = "created", body = "hello", createdAt = "now", author = SafeUserDto(id = "u1", fullName = "Jane Doe"))))
+
+        override suspend fun editPost(postId: String, body: EditPostBody): Response<ApiEnvelope<PostDto>> =
+            Response.success(ApiEnvelope(data = PostDto(id = postId, body = body.body, createdAt = "now", author = SafeUserDto(id = "u1", fullName = "Jane Doe"))))
+
+        override suspend fun deletePost(postId: String): Response<ApiEnvelope<DeletedResponse>> =
+            Response.success(ApiEnvelope(data = DeletedResponse(id = postId, deleted = true)))
     }
 }

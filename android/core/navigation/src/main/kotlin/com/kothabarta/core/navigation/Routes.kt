@@ -26,6 +26,7 @@ object Routes {
     const val FRIENDS = "friends"
     const val NOTIFICATIONS = "notifications"
     const val MY_PROFILE = "profile/me"
+    const val SETTINGS = "settings"
     const val MESSAGES = "messages"
     const val MESSAGES_CALLS = "messages/calls"
 

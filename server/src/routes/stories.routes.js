@@ -7,6 +7,7 @@ const { emitToUser } = require("../utils/realtime");
 const { upload } = require("../middleware/upload");
 const { uploadBuffer, destroyAsset } = require("../utils/cloudinary");
 const { isBlockedEitherWay } = require("../utils/blocks");
+const { blockedPairIds } = require("../utils/blocks");
 const { sendContextMessage } = require("../utils/contextMessages");
 
 const router = express.Router();
@@ -69,9 +70,10 @@ const storySnapshot = (story) => ({
 // that existing rule rather than introducing a separate privacy system.
 async function friendIdsFor(userId) {
   const friendships = await Friendship.find({ userIds: userId }).select("userIds").lean();
+  const blockedIds = await blockedPairIds(userId);
   return friendships
     .flatMap((friendship) => friendship.userIds.map(String))
-    .filter((id) => id !== userId.toString());
+    .filter((id) => id !== userId.toString() && !blockedIds.has(id));
 }
 
 // ============================================================

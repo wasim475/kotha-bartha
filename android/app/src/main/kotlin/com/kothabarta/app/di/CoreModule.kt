@@ -15,8 +15,12 @@ import com.kothabarta.core.network.ludo.LudoApi
 import com.kothabarta.core.network.messages.MessagesApi
 import com.kothabarta.core.network.quiz.QuizApi
 import com.kothabarta.core.network.social.FriendsApi
+import com.kothabarta.core.network.social.CommentsApi
 import com.kothabarta.core.network.social.NotificationsApi
+import com.kothabarta.core.network.social.NotesApi
 import com.kothabarta.core.network.social.PostsApi
+import com.kothabarta.core.network.social.ReportsApi
+import com.kothabarta.core.network.social.StoriesApi
 import com.kothabarta.core.network.social.UsersApi
 import com.kothabarta.core.network.social.PushDevicesApi
 import com.kothabarta.core.network.tictactoe.TicTacToeApi
@@ -50,6 +54,10 @@ val coreModule = module {
     }
     single { get<Retrofit>().create(AuthApi::class.java) }
     single { get<Retrofit>().create(PostsApi::class.java) }
+    single { get<Retrofit>().create(ReportsApi::class.java) }
+    single { get<Retrofit>().create(CommentsApi::class.java) }
+    single { get<Retrofit>().create(StoriesApi::class.java) }
+    single { get<Retrofit>().create(NotesApi::class.java) }
     single { get<Retrofit>().create(UsersApi::class.java) }
     single { get<Retrofit>().create(PushDevicesApi::class.java) }
     single { get<Retrofit>().create(FriendsApi::class.java) }

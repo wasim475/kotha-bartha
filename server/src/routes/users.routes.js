@@ -6,7 +6,7 @@ const Friendship = require("../models/Friendship");
 const FriendRequest = require("../models/FriendRequest");
 const Block = require("../models/Block");
 const { safeUser, serializePost } = require("../utils/serializers");
-const { blockedPairIds } = require("../utils/blocks");
+const { blockedPairIds, isBlockedEitherWay } = require("../utils/blocks");
 const { upload } = require("../middleware/upload");
 const { uploadBuffer, destroyAsset } = require("../utils/cloudinary");
 const { ACTIONS, requireAction, VISIBLE_CONTENT } = require("../utils/moderation");
@@ -76,9 +76,11 @@ router.delete("/users/me/push-device/:installationId", async (req, res, next) =>
 // simply keyed off the existing friendship relationship.
 const canViewProfileContent = async (viewerId, profileUserId) => {
   if (viewerId.toString() === profileUserId.toString()) return true;
-  return Boolean(
-    await Friendship.exists({ userIds: { $all: [viewerId, profileUserId] } }),
-  );
+  const [friendship, blocked] = await Promise.all([
+    Friendship.exists({ userIds: { $all: [viewerId, profileUserId] } }),
+    isBlockedEitherWay(viewerId, profileUserId),
+  ]);
+  return Boolean(friendship) && !blocked;
 };
 
 router.get("/users", async (req, res, next) => {

@@ -36,6 +36,7 @@ data class FriendsUiState(
     val onlineUserIds: Set<String> = emptySet(),
     val error: String? = null,
     val actionInFlightId: String? = null,
+    val actionError: String? = null,
 )
 
 class FriendsViewModel(
@@ -122,12 +123,22 @@ class FriendsViewModel(
         runAction(user.id) { repository.unfriend(user.id) }
     }
 
+    fun block(user: SafeUserDto) {
+        runAction(user.id) { repository.block(user.id) }
+    }
+
+    fun dismissActionError() { _uiState.update { it.copy(actionError = null) } }
+
     private fun runAction(id: String, action: suspend () -> ApiResult<*>) {
         viewModelScope.launch {
-            _uiState.update { it.copy(actionInFlightId = id) }
-            when (action()) {
-                is ApiResult.Success -> { _uiState.update { it.copy(actionInFlightId = null) }; loadCurrentTab() }
-                is ApiResult.Failure -> _uiState.update { it.copy(actionInFlightId = null) }
+            if (_uiState.value.actionInFlightId != null) return@launch
+            _uiState.update { it.copy(actionInFlightId = id, actionError = null) }
+            when (val result = action()) {
+                is ApiResult.Success -> {
+                    _uiState.update { state -> state.copy(actionInFlightId = null, onlineUserIds = state.onlineUserIds - id) }
+                    loadCurrentTab()
+                }
+                is ApiResult.Failure -> _uiState.update { it.copy(actionInFlightId = null, actionError = result.error.message) }
             }
         }
     }
