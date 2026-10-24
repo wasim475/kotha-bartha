@@ -43,12 +43,10 @@ data class CreateConversationRequest(val userId: String)
  * no pagination) and by every send/edit/attachment-send response. `status`
  * is server-authoritative — Android never infers/computes "delivered"/"read"
  * itself, it only ever displays this field or reacts to `message:read`.
- * `encryptedBody`/`encryptedPayloads`/`senderPublicKey` are intentionally
- * not modeled — Android is plaintext-only this milestone (see the
- * implementation plan's E2E section) and only ever needs `encrypted` to know
- * whether to trust `body` as real text or as the server's own
- * "🔒 Encrypted message" placeholder, which is already exactly what `body`
- * contains in that case — nothing else to decrypt or degrade.
+ * Encrypted wire fields are retained so REST and Socket.IO decoding preserve
+ * the server payload shape. Their presence does not enable Android E2EE:
+ * until the server enforces an authoritative conversation mode, the UI must
+ * continue treating `body` as untrusted whenever `encrypted` is true.
  */
 data class MessageDto(
     val id: String,
@@ -66,6 +64,17 @@ data class MessageDto(
     val unsendExpiresAt: String? = null,
     val replyTo: ReplyPreviewDto? = null,
     val reactions: List<ReactionEntryDto> = emptyList(),
+    val encryptedBody: EncryptedBodyDto? = null,
+    val encryptedPayloads: List<EncryptedPayloadDto>? = null,
+    val senderPublicKey: String? = null,
+)
+
+data class EncryptedBodyDto(val ciphertext: String, val iv: String)
+
+data class EncryptedPayloadDto(
+    val deviceId: String,
+    val ciphertext: String,
+    val iv: String,
 )
 
 data class MessageSenderDto(val id: String, val fullName: String, val avatar: MediaRefDto? = null)

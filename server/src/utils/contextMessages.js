@@ -3,6 +3,7 @@ const Message = require("../models/Message");
 const { pairKey } = require("./ids");
 const { emitToUser } = require("./realtime");
 const { UNSEND_WINDOW_MS } = require("./config");
+const { assertMessageWriteAllowed } = require("./messageSecurity");
 
 // Same small helpers chat.routes.js keeps local to itself, duplicated here
 // since story/note reactions originate from the Feed/Story viewer, not the
@@ -89,6 +90,7 @@ function buildPayload(req, message, conversationId) {
 
 async function sendContextMessage(req, { owner, body, storyContext }) {
   const conversation = await findOrCreateDirectConversation(req.user._id, owner._id);
+  assertMessageWriteAllowed({ conversation, type: "text" });
   const others = otherParticipants(conversation, req.user._id);
 
   // Reacting again with the same emoji is a no-op, not a second message —

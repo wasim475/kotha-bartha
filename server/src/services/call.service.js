@@ -12,6 +12,7 @@ const { safeUser } = require("../utils/serializers");
 const { clearHiddenFor, bumpUnreadFor } = require("../utils/conversationHelpers");
 const { createNotification } = require("./notification.service");
 const { sendIncomingCallPush } = require("./push.service");
+const { assertMessageWriteAllowed } = require("../utils/messageSecurity");
 
 // Server-authoritative 1-to-1 calling. The client never supplies a call id it
 // doesn't own, a participant identity, or a state transition that isn't one
@@ -167,6 +168,13 @@ const CALL_BODY = {
 async function recordCallMessage(io, call, outcome) {
   const conversation = await Conversation.findById(call.conversationId);
   if (!conversation) return;
+  // Calls are not encrypted text envelopes. Keep call state/signaling intact,
+  // but do not write a plaintext call record into an E2EE conversation.
+  try {
+    assertMessageWriteAllowed({ conversation, type: "call" });
+  } catch {
+    return;
+  }
   const recipientId = call.calleeId;
   const body = CALL_BODY[outcome](call.video, call.durationSec || 0);
 

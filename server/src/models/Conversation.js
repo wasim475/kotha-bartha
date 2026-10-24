@@ -14,6 +14,10 @@ const conversationSchema = new mongoose.Schema(
     // without tripping the unique index.
     pairKey: { type: String, unique: true, sparse: true },
     isGroup: { type: Boolean, default: false },
+    // Server-authoritative message policy. Missing values on older MongoDB
+    // documents are treated as legacy by messageSecurity.js; no client route
+    // may activate or downgrade this field.
+    messageSecurityMode: { type: String, enum: ["legacy", "e2ee"], default: "legacy" },
     groupName: { type: String, trim: true, maxlength: 80 },
     groupAvatar: { publicId: String, secureUrl: String },
     adminIds: { type: [mongoose.Schema.Types.ObjectId], default: [] },

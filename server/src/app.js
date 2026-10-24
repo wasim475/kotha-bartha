@@ -47,6 +47,9 @@ app.use("/api/v1", dataRoutes);
 
 app.use((error, req, res, next) => {
   console.error(error);
+  if (["E2EE_ENCRYPTION_REQUIRED", "UNSUPPORTED_E2EE_MESSAGE"].includes(error.code)) {
+    return res.status(error.status || 409).json({ error: { code: error.code, message: error.message } });
+  }
   res.status(500).json({
     error: { code: "INTERNAL_ERROR", message: "Something went wrong." },
   });

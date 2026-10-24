@@ -11,6 +11,7 @@ const { pairKey } = require("../utils/ids");
 const { UNSEND_WINDOW_MS } = require("../utils/config");
 const { logAdminAction } = require("./adminAudit.service");
 const { serializeReport } = require("./report.service");
+const { assertMessageWriteAllowed } = require("../utils/messageSecurity");
 
 // Messaging between users and administrators, built on what already exists:
 //   admin -> user : an ordinary Message in the normal 1-to-1 conversation (flagged
@@ -90,6 +91,11 @@ async function sendAdminMessage(admin, req, { userId, body, reportId } = {}) {
     { $setOnInsert: { participantIds: [admin._id, target._id], pairKey: key } },
     { new: true, upsert: true },
   );
+  try {
+    assertMessageWriteAllowed({ conversation, type: "text" });
+  } catch (error) {
+    throw new GameError(error.status || 409, error.code || "MESSAGE_POLICY_REJECTED", error.message);
+  }
   conversation.hiddenFor = (conversation.hiddenFor || []).filter((id) => ![admin._id.toString(), target._id.toString()].includes(id.toString()));
 
   const message = await Message.create({

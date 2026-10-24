@@ -16,6 +16,11 @@ const { THEME_IDS } = require("../utils/conversationThemes");
 const { ACTIONS, requireAction } = require("../utils/moderation");
 const { otherParticipants, clearHiddenFor, bumpUnreadFor } = require("../utils/conversationHelpers");
 const { sendNewMessagePush } = require("../services/push.service");
+const {
+  assertMessageWriteAllowed,
+  assertClientCannotChangeMessageSecurityMode,
+  isValidCurrentEncryptedEnvelope,
+} = require("../utils/messageSecurity");
 
 const router = express.Router();
 
@@ -165,6 +170,8 @@ const parseIncomingContent = (payload) => {
 
   return {
     isEncrypted,
+    envelopeFormat: multiDeviceEncrypted ? "multi-device" : legacyEncrypted ? "legacy-single" : null,
+    envelopeValid: multiDeviceEncrypted && isValidCurrentEncryptedEnvelope(payload),
     valid: !payload.encrypted || legacyEncrypted || multiDeviceEncrypted,
     oversized: legacyEncrypted && payload.ciphertext.length > MAX_CIPHERTEXT_LENGTH,
     body: isEncrypted ? "🔒 Encrypted message" : String(payload.body || "").trim(),
@@ -374,6 +381,12 @@ router.patch("/conversations/:conversationId", async (req, res, next) => {
       return res.status(403).json({
         error: { code: "FORBIDDEN", message: "Only a group admin can do that." },
       });
+    }
+
+    try {
+      assertClientCannotChangeMessageSecurityMode(req.body);
+    } catch (error) {
+      return res.status(error.status).json({ error: { code: error.code, message: error.message } });
     }
 
     if (typeof req.body.groupName === "string") {
@@ -1035,6 +1048,11 @@ router.post(
           },
         });
       }
+      try {
+        assertMessageWriteAllowed({ conversation, encrypted: isEncrypted, envelopeFormat: parsed.envelopeFormat, envelopeValid: parsed.envelopeValid });
+      } catch (error) {
+        return res.status(error.status).json({ error: { code: error.code, message: error.message } });
+      }
       if (!isEncrypted && !body) {
         return res.status(400).json({
           error: {
@@ -1188,6 +1206,22 @@ router.post(
   "/conversations/:conversationId/attachments",
   requireAction(ACTIONS.SEND_MESSAGE),
   requireAction(ACTIONS.UPLOAD),
+  async (req, res, next) => {
+    try {
+      const conversation = await Conversation.findOne({
+        _id: req.params.conversationId,
+        participantIds: req.user._id,
+      });
+      if (!conversation) {
+        return res.status(404).json({ error: { code: "NOT_FOUND", message: "Conversation not found." } });
+      }
+      assertMessageWriteAllowed({ conversation, type: "attachment" });
+      next();
+    } catch (error) {
+      if (error.status) return res.status(error.status).json({ error: { code: error.code, message: error.message } });
+      next(error);
+    }
+  },
   (req, res, next) => {
     upload.single("file")(req, res, (error) => {
       if (!error) return next();
@@ -1221,6 +1255,11 @@ router.post(
         return res.status(404).json({
           error: { code: "NOT_FOUND", message: "Conversation not found." },
         });
+      }
+      try {
+        assertMessageWriteAllowed({ conversation, type: "attachment" });
+      } catch (error) {
+        return res.status(error.status).json({ error: { code: error.code, message: error.message } });
       }
 
       const others = otherParticipants(conversation, req.user._id);
@@ -1414,6 +1453,11 @@ router.patch(
             message: "Conversation not found.",
           },
         });
+      }
+      try {
+        assertMessageWriteAllowed({ conversation, encrypted: isEncrypted, envelopeFormat: parsed.envelopeFormat, envelopeValid: parsed.envelopeValid });
+      } catch (error) {
+        return res.status(error.status).json({ error: { code: error.code, message: error.message } });
       }
 
       // Only own message can be edited
@@ -1751,6 +1795,14 @@ router.post(
         _id: { $in: targetIds },
         participantIds: req.user._id,
       });
+
+      try {
+        for (const target of targetConversations) {
+          assertMessageWriteAllowed({ conversation: target, type: sourceMessage.type });
+        }
+      } catch (error) {
+        return res.status(error.status).json({ error: { code: error.code, message: error.message } });
+      }
 
       const results = [];
       for (const target of targetConversations) {
