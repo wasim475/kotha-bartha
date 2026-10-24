@@ -317,6 +317,7 @@ private fun SocialUpdates(
     onCreateImageStory: (String, Triple<ByteArray, String, String>) -> Unit,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var showStoryComposer by remember { mutableStateOf(false) }
     var showNoteComposer by remember { mutableStateOf(false) }
     var selectedStoryGroup by remember { mutableStateOf<com.kothabarta.core.network.social.StoryGroupDto?>(null) }
@@ -324,6 +325,7 @@ private fun SocialUpdates(
     var noteText by remember { mutableStateOf("") }
     var storyPhoto by remember { mutableStateOf<Uri?>(null) }
     var storyPhotoError by remember { mutableStateOf<String?>(null) }
+    var isPreparingStoryPhoto by remember { mutableStateOf(false) }
     var submittedVersion by remember { mutableStateOf<Long?>(null) }
     val storyPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> if (uri != null) { storyPhoto = uri; storyPhotoError = null } }
     LaunchedEffect(socialUpdateVersion, socialUpdateError, submittedVersion) {
@@ -391,16 +393,19 @@ private fun SocialUpdates(
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     OutlinedTextField(value = storyText, onValueChange = { if (it.length <= 500) storyText = it }, label = { Text(if (storyPhoto == null) "Your story" else "Caption (optional)") }, modifier = Modifier.fillMaxWidth())
                     storyPhoto?.let { NetworkImage(it.toString(), "Story preview", Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(14.dp))) }
+                    if (isPreparingStoryPhoto) LinearProgressIndicator(Modifier.fillMaxWidth())
                     storyPhotoError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                     TextButton(onClick = { storyPicker.launch("image/*") }) { Text(if (storyPhoto == null) "Add photo" else "Change photo") }
                 }
             },
             confirmButton = {
-                TextButton(enabled = !isSubmitting && submittedVersion == null && (storyText.isNotBlank() || storyPhoto != null), onClick = {
+                TextButton(enabled = !isSubmitting && !isPreparingStoryPhoto && submittedVersion == null && (storyText.isNotBlank() || storyPhoto != null), onClick = {
                     val photo = storyPhoto
                     submittedVersion = socialUpdateVersion
-                    if (photo == null) onCreateTextStory(storyText) else {
+                    if (photo == null) onCreateTextStory(storyText) else scope.launch {
+                        isPreparingStoryPhoto = true
                         val selectedFile = readUploadPhoto(context, photo, "story")
+                        isPreparingStoryPhoto = false
                         if (selectedFile != null) onCreateImageStory(storyText, selectedFile) else {
                             submittedVersion = null
                             storyPhotoError = "Couldn't prepare this photo. Choose another image and try again."
