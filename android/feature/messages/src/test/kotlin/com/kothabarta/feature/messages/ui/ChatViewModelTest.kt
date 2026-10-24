@@ -14,6 +14,8 @@ import com.kothabarta.core.network.messages.ReactionRequest
 import com.kothabarta.core.network.messages.SendMessageRequest
 import com.kothabarta.core.websocket.SocketManager
 import com.kothabarta.feature.messages.data.MessagesRepository
+import com.kothabarta.feature.messages.data.MessageDecrypting
+import com.kothabarta.feature.messages.data.MessageDecryptionState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -53,6 +55,7 @@ class ChatViewModelTest {
         repository = MessagesRepository(api),
         authApi = FakeAuthApi(),
         socketManager = SocketManager("http://localhost"),
+        messageDecryptor = MessageDecrypting { _, _ -> MessageDecryptionState.Unavailable(MessageDecryptionState.Reason.NO_DEVICE_ENVELOPE) },
     )
 
     @Test
@@ -156,6 +159,22 @@ class ChatViewModelTest {
         assertEquals(1, viewModel.uiState.value.messages.count { it.id == "socket-1" })
     }
 
+    @Test
+    fun `encrypted history never falls back to body and records missing device envelope`() = runTest {
+        val api = FakeMessagesApi(history = listOf(MessageDto(
+            id = "encrypted-1", encrypted = true, body = "ciphertext must not display", createdAt = "now", senderId = "peer-1",
+        )))
+        val viewModel = newViewModel(api)
+        advanceUntilIdle()
+
+        assertEquals("ciphertext must not display", viewModel.uiState.value.messages.single().body)
+        assertEquals(
+            MessageDecryptionState.Unavailable(MessageDecryptionState.Reason.NO_DEVICE_ENVELOPE),
+            viewModel.uiState.value.decryptionStates["encrypted-1"],
+        )
+        assertEquals("🔒 Message not addressed to this device", messageBodyText(api.history.single(), viewModel.uiState.value.decryptionStates["encrypted-1"]))
+    }
+
     private fun historyMessage(id: String) = MessageDto(id = id, body = "hi", createdAt = "now", senderId = "peer-1")
 
     private class FakeAuthApi : AuthApi {
@@ -169,7 +188,7 @@ class ChatViewModelTest {
     }
 
     private class FakeMessagesApi(
-        private val history: List<MessageDto>,
+        val history: List<MessageDto>,
         var sendShouldFail: Boolean = false,
     ) : MessagesApi {
         var lastSentBody: String? = null

@@ -2,6 +2,9 @@ package com.kothabarta.app.security
 
 import android.os.Build
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.kothabarta.core.security.AndroidE2eeKeyManager
+import com.kothabarta.core.security.WebE2eeDecryptor
 import java.math.BigInteger
 import java.net.HttpURLConnection
 import java.net.URL
@@ -12,6 +15,7 @@ import java.security.MessageDigest
 import java.security.interfaces.ECPublicKey
 import java.security.spec.ECGenParameterSpec
 import java.util.Base64
+import java.util.UUID
 import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.KeyAgreement
@@ -19,6 +23,7 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -98,6 +103,62 @@ class AndroidKeystoreEcdhFeasibilityTest {
         } finally {
             deleteAliases(listOf(recipientAlias, wrongAlias))
         }
+    }
+
+    @Test
+    fun testProductionDecryptorOpensNodeWebCryptoEnvelope() {
+        requireApi31()
+        val recipientAlias = testAlias("production-decryptor")
+        try {
+            val recipient = createKeystoreKeyPair(recipientAlias)
+            val vector = requestNodeWebCryptoVector(recipient.public as ECPublicKey)
+            val result = WebE2eeDecryptor().decrypt(
+                recipient.private,
+                vector.getString("senderPublicKey"),
+                vector.getString("iv"),
+                vector.getString("ciphertext"),
+            )
+            assertEquals(WebE2eeDecryptor.DecryptionResult.Success(ECDH_VECTOR_PLAINTEXT), result)
+        } finally {
+            deleteAliases(listOf(recipientAlias))
+        }
+    }
+
+    @Test
+    fun testProductionDecryptorRejectsInvalidJwkAndBase64() {
+        requireApi31()
+        val pair = KeyPairGenerator.getInstance("EC").run {
+            initialize(ECGenParameterSpec("secp256r1"))
+            generateKeyPair()
+        }
+        val decryptor = WebE2eeDecryptor()
+        assertEquals(
+            WebE2eeDecryptor.DecryptionResult.InvalidSenderKey,
+            decryptor.decrypt(pair.private, "{\"kty\":\"RSA\"}", "AAAAAAAAAAAAAAAA", "AAAAAAAAAAAAAAAAAAAAAA=="),
+        )
+        assertEquals(
+            WebE2eeDecryptor.DecryptionResult.InvalidPayload,
+            decryptor.decrypt(pair.private, "{\"kty\":\"EC\",\"crv\":\"P-256\",\"x\":\"AA\",\"y\":\"AA\"}", "bad!", "bad!"),
+        )
+    }
+
+    @Test
+    fun testProductionKeyManagerKeepsDeviceIdentityAndAccountKeysIsolated() {
+        requireApi31()
+        val manager = AndroidE2eeKeyManager(InstrumentationRegistry.getInstrumentation().targetContext)
+        val suffix = UUID.randomUUID().toString()
+        val firstAccount = "e2ee-test-a-$suffix"
+        val secondAccount = "e2ee-test-b-$suffix"
+        val firstDeviceId = manager.deviceId()
+        assertEquals(firstDeviceId, manager.deviceId())
+        val first = manager.provisionForAccount(firstAccount) as AndroidE2eeKeyManager.KeyProvisionResult.Created
+        val second = manager.provisionForAccount(secondAccount) as AndroidE2eeKeyManager.KeyProvisionResult.Created
+        val firstAgain = manager.existingPrivateKey(firstAccount) as AndroidE2eeKeyManager.KeyLookup.Available
+        val secondAgain = manager.existingPrivateKey(secondAccount) as AndroidE2eeKeyManager.KeyLookup.Available
+        assertTrue(first.publicKey.encoded.contentEquals(firstAgain.key.public.encoded))
+        assertTrue(second.publicKey.encoded.contentEquals(secondAgain.key.public.encoded))
+        assertFalse(first.publicKey.encoded.contentEquals(second.publicKey.encoded))
+        assertTrue(manager.existingPrivateKey("unprovisioned-$suffix") is AndroidE2eeKeyManager.KeyLookup.Missing)
     }
 
     @Test

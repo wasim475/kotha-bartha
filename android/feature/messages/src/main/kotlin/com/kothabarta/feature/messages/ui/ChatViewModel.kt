@@ -16,6 +16,9 @@ import com.kothabarta.core.network.messages.TypingStartRequest
 import com.kothabarta.core.network.safeApiCall
 import com.kothabarta.core.websocket.SocketConnectionState
 import com.kothabarta.core.websocket.SocketManager
+import com.kothabarta.feature.messages.data.MessageDecrypting
+import com.kothabarta.feature.messages.data.MessageDecryptionState
+import com.kothabarta.feature.messages.data.isEncryptedForDisplay
 import com.kothabarta.feature.messages.data.MessagesRepository
 import io.socket.emitter.Emitter
 import java.time.Instant
@@ -42,6 +45,7 @@ data class ChatUiState(
     val failedIds: Set<String> = emptySet(),
     val myUserId: String? = null,
     val uploadingAttachment: Boolean = false,
+    val decryptionStates: Map<String, MessageDecryptionState> = emptyMap(),
 )
 
 private const val TYPING_STOP_DELAY_MS = 2_500L
@@ -63,6 +67,7 @@ class ChatViewModel(
     private val repository: MessagesRepository,
     private val authApi: AuthApi,
     private val socketManager: SocketManager,
+    private val messageDecryptor: MessageDecrypting,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -71,6 +76,7 @@ class ChatViewModel(
     private var isCurrentlyTyping = false
     private var typingStopJob: Job? = null
     private var peerTypingClearJob: Job? = null
+    private val decryptionFingerprints = mutableMapOf<String, DecryptionFingerprint>()
 
     private val newMessageListener = Emitter.Listener { args ->
         args.firstOrNull()?.decodeSocketPayload<MessageDto>()?.let { message ->
@@ -83,13 +89,15 @@ class ChatViewModel(
                 _uiState.update { state ->
                     state.copy(messages = state.messages.map { if (it.id == updated.id) updated else it })
                 }
+                scheduleDecryption(updated)
             }
         }
     }
     private val deletedMessageListener = Emitter.Listener { args ->
         args.firstOrNull()?.decodeSocketPayload<MessageDeletedEvent>()?.let { event ->
             if (event.conversationId == conversationId) {
-                _uiState.update { it.copy(messages = it.messages.filterNot { m -> m.id == event.id }) }
+                decryptionFingerprints.remove(event.id)
+                _uiState.update { it.copy(messages = it.messages.filterNot { m -> m.id == event.id }, decryptionStates = it.decryptionStates - event.id) }
             }
         }
     }
@@ -160,7 +168,10 @@ class ChatViewModel(
     private fun loadMyUserId() {
         viewModelScope.launch {
             val result = safeApiCall { authApi.me() }
-            if (result is ApiResult.Success) _uiState.update { it.copy(myUserId = result.data.id) }
+            if (result is ApiResult.Success) {
+                _uiState.update { it.copy(myUserId = result.data.id) }
+                _uiState.value.messages.forEach(::scheduleDecryption)
+            }
         }
     }
 
@@ -169,7 +180,14 @@ class ChatViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = it.messages.isEmpty(), error = null) }
             when (val result = repository.getMessages(conversationId)) {
-                is ApiResult.Success -> _uiState.update { it.copy(isLoading = false, messages = result.data) }
+                is ApiResult.Success -> {
+                    _uiState.update { state ->
+                        val ids = result.data.mapTo(mutableSetOf()) { it.id }
+                        decryptionFingerprints.keys.retainAll(ids)
+                        state.copy(isLoading = false, messages = result.data, decryptionStates = state.decryptionStates.filterKeys { it in ids })
+                    }
+                    result.data.forEach(::scheduleDecryption)
+                }
                 is ApiResult.Failure -> _uiState.update { it.copy(isLoading = false, error = result.error.message) }
             }
         }
@@ -187,6 +205,26 @@ class ChatViewModel(
         _uiState.update { state ->
             if (state.messages.any { it.id == message.id }) state
             else state.copy(messages = state.messages + message)
+        }
+        scheduleDecryption(message)
+    }
+
+    private fun scheduleDecryption(message: MessageDto) {
+        if (!message.isEncryptedForDisplay()) {
+            decryptionFingerprints.remove(message.id)
+            _uiState.update { it.copy(decryptionStates = it.decryptionStates - message.id) }
+            return
+        }
+        val accountId = _uiState.value.myUserId ?: return
+        val fingerprint = DecryptionFingerprint(message.encrypted, message.encryptedBody, message.encryptedPayloads, message.senderPublicKey)
+        if (decryptionFingerprints[message.id] == fingerprint) return
+        decryptionFingerprints[message.id] = fingerprint
+        _uiState.update { it.copy(decryptionStates = it.decryptionStates + (message.id to MessageDecryptionState.Pending)) }
+        viewModelScope.launch {
+            val outcome = messageDecryptor.decrypt(message, accountId)
+            if (decryptionFingerprints[message.id] == fingerprint && _uiState.value.messages.any { it.id == message.id }) {
+                _uiState.update { it.copy(decryptionStates = it.decryptionStates + (message.id to outcome)) }
+            }
         }
     }
 
@@ -324,3 +362,10 @@ class ChatViewModel(
         }
     }
 }
+
+private data class DecryptionFingerprint(
+    val encrypted: Boolean,
+    val encryptedBody: com.kothabarta.core.network.messages.EncryptedBodyDto?,
+    val encryptedPayloads: List<com.kothabarta.core.network.messages.EncryptedPayloadDto>?,
+    val senderPublicKey: String?,
+)

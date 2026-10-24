@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.kothabarta.core.network.messages.MessageDto
+import com.kothabarta.feature.messages.data.MessageDecryptionState
 import com.kothabarta.core.ui.components.NetworkImage
 import com.kothabarta.core.ui.components.AppIcon
 import com.kothabarta.core.ui.components.AppSymbol
@@ -44,6 +45,7 @@ fun MessageBubble(
     onRetry: () -> Unit,
     onDiscard: () -> Unit,
     modifier: Modifier = Modifier,
+    decryptionState: MessageDecryptionState? = null,
 ) {
     var actionsOpen by remember(message.id) { mutableStateOf(false) }
     val canUnsend = isOwn && !isPending && message.unsendExpiresAt?.let { runCatching { Instant.parse(it).isAfter(Instant.now()) }.getOrDefault(false) } == true
@@ -92,7 +94,7 @@ fun MessageBubble(
                         }
                     }
                 }
-                val bodyText = if (message.encrypted) "🔒 Encrypted message" else message.body.orEmpty()
+                val bodyText = messageBodyText(message, decryptionState)
                 if (bodyText.isNotBlank()) {
                     Text(
                         text = bodyText,
@@ -138,6 +140,26 @@ fun MessageBubble(
             }
         }
     }
+}
+
+internal fun messageBodyText(message: MessageDto, state: MessageDecryptionState?): String {
+    val isEncrypted = message.encrypted || message.encryptedPayloads?.isNotEmpty() == true || message.encryptedBody != null || message.senderPublicKey != null
+    return if (isEncrypted) encryptedDisplayText(state) else message.body.orEmpty()
+}
+
+private fun encryptedDisplayText(state: MessageDecryptionState?): String = when (state) {
+    is MessageDecryptionState.Decrypted -> state.plaintext
+    MessageDecryptionState.Pending -> "🔒 Decrypting…"
+    is MessageDecryptionState.Unavailable -> when (state.reason) {
+        MessageDecryptionState.Reason.DEVICE_KEY_UNAVAILABLE -> "🔒 Device key unavailable"
+        MessageDecryptionState.Reason.PLATFORM_UNSUPPORTED -> "🔒 Secure decryption unavailable on this Android version"
+        MessageDecryptionState.Reason.NO_DEVICE_ENVELOPE -> "🔒 Message not addressed to this device"
+        MessageDecryptionState.Reason.LEGACY_FORMAT_UNSUPPORTED -> "🔒 Legacy encrypted message unavailable"
+        MessageDecryptionState.Reason.INVALID_SENDER_KEY,
+        MessageDecryptionState.Reason.INVALID_ENVELOPE,
+        MessageDecryptionState.Reason.AUTHENTICATION_FAILED -> "🔒 Unable to decrypt"
+    }
+    null -> "🔒 Decryption unavailable"
 }
 
 private fun metaLabel(isOwn: Boolean, isPending: Boolean, isFailed: Boolean, status: String, createdAt: String): String {

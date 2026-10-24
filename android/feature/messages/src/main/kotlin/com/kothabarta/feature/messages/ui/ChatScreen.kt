@@ -131,6 +131,7 @@ fun ChatScreen(
                             onDeleteForMe = { viewModel.deleteForMe(message.id) },
                             onRetry = { viewModel.retrySend(message.id) },
                             onDiscard = { viewModel.discardFailed(message.id) },
+                            decryptionState = state.decryptionStates[message.id],
                         )
                     }
                 }

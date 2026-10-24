@@ -25,6 +25,8 @@ import com.kothabarta.core.network.social.UsersApi
 import com.kothabarta.core.network.social.PushDevicesApi
 import com.kothabarta.core.network.tictactoe.TicTacToeApi
 import com.kothabarta.core.security.EncryptedTokenStore
+import com.kothabarta.core.security.AndroidE2eeKeyManager
+import com.kothabarta.core.security.E2eeKeyProvider
 import com.kothabarta.core.security.TokenStore
 import com.kothabarta.core.websocket.SocketManager
 import org.koin.android.ext.koin.androidContext
@@ -40,6 +42,8 @@ import retrofit2.Retrofit
  */
 val coreModule = module {
     single<TokenStore> { EncryptedTokenStore(androidContext()) }
+    single { AndroidE2eeKeyManager(androidContext()) }
+    single<E2eeKeyProvider> { get<AndroidE2eeKeyManager>() }
     single { UnauthorizedNotifier() }
     single { AppPreferences(androidContext()) }
     single<PushDeviceRegistrar> { FirebasePushDeviceRegistrar(androidContext(), get(), get()) }

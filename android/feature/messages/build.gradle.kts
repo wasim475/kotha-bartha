@@ -41,6 +41,7 @@ dependencies {
     implementation(project(":core:websocket"))
     implementation(project(":core:navigation"))
     implementation(project(":core:ui"))
+    implementation(project(":core:security"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
