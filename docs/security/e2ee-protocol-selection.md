@@ -1,7 +1,7 @@
 # Kotha-Barta E2EE Phase 2: protocol and library selection
 
-**Date:** 2026-10-24  
-**Status:** Protocol direction recommended; production library choice gated on a cross-platform prototype and security review.  
+**Date:** 2026-10-24
+**Status:** Protocol direction recommended; production library choice gated on a cross-platform prototype and security review.
 **Scope:** Documentation and evidence review only. No application code, database schema, dependency, message payload, or existing cryptographic behavior was changed.
 
 ## Executive recommendation
@@ -96,6 +96,8 @@ Assume an attacker can read/modify the database, control or observe delivery, re
 - **Local compromise / backup:** hardware-backed key protection where available, app-private storage, OS backup exclusion or encrypted backup, lock-screen/app-auth policy, logging/crash-report redaction, and secure state deletion. Device compromise can expose plaintext and live group state.
 - **Metadata:** explain server-visible participants/devices, membership changes, timing, size, delivery/read indicators and network data. MLS does not make these private automatically.
 - **Recovery:** recovery credentials and any backup become part of the trust boundary. A PIN alone has low entropy and can be guessed offline if it protects a copied encrypted backup; a server rate limit cannot prevent offline guesses. Use a high-entropy recovery key or a carefully designed memory-hard derivation plus strong encrypted key backup, and make the residual risk clear.
+
+The future Kotha-Barta recovery PIN requirement, if a PIN-based option is approved after protocol and infrastructure review, is exactly five ASCII numeric digits held as a string (leading zeroes are valid). Five digits are still only 100,000 possibilities (~16.61 bits if uniformly random), so the PIN must not be the sole security boundary or be described as offline-brute-force safe. See the recovery audit for the candidate trust-service constraints and future validation/test plan.
 
 Do not preserve a silent plaintext fallback for conversations marked E2EE. Once a conversation has committed to an E2EE version, server APIs must reject plaintext send/edit payloads for that conversation. If keys or protocol state are unavailable, fail closed with a clear retry/recovery state. Legacy plaintext conversations must remain explicitly labeled as legacy until both participants and all participating devices have completed a deliberate transition.
 
