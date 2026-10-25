@@ -18,4 +18,6 @@ data class ChatTarget(
     val peerId: String?,
     val peerName: String?,
     val peerAvatarUrl: String?,
+    val peerLastSeenAt: String? = null,
+    val peerIsOnline: Boolean = false,
 )

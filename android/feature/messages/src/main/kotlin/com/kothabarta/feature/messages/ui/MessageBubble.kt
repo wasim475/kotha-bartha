@@ -23,6 +23,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import com.kothabarta.core.network.messages.MessageDto
 import com.kothabarta.feature.messages.data.MessageDecryptionState
@@ -56,10 +61,17 @@ fun MessageBubble(
     ) {
         Surface(
             modifier = Modifier
-                .widthIn(max = 280.dp)
-                .clip(RoundedCornerShape(16.dp))
+                .widthIn(max = 320.dp)
+                .clip(
+                    RoundedCornerShape(
+                        topStart = 16.dp,
+                        topEnd = 16.dp,
+                        bottomStart = if (isOwn) 16.dp else 4.dp,
+                        bottomEnd = if (isOwn) 4.dp else 16.dp,
+                    ),
+                )
                 .clickable { actionsOpen = !actionsOpen },
-            color = if (isOwn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+            color = if (isOwn) ChatColors.outgoingBubble else ChatColors.incomingBubble,
         ) {
             Column(modifier = Modifier.padding(Spacing.sm)) {
                 message.replyTo?.let { reply ->
@@ -98,7 +110,7 @@ fun MessageBubble(
                 if (bodyText.isNotBlank()) {
                     Text(
                         text = bodyText,
-                        color = if (isOwn) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = ChatColors.primaryText,
                         style = MaterialTheme.typography.bodyLarge,
                     )
                 }
@@ -108,12 +120,30 @@ fun MessageBubble(
                         style = MaterialTheme.typography.labelMedium,
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = metaLabel(isOwn, isPending, isFailed, message.status, message.createdAt),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = statusColor(isOwn, message.status, isFailed),
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (isFailed) {
+                        Text("Failed to send", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                    } else if (isPending) {
+                        Text("Sending…", color = ChatColors.secondaryText, style = MaterialTheme.typography.labelSmall)
+                    } else {
+                        Text(messageTime(message.createdAt), color = ChatColors.secondaryText, style = MaterialTheme.typography.labelSmall)
+                        if (isOwn) {
+                            Text(
+                                text = deliveryTick(message.status),
+                                modifier = Modifier
+                                    .padding(start = 4.dp)
+                                    .semantics { contentDescription = deliveryDescription(message.status) },
+                                color = if (message.status == "read") Color(0xFF53BDEB) else ChatColors.secondaryText,
+                                fontSize = 14.sp,
+                                lineHeight = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -163,24 +193,16 @@ private fun encryptedDisplayText(state: MessageDecryptionState?): String = when 
     null -> "🔒 Decryption unavailable"
 }
 
-private fun metaLabel(isOwn: Boolean, isPending: Boolean, isFailed: Boolean, status: String, createdAt: String): String {
-    val time = runCatching {
-        Instant.parse(createdAt).atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("h:mm a"))
-    }.getOrDefault("")
-    val tick = when {
-        isFailed -> "Failed to send"
-        isPending -> "Sending…"
-        !isOwn -> time
-        status == "read" || status == "delivered" -> "$time ✓✓"
-        else -> "$time ✓"
-    }
-    return tick
-}
+internal fun messageTime(createdAt: String): String = runCatching {
+    Instant.parse(createdAt)
+        .atZone(java.time.ZoneId.systemDefault())
+        .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+}.getOrDefault("")
 
-@Composable
-private fun statusColor(isOwn: Boolean, status: String, isFailed: Boolean) = when {
-    isFailed -> MaterialTheme.colorScheme.error
-    !isOwn -> MaterialTheme.colorScheme.onSurfaceVariant
-    status == "read" -> MaterialTheme.colorScheme.primary
-    else -> MaterialTheme.colorScheme.onSurfaceVariant
+internal fun deliveryTick(status: String): String = if (status == "delivered" || status == "read") "✓✓" else "✓"
+
+private fun deliveryDescription(status: String): String = when (status) {
+    "read" -> "Read"
+    "delivered" -> "Delivered"
+    else -> "Sent"
 }

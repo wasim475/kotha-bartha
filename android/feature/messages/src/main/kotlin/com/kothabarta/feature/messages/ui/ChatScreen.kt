@@ -4,7 +4,9 @@ import android.net.Uri
 import android.webkit.MimeTypeMap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -31,11 +34,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import com.kothabarta.core.navigation.NavigationEvent
 import com.kothabarta.core.network.call.CallLauncher
 import com.kothabarta.core.network.messages.MessageDto
+import com.kothabarta.core.ui.components.AvatarImage
 import com.kothabarta.core.ui.components.AppTextField
 import com.kothabarta.core.ui.components.AppIcon
 import com.kothabarta.core.ui.components.AppSymbol
@@ -43,6 +52,10 @@ import com.kothabarta.core.ui.components.FullScreenError
 import com.kothabarta.core.ui.components.FullScreenLoading
 import com.kothabarta.core.ui.theme.Spacing
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
@@ -53,9 +66,13 @@ fun ChatScreen(
     peerId: String?,
     peerName: String?,
     peerAvatarUrl: String?,
+    peerLastSeenAt: String? = null,
+    peerIsOnline: Boolean = false,
     targetMessageId: String? = null,
     onNavigate: (NavigationEvent) -> Unit,
-    viewModel: ChatViewModel = koinViewModel(parameters = { parametersOf(conversationId, peerId, peerName, peerAvatarUrl) }),
+    viewModel: ChatViewModel = koinViewModel(
+        parameters = { parametersOf(conversationId, peerId, peerName, peerAvatarUrl, peerLastSeenAt, peerIsOnline) },
+    ),
 ) {
     val state by viewModel.uiState.collectAsState()
     val callLauncher = koinInject<CallLauncher>()
@@ -96,11 +113,16 @@ fun ChatScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    MaterialTheme(colorScheme = ChatColorScheme) {
+        Column(modifier = Modifier.fillMaxSize().background(ChatColors.background)) {
         ChatHeader(
             peerName = viewModel.peerName,
+            peerAvatarUrl = peerAvatarUrl,
             isPeerTyping = state.isPeerTyping,
+            peerIsOnline = state.peerIsOnline,
+            peerLastSeenAt = state.peerLastSeenAt,
             canCall = !peerId.isNullOrBlank(),
+            onBack = { onNavigate(NavigationEvent.PopBackStack) },
             onAudioCall = { peerId?.let { callLauncher.startCall(it, peerName.orEmpty(), peerAvatarUrl, false) } },
             onVideoCall = { peerId?.let { callLauncher.startCall(it, peerName.orEmpty(), peerAvatarUrl, true) } },
         )
@@ -115,9 +137,9 @@ fun ChatScreen(
                 else -> LazyColumn(
                     state = listState,
                     reverseLayout = true,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().background(ChatColors.background),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(Spacing.md),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.sm, alignment = Alignment.Bottom),
+                    verticalArrangement = Arrangement.spacedBy(4.dp, alignment = Alignment.Bottom),
                 ) {
                     items(state.messages.asReversed(), key = { it.id }) { message ->
                         MessageBubble(
@@ -133,6 +155,7 @@ fun ChatScreen(
                             onDiscard = { viewModel.discardFailed(message.id) },
                             decryptionState = state.decryptionStates[message.id],
                         )
+                        }
                     }
                 }
             }
@@ -192,20 +215,108 @@ fun ChatScreen(
     }
 }
 
+internal object ChatColors {
+    val background = Color(0xFF0B141A)
+    val header = Color(0xFF202C33)
+    val incomingBubble = Color(0xFF202C33)
+    val outgoingBubble = Color(0xFF005C4B)
+    val primaryText = Color(0xFFE9EDEF)
+    val secondaryText = Color(0xFF8696A0)
+    val online = Color(0xFF25D366)
+}
+
+private val ChatColorScheme = darkColorScheme(
+    primary = ChatColors.online,
+    onPrimary = ChatColors.primaryText,
+    background = ChatColors.background,
+    onBackground = ChatColors.primaryText,
+    surface = ChatColors.header,
+    onSurface = ChatColors.primaryText,
+    surfaceVariant = ChatColors.incomingBubble,
+    onSurfaceVariant = ChatColors.secondaryText,
+    outline = ChatColors.secondaryText,
+)
+
 @Composable
-private fun ChatHeader(peerName: String?, isPeerTyping: Boolean, canCall: Boolean, onAudioCall: () -> Unit, onVideoCall: () -> Unit) {
-    Surface(tonalElevation = 2.dp) {
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.sm), verticalAlignment = Alignment.CenterVertically) {
+private fun ChatHeader(
+    peerName: String?,
+    peerAvatarUrl: String?,
+    isPeerTyping: Boolean,
+    peerIsOnline: Boolean,
+    peerLastSeenAt: String?,
+    canCall: Boolean,
+    onBack: () -> Unit,
+    onAudioCall: () -> Unit,
+    onVideoCall: () -> Unit,
+) {
+    Surface(color = ChatColors.header) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onBack) {
+                Text("←", color = ChatColors.primaryText, fontSize = 28.sp, lineHeight = 28.sp)
+            }
+            Box(modifier = Modifier.padding(end = Spacing.sm)) {
+                AvatarImage(
+                    avatarUrl = peerAvatarUrl,
+                    initials = peerName ?: "Chat",
+                    size = 42.dp,
+                )
+                if (peerIsOnline) {
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .align(Alignment.BottomEnd)
+                            .background(ChatColors.online, androidx.compose.foundation.shape.CircleShape)
+                            .semantics { contentDescription = "Online" },
+                    )
+                }
+            }
             Column(modifier = Modifier.weight(1f)) {
-                Text(peerName ?: "Chat", style = MaterialTheme.typography.titleMedium)
-                if (isPeerTyping) {
-                    Text("typing…", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Text(
+                    peerName ?: "Chat",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = ChatColors.primaryText,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+                val subtitle = when {
+                    isPeerTyping -> "typing…"
+                    peerIsOnline -> "online"
+                    else -> formatLastSeenForChat(peerLastSeenAt)
+                }
+                if (!subtitle.isNullOrBlank()) {
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (isPeerTyping || peerIsOnline) ChatColors.online else ChatColors.secondaryText,
+                        maxLines = 1,
+                    )
                 }
             }
             if (canCall) {
-                IconButton(onClick = onAudioCall) { AppIcon(AppSymbol.AUDIO_CALL, contentDescription = "Start audio call") }
-                IconButton(onClick = onVideoCall) { AppIcon(AppSymbol.VIDEO_CALL, contentDescription = "Start video call") }
+                IconButton(onClick = onVideoCall) {
+                    AppIcon(AppSymbol.VIDEO_CALL, contentDescription = "Start video call", tint = ChatColors.primaryText)
+                }
+                IconButton(onClick = onAudioCall) {
+                    AppIcon(AppSymbol.AUDIO_CALL, contentDescription = "Start audio call", tint = ChatColors.primaryText)
+                }
             }
         }
+    }
+}
+
+internal fun formatLastSeenForChat(lastSeenAt: String?, now: ZonedDateTime = ZonedDateTime.now()): String? {
+    if (lastSeenAt.isNullOrBlank()) return null
+    val seen = runCatching { Instant.parse(lastSeenAt).atZone(now.zone) }.getOrNull() ?: return null
+    val time = seen.format(DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)).lowercase(Locale.ENGLISH)
+    return if (seen.toLocalDate() == now.withZoneSameInstant(seen.zone).toLocalDate()) {
+        "last seen at $time"
+    } else {
+        val dateTime = seen.format(DateTimeFormatter.ofPattern("MMM d 'at' h:mm a", Locale.ENGLISH))
+            .replace("AM", "am")
+            .replace("PM", "pm")
+        "last seen at $dateTime"
     }
 }

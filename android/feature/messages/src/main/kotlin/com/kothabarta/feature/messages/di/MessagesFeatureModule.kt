@@ -17,7 +17,13 @@ val messagesFeatureModule = module {
     single<MessageDeviceKeyRegistrar> { AndroidMessageDeviceKeyRegistrar(get(), get()) }
     single<ConversationLauncher> { get<MessagesRepository>() }
     viewModel { ConversationsViewModel(get(), get()) }
-    viewModel { (conversationId: String, peerId: String?, peerName: String?, peerAvatarUrl: String?) ->
-        ChatViewModel(conversationId, peerId, peerName, peerAvatarUrl, get(), get(), get(), get(), get())
+    viewModel { parameters ->
+        val conversationId = parameters.get<String>(0)
+        val peerId = parameters.get<String?>(1)
+        val peerName = parameters.get<String?>(2)
+        val peerAvatarUrl = parameters.get<String?>(3)
+        val peerLastSeenAt = parameters.get<String?>(4)
+        val peerIsOnline = parameters.get<Boolean>(5)
+        ChatViewModel(conversationId, peerId, peerName, peerAvatarUrl, peerLastSeenAt, peerIsOnline, get(), get(), get(), get(), get())
     }
 }

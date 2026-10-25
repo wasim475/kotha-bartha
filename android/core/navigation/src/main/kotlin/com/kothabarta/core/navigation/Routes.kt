@@ -49,19 +49,30 @@ object Routes {
     const val CHAT_PEER_ID_ARG = "peerId"
     const val CHAT_PEER_NAME_ARG = "peerName"
     const val CHAT_PEER_AVATAR_ARG = "peerAvatarUrl"
+    const val CHAT_PEER_LAST_SEEN_ARG = "peerLastSeenAt"
+    const val CHAT_PEER_ONLINE_ARG = "peerIsOnline"
     const val CHAT_MESSAGE_ARG = "messageId"
     const val CHAT_PATTERN =
-        "messages/{$CHAT_CONVERSATION_ARG}?$CHAT_PEER_ID_ARG={$CHAT_PEER_ID_ARG}&$CHAT_PEER_NAME_ARG={$CHAT_PEER_NAME_ARG}&$CHAT_PEER_AVATAR_ARG={$CHAT_PEER_AVATAR_ARG}&$CHAT_MESSAGE_ARG={$CHAT_MESSAGE_ARG}"
+        "messages/{$CHAT_CONVERSATION_ARG}?$CHAT_PEER_ID_ARG={$CHAT_PEER_ID_ARG}&$CHAT_PEER_NAME_ARG={$CHAT_PEER_NAME_ARG}&$CHAT_PEER_AVATAR_ARG={$CHAT_PEER_AVATAR_ARG}&$CHAT_PEER_LAST_SEEN_ARG={$CHAT_PEER_LAST_SEEN_ARG}&$CHAT_PEER_ONLINE_ARG={$CHAT_PEER_ONLINE_ARG}&$CHAT_MESSAGE_ARG={$CHAT_MESSAGE_ARG}"
 
     private fun encode(value: String) = URLEncoder.encode(value, "UTF-8")
     fun decode(value: String) = URLDecoder.decode(value, "UTF-8")
 
-    fun chat(conversationId: String, peerId: String? = null, peerName: String? = null, peerAvatarUrl: String? = null, messageId: String? = null): String {
+    fun chat(
+        conversationId: String,
+        peerId: String? = null,
+        peerName: String? = null,
+        peerAvatarUrl: String? = null,
+        messageId: String? = null,
+        peerLastSeenAt: String? = null,
+        peerIsOnline: Boolean = false,
+    ): String {
         val id = peerId?.let { encode(it) }.orEmpty()
         val name = peerName?.let { encode(it) }.orEmpty()
         val avatar = peerAvatarUrl?.let { encode(it) }.orEmpty()
         val message = messageId?.let { encode(it) }.orEmpty()
-        return "messages/$conversationId?$CHAT_PEER_ID_ARG=$id&$CHAT_PEER_NAME_ARG=$name&$CHAT_PEER_AVATAR_ARG=$avatar&$CHAT_MESSAGE_ARG=$message"
+        val lastSeen = peerLastSeenAt?.let { encode(it) }.orEmpty()
+        return "messages/$conversationId?$CHAT_PEER_ID_ARG=$id&$CHAT_PEER_NAME_ARG=$name&$CHAT_PEER_AVATAR_ARG=$avatar&$CHAT_PEER_LAST_SEEN_ARG=$lastSeen&$CHAT_PEER_ONLINE_ARG=$peerIsOnline&$CHAT_MESSAGE_ARG=$message"
     }
 
     // Study + Quiz/Games/Leaderboard/Tic-Tac-Toe/Ludo — added in the Study

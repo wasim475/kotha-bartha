@@ -137,7 +137,16 @@ class ProfileViewModel(
                     _uiState.update { it.copy(messageActionInFlight = false) }
                     val target = result.data
                     _navigationEvents.emit(
-                        NavigationEvent.NavigateTo(Routes.chat(target.conversationId, target.peerId, target.peerName, target.peerAvatarUrl)),
+                        NavigationEvent.NavigateTo(
+                            Routes.chat(
+                                conversationId = target.conversationId,
+                                peerId = target.peerId,
+                                peerName = target.peerName,
+                                peerAvatarUrl = target.peerAvatarUrl,
+                                peerLastSeenAt = target.peerLastSeenAt,
+                                peerIsOnline = target.peerIsOnline,
+                            ),
+                        ),
                     )
                 }
                 is ApiResult.Failure -> _uiState.update {

@@ -23,7 +23,14 @@ class MessagesRepository(private val messagesApi: MessagesApi) : ConversationLau
 
     override suspend fun openConversationWith(userId: String): ApiResult<ChatTarget> =
         safeApiCall { messagesApi.createOrOpenConversation(CreateConversationRequest(userId)) }.map { conversation ->
-            ChatTarget(conversation.id, conversation.user?.id, conversation.user?.fullName, conversation.user?.avatar?.secureUrl)
+            ChatTarget(
+                conversationId = conversation.id,
+                peerId = conversation.user?.id,
+                peerName = conversation.user?.fullName,
+                peerAvatarUrl = conversation.user?.avatar?.secureUrl,
+                peerLastSeenAt = conversation.user?.lastSeenAt,
+                peerIsOnline = conversation.user?.isOnline == true,
+            )
         }
 
     /** Full history every time — the server has no cursor pagination for this endpoint (see android-api-contract.md). */

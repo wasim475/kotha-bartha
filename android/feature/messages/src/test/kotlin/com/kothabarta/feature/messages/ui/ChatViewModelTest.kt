@@ -34,6 +34,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import retrofit2.Response
+import java.time.ZonedDateTime
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModelTest {
@@ -56,6 +57,8 @@ class ChatViewModelTest {
         peerId = "peer-1",
         peerName = "Peer",
         peerAvatarUrl = null,
+        peerLastSeenAt = null,
+        peerIsOnline = false,
         repository = MessagesRepository(api),
         authApi = FakeAuthApi(),
         socketManager = SocketManager("http://localhost"),
@@ -192,6 +195,27 @@ class ChatViewModelTest {
             viewModel.uiState.value.decryptionStates["encrypted-1"],
         )
         assertEquals("🔒 Message not addressed to this device", messageBodyText(api.history.single(), viewModel.uiState.value.decryptionStates["encrypted-1"]))
+    }
+
+    @Test
+    fun `last seen formats time today and date for previous days`() {
+        val now = ZonedDateTime.parse("2026-10-26T08:00:00+06:00")
+
+        assertEquals(
+            "last seen at 6:20 am",
+            formatLastSeenForChat("2026-10-26T00:20:00Z", now),
+        )
+        assertEquals(
+            "last seen at Oct 25 at 6:21 am",
+            formatLastSeenForChat("2026-10-25T00:21:00Z", now),
+        )
+    }
+
+    @Test
+    fun `message status ticks distinguish sent delivered and read`() {
+        assertEquals("✓", deliveryTick("sent"))
+        assertEquals("✓✓", deliveryTick("delivered"))
+        assertEquals("✓✓", deliveryTick("read"))
     }
 
     private fun historyMessage(id: String) = MessageDto(id = id, body = "hi", createdAt = "now", senderId = "peer-1")

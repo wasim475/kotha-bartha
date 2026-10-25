@@ -13,6 +13,7 @@ import com.kothabarta.core.network.messages.ReactionUpdateDto
 import com.kothabarta.core.network.messages.ReplyPreviewDto
 import com.kothabarta.core.network.messages.TypingEvent
 import com.kothabarta.core.network.messages.TypingStartRequest
+import com.kothabarta.core.network.social.PresenceUpdate
 import com.kothabarta.core.network.safeApiCall
 import com.kothabarta.core.websocket.SocketConnectionState
 import com.kothabarta.core.websocket.SocketManager
@@ -47,6 +48,8 @@ data class ChatUiState(
     val myUserId: String? = null,
     val uploadingAttachment: Boolean = false,
     val decryptionStates: Map<String, MessageDecryptionState> = emptyMap(),
+    val peerIsOnline: Boolean = false,
+    val peerLastSeenAt: String? = null,
 )
 
 private const val TYPING_STOP_DELAY_MS = 2_500L
@@ -65,6 +68,8 @@ class ChatViewModel(
     private val peerId: String?,
     val peerName: String?,
     val peerAvatarUrl: String?,
+    peerLastSeenAt: String?,
+    peerIsOnline: Boolean,
     private val repository: MessagesRepository,
     private val authApi: AuthApi,
     private val socketManager: SocketManager,
@@ -72,7 +77,9 @@ class ChatViewModel(
     private val messageDeviceKeyRegistrar: MessageDeviceKeyRegistrar,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(ChatUiState())
+    private val _uiState = MutableStateFlow(
+        ChatUiState(peerIsOnline = peerIsOnline, peerLastSeenAt = peerLastSeenAt),
+    )
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     private var isCurrentlyTyping = false
@@ -123,6 +130,18 @@ class ChatViewModel(
     }
     private val typingStartListener = Emitter.Listener { args -> onTypingEvent(args, isStart = true) }
     private val typingStopListener = Emitter.Listener { args -> onTypingEvent(args, isStart = false) }
+    private val presenceListener = Emitter.Listener { args ->
+        args.firstOrNull()?.decodeSocketPayload<PresenceUpdate>()?.let { update ->
+            if (update.userId == peerId) {
+                _uiState.update { state ->
+                    state.copy(
+                        peerIsOnline = update.isOnline,
+                        peerLastSeenAt = update.lastSeenAt ?: state.peerLastSeenAt,
+                    )
+                }
+            }
+        }
+    }
 
     private fun onTypingEvent(args: Array<out Any>, isStart: Boolean) {
         val event = args.firstOrNull()?.decodeSocketPayload<TypingEvent>() ?: return
@@ -148,6 +167,7 @@ class ChatViewModel(
         socketManager.on("message:read", readListener)
         socketManager.on("typing:start", typingStartListener)
         socketManager.on("typing:stop", typingStopListener)
+        socketManager.on("presence:update", presenceListener)
         viewModelScope.launch {
             socketManager.connectionState
                 .drop(1)
@@ -165,6 +185,7 @@ class ChatViewModel(
         socketManager.off("message:read", readListener)
         socketManager.off("typing:start", typingStartListener)
         socketManager.off("typing:stop", typingStopListener)
+        socketManager.off("presence:update", presenceListener)
     }
 
     private fun loadMyUserId() {

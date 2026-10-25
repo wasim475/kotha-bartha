@@ -94,7 +94,14 @@ class ConversationsViewModel(
         viewModelScope.launch {
             _navigationEvents.emit(
                 NavigationEvent.NavigateTo(
-                    Routes.chat(conversation.id, conversation.user?.id, conversation.user?.fullName, conversation.user?.avatar?.secureUrl),
+                    Routes.chat(
+                        conversationId = conversation.id,
+                        peerId = conversation.user?.id,
+                        peerName = conversation.user?.fullName,
+                        peerAvatarUrl = conversation.user?.avatar?.secureUrl,
+                        peerLastSeenAt = conversation.user?.lastSeenAt,
+                        peerIsOnline = conversation.user?.isOnline == true,
+                    ),
                 ),
             )
         }

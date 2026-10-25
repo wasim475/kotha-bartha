@@ -298,6 +298,8 @@ fun MainScreen(
                         navArgument(Routes.CHAT_PEER_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
                         navArgument(Routes.CHAT_PEER_NAME_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
                         navArgument(Routes.CHAT_PEER_AVATAR_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+                        navArgument(Routes.CHAT_PEER_LAST_SEEN_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+                        navArgument(Routes.CHAT_PEER_ONLINE_ARG) { type = NavType.BoolType; defaultValue = false },
                         navArgument(Routes.CHAT_MESSAGE_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
                     ),
                 ) { backStackEntry ->
@@ -309,6 +311,8 @@ fun MainScreen(
                         peerId = decoded(Routes.CHAT_PEER_ID_ARG),
                         peerName = decoded(Routes.CHAT_PEER_NAME_ARG),
                         peerAvatarUrl = decoded(Routes.CHAT_PEER_AVATAR_ARG),
+                        peerLastSeenAt = decoded(Routes.CHAT_PEER_LAST_SEEN_ARG),
+                        peerIsOnline = args?.getBoolean(Routes.CHAT_PEER_ONLINE_ARG) ?: false,
                         targetMessageId = decoded(Routes.CHAT_MESSAGE_ARG),
                         onNavigate = onNavigate,
                     )
