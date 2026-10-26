@@ -2,6 +2,7 @@ package com.kothabarta.feature.auth.data
 
 import com.kothabarta.core.common.ApiResult
 import com.kothabarta.core.network.ApiEnvelope
+import com.kothabarta.core.network.PushDeviceRegistrar
 import com.kothabarta.core.network.auth.AuthApi
 import com.kothabarta.core.network.auth.GoogleLoginRequest
 import com.kothabarta.core.network.auth.LoginRequest
@@ -11,6 +12,12 @@ import com.kothabarta.core.network.auth.UserDto
 import com.kothabarta.core.security.TokenStore
 import com.kothabarta.core.websocket.SocketManager
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
@@ -50,6 +57,43 @@ class AuthRepositoryTest {
 
         assertTrue(result is ApiResult.Failure)
         assertTrue(connectedTokens.isEmpty())
+    }
+
+    @Test
+    fun `saved session restoration does not wait for FCM registration`() = runBlocking {
+        val pushScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val registrar = BlockingPushRegistrar()
+        val repository = AuthRepository(
+            authApi = FakeAuthApi(validSession = true),
+            tokenStore = FakeTokenStore("saved-token"),
+            socketManager = SocketManager("http://localhost"),
+            pushDeviceRegistrar = registrar,
+            pushSyncScope = pushScope,
+        )
+
+        try {
+            val result = repository.currentUser()
+
+            assertTrue(result is ApiResult.Success)
+            assertTrue("FCM sync should be scheduled", registrar.started.isCompleted)
+            assertTrue("FCM sync remains pending", !registrar.release.isCompleted)
+        } finally {
+            registrar.release.complete(Unit)
+            pushScope.cancel()
+        }
+    }
+
+    private class BlockingPushRegistrar : PushDeviceRegistrar {
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+
+        override suspend fun syncCurrentToken() {
+            started.complete(Unit)
+            release.await()
+        }
+
+        override suspend fun registerToken(token: String) = Unit
+        override suspend fun unregister() = Unit
     }
 
     private class FakeTokenStore(private val token: String?) : TokenStore {

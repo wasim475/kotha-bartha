@@ -15,6 +15,11 @@ import com.kothabarta.core.network.safeApiCall
 import com.kothabarta.core.network.safeAuthCall
 import com.kothabarta.core.security.TokenStore
 import com.kothabarta.core.websocket.SocketManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Owns the one thing every screen in this module ultimately needs: turning a
@@ -30,6 +35,7 @@ class AuthRepository(
     private val socketManager: SocketManager,
     private val connectSocket: (String) -> Unit = socketManager::connect,
     private val pushDeviceRegistrar: PushDeviceRegistrar = NoOpPushDeviceRegistrar,
+    private val pushSyncScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) : SessionManager {
     override val isSignedIn: Boolean
         get() = !tokenStore.getToken().isNullOrBlank()
@@ -48,7 +54,7 @@ class AuthRepository(
         val result = safeApiCall { authApi.me() }
         if (result is ApiResult.Success) {
             tokenStore.getToken()?.takeIf(String::isNotBlank)?.let(connectSocket)
-            runCatching { pushDeviceRegistrar.syncCurrentToken() }
+            syncPushTokenInBackground()
         }
         return result
     }
@@ -72,7 +78,20 @@ class AuthRepository(
             connectSocket(session.token)
             session.user
         }
-        if (mapped is ApiResult.Success) runCatching { pushDeviceRegistrar.syncCurrentToken() }
+        if (mapped is ApiResult.Success) syncPushTokenInBackground()
         return mapped
+    }
+
+    /** Push registration is best-effort and must never delay auth or splash navigation. */
+    private fun syncPushTokenInBackground() {
+        pushSyncScope.launch {
+            withTimeoutOrNull(PUSH_SYNC_TIMEOUT_MILLIS) {
+                runCatching { pushDeviceRegistrar.syncCurrentToken() }
+            }
+        }
+    }
+
+    private companion object {
+        const val PUSH_SYNC_TIMEOUT_MILLIS = 15_000L
     }
 }
