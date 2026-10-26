@@ -1,4 +1,5 @@
 const firebaseAdmin = require("firebase-admin");
+const { getMessaging: getFirebaseMessaging } = require("firebase-admin/messaging");
 const User = require("../models/User");
 const Message = require("../models/Message");
 
@@ -15,9 +16,10 @@ function safeFirebaseErrorCode(error) {
     : undefined;
 }
 
-function safeErrorDetails(error, stage) {
+function safeErrorDetails(error, stage, substage) {
   const name = typeof error?.name === "string" && /^[A-Za-z][A-Za-z0-9]{0,79}$/.test(error.name) ? error.name : "Error";
   const details = { stage, errorClass: name };
+  if (typeof substage === "string" && /^[a-z][a-z0-9-]{0,63}$/.test(substage)) details.substage = substage;
   const firebaseCode = safeFirebaseErrorCode(error);
   if (firebaseCode) details.firebaseCode = firebaseCode;
   if (typeof error?.code === "number" && Number.isFinite(error.code)) details.databaseCode = error.code;
@@ -33,12 +35,17 @@ function createPushDispatcher({
 } = {}) {
   let missingConfigurationLogged = false;
   let messagingPromise = null;
+  let initializationSubstage = "firebase-admin-factory";
 
   async function getMessaging(projectId) {
     if (!messagingPromise) {
-      messagingPromise = Promise.resolve().then(() =>
-        messagingFactory(firebaseAdmin, projectId, env.FCM_SERVICE_ACCOUNT_JSON),
-      );
+      initializationSubstage = "firebase-admin-factory";
+      messagingPromise = Promise.resolve().then(() => messagingFactory(
+        firebaseAdmin,
+        projectId,
+        env.FCM_SERVICE_ACCOUNT_JSON,
+        { onStage: (substage) => { initializationSubstage = substage; } },
+      ));
     }
     try {
       return await messagingPromise;
@@ -102,7 +109,7 @@ function createPushDispatcher({
       });
     } catch (error) {
       logger.error("FCM push initialization or lookup failed", {
-        ...safeErrorDetails(error, stage),
+        ...safeErrorDetails(error, stage, stage === "firebase-initialization" ? initializationSubstage : undefined),
       });
     }
   }
@@ -158,18 +165,34 @@ function createPushDispatcher({
   };
 }
 
-function createAdminMessaging(admin, projectId, serviceAccountJson) {
+function createAdminMessaging(admin, projectId, serviceAccountJson, {
+  onStage = () => {},
+  messagingGetter = getFirebaseMessaging,
+} = {}) {
   const name = `kotha-barta-${projectId}`;
-  const existingApp = admin.apps.find(
+  onStage("app-lookup");
+  const existingApp = admin.getApps().find(
     (app) => app.name === name || app.options?.projectId === projectId,
   );
-  if (existingApp) return admin.messaging(existingApp);
+  if (existingApp) {
+    onStage("messaging-service");
+    return messagingGetter(existingApp);
+  }
 
-  const credential = serviceAccountJson
-    ? admin.credential.cert(JSON.parse(serviceAccountJson))
-    : admin.credential.applicationDefault();
+  let credential;
+  if (serviceAccountJson) {
+    onStage("service-account-json-parse");
+    const serviceAccount = JSON.parse(serviceAccountJson);
+    onStage("service-account-credential");
+    credential = admin.cert(serviceAccount);
+  } else {
+    onStage("application-default-credential");
+    credential = admin.applicationDefault();
+  }
+  onStage("app-initialization");
   const app = admin.initializeApp({ credential, projectId }, name);
-  return admin.messaging(app);
+  onStage("messaging-service");
+  return messagingGetter(app);
 }
 
 const { sendDataPush, sendNewMessagePush, claimMessagePushAttempt } = createPushDispatcher();

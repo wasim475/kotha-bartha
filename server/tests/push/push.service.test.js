@@ -1,5 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const firebaseAdmin = require("firebase-admin");
+const { getMessaging } = require("firebase-admin/messaging");
 const {
   messagePushData,
   messagePushRecipients,
@@ -39,22 +41,20 @@ test("message recipients come from conversation participants and exclude the sen
 test("Firebase Admin Messaging is initialized with server credentials or ADC", () => {
   const initialized = [];
   const admin = {
-    apps: [],
-    credential: {
-      cert: (credentials) => ({ type: "service-account", clientEmail: credentials.client_email }),
-      applicationDefault: () => ({ type: "application-default" }),
-    },
+    getApps: () => initialized,
+    cert: (credentials) => ({ type: "service-account", clientEmail: credentials.client_email }),
+    applicationDefault: () => ({ type: "application-default" }),
     initializeApp(options, name) {
       const app = { ...options, name };
-      this.apps.push(app);
       initialized.push(app);
       return app;
     },
-    messaging: (app) => ({ app }),
   };
 
-  createAdminMessaging(admin, "test-project", JSON.stringify({ client_email: "server@example.test" }));
-  createAdminMessaging(admin, "test-project", null);
+  createAdminMessaging(admin, "test-project", JSON.stringify({ client_email: "server@example.test" }), {
+    messagingGetter: (app) => ({ app }),
+  });
+  createAdminMessaging(admin, "test-project", null, { messagingGetter: (app) => ({ app }) });
 
   assert.equal(initialized.length, 1);
   assert.equal(initialized[0].name, "kotha-barta-test-project");
@@ -63,21 +63,54 @@ test("Firebase Admin Messaging is initialized with server credentials or ADC", (
     type: "service-account",
     clientEmail: "server@example.test",
   });
+
+  const adcApps = [];
+  const adcAdmin = {
+    getApps: () => adcApps,
+    cert: () => { throw new Error("service-account credential should not be used"); },
+    applicationDefault: () => ({ type: "application-default" }),
+    initializeApp(options, name) {
+      const app = { ...options, name };
+      adcApps.push(app);
+      return app;
+    },
+  };
+  createAdminMessaging(adcAdmin, "adc-test-project", null, { messagingGetter: (app) => ({ app }) });
+  assert.deepEqual(adcApps[0].credential, { type: "application-default" });
 });
 
 test("Firebase Admin reuses an existing app for the configured project", () => {
   const existingApp = { name: "[DEFAULT]", options: { projectId: "kothax-14bd0" } };
   const admin = {
-    apps: [existingApp],
-    credential: { applicationDefault: () => ({ type: "application-default" }) },
+    getApps: () => [existingApp],
+    applicationDefault: () => ({ type: "application-default" }),
     initializeApp() { throw new Error("must not initialize a duplicate app"); },
-    messaging: (app) => ({ app }),
   };
 
-  const messaging = createAdminMessaging(admin, "kothax-14bd0", null);
+  const messaging = createAdminMessaging(admin, "kothax-14bd0", null, { messagingGetter: (app) => ({ app }) });
 
   assert.equal(messaging.app, existingApp);
-  assert.equal(admin.apps.length, 1);
+  assert.equal(admin.getApps().length, 1);
+});
+
+test("Firebase Admin 14 modular exports initialize and reuse messaging successfully", async () => {
+  assert.equal(typeof firebaseAdmin.getApps, "function");
+  assert.equal(typeof firebaseAdmin.cert, "function");
+  assert.equal(typeof firebaseAdmin.applicationDefault, "function");
+  assert.equal(typeof firebaseAdmin.initializeApp, "function");
+  assert.equal("apps" in firebaseAdmin, false);
+  const projectId = `push-sdk-test-${process.pid}-${Date.now()}`;
+  let app;
+  try {
+    const messaging = createAdminMessaging(firebaseAdmin, projectId, null);
+    app = messaging.app;
+    assert.equal(typeof messaging.send, "function");
+    const reusedMessaging = createAdminMessaging(firebaseAdmin, projectId, null);
+    assert.equal(reusedMessaging.app, app);
+    assert.equal(firebaseAdmin.getApps().filter((candidate) => candidate.options.projectId === projectId).length, 1);
+  } finally {
+    if (app) await firebaseAdmin.deleteApp(app);
+  }
 });
 
 test("message dispatch fans out across devices once per message and installation", async () => {
@@ -177,11 +210,21 @@ test("Firebase initialization failure logs stage, safe class, and provider code 
   const dispatcher = createPushDispatcher({
     userModel: fakeUserModel([]),
     env: { FCM_PROJECT_ID: "test-project", FCM_SERVICE_ACCOUNT_JSON: "private-key-secret" },
-    messagingFactory: () => { const error = new Error("private-key-secret token-secret"); error.code = "app/invalid-credential"; return Promise.reject(error); },
+    messagingFactory: (_admin, _projectId, _credentials, { onStage }) => {
+      onStage("application-default-credential");
+      const error = new Error("private-key-secret token-secret");
+      error.code = "app/invalid-credential";
+      return Promise.reject(error);
+    },
     logger: logs.logger,
   });
   await dispatcher.sendDataPush(["user-secret-id"], { body: "plaintext-secret" });
-  assert.deepEqual(logs.entries[0].details, { stage: "firebase-initialization", errorClass: "Error", firebaseCode: "app/invalid-credential" });
+  assert.deepEqual(logs.entries[0].details, {
+    stage: "firebase-initialization",
+    substage: "application-default-credential",
+    errorClass: "Error",
+    firebaseCode: "app/invalid-credential",
+  });
   assertSanitized(logs.entries);
 });
 

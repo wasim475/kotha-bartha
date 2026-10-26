@@ -37,19 +37,19 @@ function inspectCredentialFile(env = process.env, readFile = fs.readFileSync) {
   return { projectId };
 }
 
-function initializeMessaging(admin, projectId) {
-  const before = admin.apps.length;
-  const messaging = createAdminMessaging(admin, projectId, null);
-  const after = admin.apps.length;
-  const app = admin.apps.find(
+function initializeMessaging(admin = firebaseAdmin, projectId = EXPECTED_PROJECT_ID, messagingFactory = createAdminMessaging) {
+  const before = admin.getApps().length;
+  const messaging = messagingFactory(admin, projectId, null);
+  const after = admin.getApps().length;
+  const app = admin.getApps().find(
     (candidate) => candidate.name === `kotha-barta-${projectId}` || candidate.options?.projectId === projectId,
   );
   if (!app || after > before + 1) {
     throw new Error("Firebase Admin initialization did not resolve to one project app.");
   }
 
-  createAdminMessaging(admin, projectId, null);
-  if (admin.apps.length !== after) {
+  messagingFactory(admin, projectId, null);
+  if (admin.getApps().length !== after) {
     throw new Error("Firebase Admin initialization created a duplicate app.");
   }
 

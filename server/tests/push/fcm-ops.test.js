@@ -3,9 +3,31 @@ const assert = require("node:assert/strict");
 const {
   EXPECTED_PROJECT_ID,
   inspectCredentialFile,
+  initializeMessaging,
   authenticateApplicationDefaultCredentials,
   sendTestNotification,
 } = require("../../scripts/fcm-ops");
+
+test("FCM runtime initialization uses the modern Firebase Admin app API and reuses one app", () => {
+  const apps = [];
+  const admin = {
+    getApps: () => apps,
+    initializeApp(options, name) {
+      const app = { options, name };
+      apps.push(app);
+      return app;
+    },
+  };
+  const factory = (instance, projectId) => {
+    const app = instance.getApps().find((candidate) => candidate.options.projectId === projectId)
+      || instance.initializeApp({ projectId }, `kotha-barta-${projectId}`);
+    return { app };
+  };
+
+  const messaging = initializeMessaging(admin, EXPECTED_PROJECT_ID, factory);
+  assert.equal(messaging.app.options.projectId, EXPECTED_PROJECT_ID);
+  assert.equal(apps.length, 1);
+});
 
 test("FCM diagnostics validate ADC file metadata without exposing credential contents", () => {
   const result = inspectCredentialFile({
