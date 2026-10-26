@@ -14,7 +14,7 @@ enum class AppSymbol {
     ACCOUNT, ATTACHMENT, AUDIO_CALL, CALCULATOR, CALL_END, CALL_INCOMING, CALL_MISSED, CALL_OUTGOING,
     CAMERA, CHAT, CLOSE, DARK_MODE, EXPAND, FEED, FLIP_CAMERA, FRIENDS, GAMES, LEADERBOARD, LIGHT_MODE,
     MIC, MIC_OFF, MINIMIZE, NOTIFICATIONS, QUIZ, REACTIONS, SCREEN_SHARE, SCREEN_SHARE_STOP, SEARCH, STUDY,
-    BLOCK, LOGOUT, MORE_VERT, PERSON_REMOVE, SETTINGS, TIC_TAC_TOE, VIDEO_CALL, VIDEO_OFF, VOLUME,
+    BLOCK, LOGOUT, MORE_VERT, PERSON_REMOVE, SEND, SETTINGS, TIC_TAC_TOE, VIDEO_CALL, VIDEO_OFF, VOLUME,
 }
 
 @Composable
@@ -66,6 +66,7 @@ private fun AppSymbol.drawableRes(): Int = when (this) {
     AppSymbol.SCREEN_SHARE -> R.drawable.ic_screen_share
     AppSymbol.SCREEN_SHARE_STOP -> R.drawable.ic_stop_screen_share
     AppSymbol.SEARCH -> R.drawable.ic_search
+    AppSymbol.SEND -> R.drawable.ic_send
     AppSymbol.SETTINGS -> R.drawable.ic_settings
     AppSymbol.STUDY -> R.drawable.ic_auto_stories
     AppSymbol.TIC_TAC_TOE -> R.drawable.ic_grid_3x3
