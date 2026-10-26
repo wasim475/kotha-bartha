@@ -19,6 +19,7 @@
     "test:ludo:integration": "node tests/ludo-integration/server.integration.js && node tests/ludo-integration/multi.integration.js",
     "test:ludo:browser": "node tests/ludo-integration/browser.integration.js",
     "test:call": "node --test \"tests/call/*.test.js\"",
+    "test:push:integration": "node --test tests/push/push-device-registration.integration.js",
     "test:call:integration": "node tests/call-integration/server.integration.js",
     "test:call:browser": "node tests/call-integration/browser.integration.js"
   },
