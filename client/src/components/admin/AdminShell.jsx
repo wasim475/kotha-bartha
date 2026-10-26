@@ -39,7 +39,7 @@ export default function AdminShell({ user }) {
     <AdminContext.Provider value={value}>
       <div className="min-h-dvh bg-paper text-ink lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]">
         <aside className="sticky top-0 z-20 hidden h-dvh overflow-y-auto border-r border-line bg-panel p-3 lg:block" aria-label="Sidebar">
-          <p className="px-3 pt-2 pb-3 text-[11px] font-bold tracking-wide text-muted uppercase">Kotha-Barta</p>
+          <p className="px-3 pt-2 pb-3 text-[11px] font-bold tracking-wide text-muted uppercase">KothaX</p>
           <AdminSidebar />
         </aside>
 

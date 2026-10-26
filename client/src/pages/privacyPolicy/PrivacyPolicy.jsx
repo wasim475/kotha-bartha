@@ -18,7 +18,7 @@ export default function PrivacyPolicy() {
         {/* Introduction */}
         <section className="space-y-4">
           <p>
-            Welcome to <strong>Kotha-Barta</strong> (“we,” “our,” “us,” or
+            Welcome to <strong>KothaX</strong> (“we,” “our,” “us,” or
             “the App”). We respect your privacy and are committed to
             protecting your personal information.
           </p>
@@ -26,11 +26,11 @@ export default function PrivacyPolicy() {
           <p>
             This Privacy Policy explains what information we collect, how we
             use it, how we protect it, and what choices you have when using
-            the kotha-Barta application and related services.
+            the KothaX application and related services.
           </p>
 
           <p>
-            By creating an account or using kotha-Barta, you agree to the
+            By creating an account or using KothaX, you agree to the
             practices described in this Privacy Policy.
           </p>
         </section>
@@ -64,7 +64,7 @@ export default function PrivacyPolicy() {
 
           <SubTitle>1.2 User-Generated Content</SubTitle>
 
-          <p>When you use kotha-Barta, you may voluntarily provide content such as:</p>
+          <p>When you use KothaX, you may voluntarily provide content such as:</p>
 
           <ul>
             <li>Posts</li>
@@ -162,7 +162,7 @@ export default function PrivacyPolicy() {
         {/* 4 */}
         <PolicySection title="4. Messages and Private Communications">
           <p>
-            kotha-Barta provides private communication features between users.
+            KothaX provides private communication features between users.
           </p>
 
           <p>
@@ -298,7 +298,7 @@ export default function PrivacyPolicy() {
         {/* 10 */}
         <PolicySection title="10. Children's Privacy">
           <p>
-            kotha-Barta is not intended for children who are below the minimum
+            KothaX is not intended for children who are below the minimum
             age required by applicable law to use the service without
             parental consent.
           </p>
@@ -362,7 +362,7 @@ export default function PrivacyPolicy() {
 
           <div className="mt-4 rounded-xl bg-base-200 p-5">
             <p>
-              <strong>App Name:</strong> kotha-Barta
+              <strong>App Name:</strong> KothaX
             </p>
 
             <p className="mt-2">
@@ -380,7 +380,7 @@ export default function PrivacyPolicy() {
         {/* Footer */}
         <div className="mt-10 border-t border-base-300 pt-6 text-center text-sm text-base-content/60">
           <p>
-            By using kotha-Barta, you acknowledge that you have read and
+            By using KothaX, you acknowledge that you have read and
             understood this Privacy Policy.
           </p>
         </div>

@@ -22,7 +22,7 @@ test("message push has generic copy and the conversation deep link, without mess
     notificationId: "message-1",
     conversationId: "conversation-1",
     messageId: "message-1",
-    title: "Kotha-Barta",
+    title: "KothaX",
     body: "New message",
   });
 });
@@ -55,7 +55,7 @@ test("Firebase Admin Messaging is initialized with server credentials or ADC", (
   createAdminMessaging(admin, "test-project", null);
 
   assert.equal(initialized.length, 1);
-  assert.equal(initialized[0].name, "kotha-barta-test-project");
+  assert.equal(initialized[0].name, "KothaX-test-project");
   assert.equal(initialized[0].projectId, "test-project");
   assert.deepEqual(initialized[0].credential, {
     type: "service-account",
@@ -90,7 +90,7 @@ test("message dispatch fans out across devices once per message and installation
         notificationId: "message-1",
         conversationId: "conversation-1",
         messageId: "message-1",
-        title: "Kotha-Barta",
+        title: "KothaX",
         body: "New message",
       });
       assert.equal(JSON.stringify(message).includes("plaintext"), false);

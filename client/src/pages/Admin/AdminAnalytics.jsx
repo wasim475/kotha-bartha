@@ -69,7 +69,7 @@ export default function AdminAnalytics() {
   return (
     <AdminPage
       title="Analytics"
-      subtitle="Visits and activity across Kotha-Barta."
+      subtitle="Visits and activity across KothaX."
       actions={
         <div className="flex gap-1.5" role="group" aria-label="Time range">
           {RANGES.map(([key, label]) => (

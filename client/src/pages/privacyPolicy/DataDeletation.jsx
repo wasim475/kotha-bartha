@@ -35,12 +35,12 @@ export default function DataDeletion() {
         {/* Introduction */}
         <section className="space-y-4 leading-7 text-base-content/80">
           <p>
-            At <strong>kotha-Barta</strong>, we respect your right to control
+            At <strong>KothaX</strong>, we respect your right to control
             your personal information.
           </p>
 
           <p>
-            If you no longer want to use your kotha-Barta account, you may
+            If you no longer want to use your KothaX account, you may
             request deletion of your account and associated personal data.
           </p>
         </section>
@@ -80,13 +80,13 @@ export default function DataDeletion() {
           <div className="space-y-4 leading-7 text-base-content/80">
             <p>
               If you created or accessed your account using Google or
-              Facebook Login, requesting deletion through kotha-Barta will
-              remove the information associated with your kotha-Barta account
+              Facebook Login, requesting deletion through KothaX will
+              remove the information associated with your KothaX account
               that we control.
             </p>
 
             <p>
-              Deleting your kotha-Barta account does not necessarily delete
+              Deleting your KothaX account does not necessarily delete
               information held by Google or Facebook. For information stored
               by those services, you should manage your data directly through
               the respective service.
@@ -101,7 +101,7 @@ export default function DataDeletion() {
           </h2>
 
           <p className="mb-6 leading-7 text-base-content/80">
-            Enter the email address associated with your kotha-Barta account
+            Enter the email address associated with your KothaX account
             below and submit your deletion request.
           </p>
 
@@ -199,7 +199,7 @@ export default function DataDeletion() {
         {/* Footer */}
         <div className="mt-10 border-t border-base-300 pt-6 text-center text-sm text-base-content/60">
           <p>
-            © {new Date().getFullYear()} kotha-Barta. All rights reserved.
+            © {new Date().getFullYear()} KothaX. All rights reserved.
           </p>
         </div>
       </div>

@@ -1,4 +1,4 @@
-# KOTHA-BARTA
+# KothaX
 
 Mobile-first social networking and messaging platform built with React, Express, MongoDB, Mongoose, JWT, Socket.io, MUI, and Tailwind-ready client tooling.
 

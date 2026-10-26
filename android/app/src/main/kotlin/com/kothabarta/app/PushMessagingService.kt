@@ -60,7 +60,7 @@ class PushMessagingService : FirebaseMessagingService(), KoinComponent {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val notificationTitle = if (type == "message") "Kotha-Barta"
+        val notificationTitle = if (type == "message") "KothaX"
         else data["title"] ?: if (type == "call") "Incoming call" else "New message"
         val notificationBody = if (type == "message") "New message"
         else data["body"] ?: if (type == "call") "Incoming call" else "You have a new message."

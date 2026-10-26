@@ -135,7 +135,7 @@ async function start() {
   startLeaderboardArchiveScheduler();
   // Ludo turn timeouts, reconnect windows and idle lobbies (see services/ludo.service.js).
   startLudoScheduler(io);
-  httpServer.listen(port, () => console.log(`KOTHA-BARTA Connected...`));
+  httpServer.listen(port, () => console.log(`KothaX Connected...`));
 }
 
 start().catch((error) => {

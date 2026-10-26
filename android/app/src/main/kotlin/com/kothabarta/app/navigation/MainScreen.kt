@@ -405,7 +405,7 @@ fun MainScreen(
         AlertDialog(
             onDismissRequest = { if (!isLoggingOut) showLogoutConfirmation = false },
             title = { Text("Log out?") },
-            text = { Text("You will need to sign in again to use Kotha-Barta.") },
+            text = { Text("You will need to sign in again to use KothaX.") },
             confirmButton = {
                 TextButton(
                     enabled = !isLoggingOut,

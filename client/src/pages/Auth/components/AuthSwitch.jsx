@@ -5,7 +5,7 @@ export default function AuthSwitch({ signup }) {
 
   return (
     <p className="auth-switch">
-      {signup ? "Already have an account?" : "New to Kotha-Barta?"}{" "}
+      {signup ? "Already have an account?" : "New to KothaX?"}{" "}
       <button onClick={() => navigate(signup ? "/login" : "/signup")}>
         {signup ? "Sign in" : "Create an account"}
       </button>

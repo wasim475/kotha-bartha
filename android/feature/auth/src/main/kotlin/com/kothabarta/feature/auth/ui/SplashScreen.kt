@@ -30,7 +30,7 @@ fun SplashScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("Kotha-Barta", style = MaterialTheme.typography.headlineMedium)
+        Text("KothaX", style = MaterialTheme.typography.headlineMedium)
         Spacer(modifier = Modifier.height(Spacing.lg))
         CircularProgressIndicator()
     }

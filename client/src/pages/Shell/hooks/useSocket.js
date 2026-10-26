@@ -56,7 +56,7 @@ export default function useSocket(userId) {
         Notification.permission === "granted"
       ) {
         const desktopNotification = new Notification(
-          payload?.sender?.fullName?.trim() || "Kotha-Barta",
+          payload?.sender?.fullName?.trim() || "KothaX",
           {
             body: payload?.body || "",
           },
@@ -64,7 +64,7 @@ export default function useSocket(userId) {
 
         desktopNotification.onclick = () => {
           window.focus();
-          document.title = "kotha-barta";
+          document.title = "KothaX";
           desktopNotification.close();
         };
       }

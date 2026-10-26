@@ -217,7 +217,7 @@ async function listInbox({ tab, page }) {
     ...system.map((item) => ({
       kind: "system",
       id: item._id.toString(),
-      from: { id: null, fullName: "Kotha-Barta Administration", avatar: null },
+      from: { id: null, fullName: "KothaX Administration", avatar: null },
       to: userView(users.get(item.recipientId?.toString())),
       subject: `To ${users.get(item.recipientId?.toString())?.fullName || "a user"}`,
       preview: preview(item.body),

@@ -15,7 +15,7 @@ test("message push contains generic copy and stable destination IDs only", () =>
     notificationId: "m1",
     conversationId: "c1",
     messageId: "m1",
-    title: "Kotha-Barta",
+    title: "KothaX",
     body: "New message",
   });
   assert.equal(JSON.stringify(data).includes("secret"), false);

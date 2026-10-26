@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { useRealtime } from "../../../utility/helpers";
 
-const baseTitle = "Kotha-Barta";
+const baseTitle = "KothaX";
 const faviconPath = "/logo.png";
 const faviconSize = 64;
 let faviconRenderId = 0;

@@ -1,4 +1,4 @@
-# Kotha-Barta E2EE Phase 0: Protocol and Security Decision
+# KothaX E2EE Phase 0: Protocol and Security Decision
 
 **Date:** 2026-10-24
 **Status:** Decision proposal for review; no production protocol or implementation is approved by this document.
@@ -58,7 +58,7 @@ Treat every installation—Web browser profile or Android app installation—as 
 
 If MLS is validated, represent a 1:1 conversation as a two-or-more-member MLS group whose members are the participating devices. A user with multiple enrolled devices has multiple MLS members. Each device maintains independent local state; do not copy a mutable group-state database between devices. Adding/removing a device is an authenticated group membership change with the protocol's commit/epoch transition.
 
-Web and Android must use compatible choices for the MLS protocol version, cipher suite, credentials, extensions, identity mapping, application content format, and message framing. The server acts as an untrusted Delivery Service for opaque MLS messages and related routing. A separately specified Authentication Service/device enrollment policy decides which credentials represent account devices. MLS does not define Kotha-Barta's account authorization, safety UX, message retention, push privacy, history sync, attachment handling, or full delivery service.
+Web and Android must use compatible choices for the MLS protocol version, cipher suite, credentials, extensions, identity mapping, application content format, and message framing. The server acts as an untrusted Delivery Service for opaque MLS messages and related routing. A separately specified Authentication Service/device enrollment policy decides which credentials represent account devices. MLS does not define KothaX's account authorization, safety UX, message retention, push privacy, history sync, attachment handling, or full delivery service.
 
 ### Conversation security mode
 
@@ -104,7 +104,7 @@ Before a conversation enters MLS active mode, clients may continue existing beha
 
 ## MLS candidate evaluation criteria
 
-RFC 9420 specifies MLS protocol framing and group key establishment; RFC 9750 describes the broader architecture and identifies application/infrastructure responsibilities. MLS can supply cryptographic group state, but Kotha-Barta still needs an Authentication Service, Delivery Service behavior, credential validation, device policy, persistence, UI, and application-level message conventions. See [RFC 9420](https://www.rfc-editor.org/rfc/rfc9420.html) and [RFC 9750](https://www.rfc-editor.org/rfc/rfc9750.html).
+RFC 9420 specifies MLS protocol framing and group key establishment; RFC 9750 describes the broader architecture and identifies application/infrastructure responsibilities. MLS can supply cryptographic group state, but KothaX still needs an Authentication Service, Delivery Service behavior, credential validation, device policy, persistence, UI, and application-level message conventions. See [RFC 9420](https://www.rfc-editor.org/rfc/rfc9420.html) and [RFC 9750](https://www.rfc-editor.org/rfc/rfc9750.html).
 
 Every library must be evaluated at an immutable version/commit and exact feature/provider configuration. A README conformance statement or compiling target is not sufficient. Required evidence:
 
@@ -115,7 +115,7 @@ Every library must be evaluated at an immutable version/commit and exact feature
 5. **Persistent state:** documented storage API, atomic transaction/commit semantics, encrypted-at-rest host adapter, crash/restart/corruption behavior, backup/restore, concurrency and schema-version policy.
 6. **Multi-device:** multiple identities/groups, per-device credentials, add/remove/rekey, offline KeyPackages/Welcome delivery, stale/competing commit behavior, and no implicit historical access.
 7. **License and supply chain:** exact dependency and generated-binding licenses, notices/SBOM, provenance/checksums, known vulnerabilities, and compatible distribution terms.
-8. **Maintenance and security review:** release cadence, supported-version policy, security policy/advisories, response SLA/ownership, audit scope and date, unresolved findings, and who maintains any Kotha-Barta wrapper/provider/storage code.
+8. **Maintenance and security review:** release cadence, supported-version policy, security policy/advisories, response SLA/ownership, audit scope and date, unresolved findings, and who maintains any KothaX wrapper/provider/storage code.
 9. **Operational fit:** pinned Rust/NDK/JDK/Gradle/WASM/browser toolchains, reproducible offline-capable build evidence, supported device/browser matrix, performance, state size, message ordering and relay requirements.
 
 ### Candidate decision matrix

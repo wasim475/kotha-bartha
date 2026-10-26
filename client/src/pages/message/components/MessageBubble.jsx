@@ -393,7 +393,7 @@ const MessageBubble = ({
           {message.adminMessage && (
             <span className="mb-0.5 ml-1 inline-flex items-center gap-1 text-[11px] font-bold text-accent" data-testid="admin-message-label">
               <span className="rounded bg-accent px-1.5 py-px text-[10px] tracking-wide text-white uppercase">Admin</span>
-              Kotha-Barta Administration
+              KothaX Administration
             </span>
           )}
 

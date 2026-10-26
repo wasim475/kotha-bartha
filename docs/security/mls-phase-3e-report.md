@@ -133,7 +133,7 @@ kotha-bartha-mls-prototype/
     android-uniffi-adapter/         # narrow project-owned Kotlin FFI surface
     web-wasm-adapter/               # wasm-bindgen exports and browser randomness
   android-harness/                  # standalone test app; no production modules
-  web-harness/                      # minimal browser peer; no real Kotha-Barta account
+  web-harness/                      # minimal browser peer; no real KothaX account
   relay/                            # local synthetic MLS opaque-message relay
   vectors/                          # upstream vectors + recorded expected results
   storage-tests/

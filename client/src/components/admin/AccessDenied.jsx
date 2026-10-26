@@ -13,7 +13,7 @@ export default function AccessDenied({ message = "You don't have permission to v
         <h1 className="font-display text-2xl font-semibold text-ink">Access denied</h1>
         <p className="text-sm text-muted">{message}</p>
         <Link to="/app/feed" className="rounded-md border border-line bg-panel px-4 py-2.5 text-sm font-semibold text-ink shadow-soft hover:bg-soft">
-          Back to Kotha-Barta
+          Back to KothaX
         </Link>
       </div>
     </div>

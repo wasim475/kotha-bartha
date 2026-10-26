@@ -2,7 +2,7 @@
   কথা-স্টাডি is a design-only extension of the main app: it reuses the
   shared .app-shell/.app-body/.desktop-nav/.bottom-nav/.nav-item layout and
   tokens (--paper, --panel, --ink, --line, --muted, --soft, --shadow) so it
-  stays a natural extension of কথা-বার্তা, but swaps in a scoped accent
+  stays a natural extension of KothaX, but swaps in a scoped accent
   (--study-accent) so the section still reads as visually distinct.
 */
 .study-shell {

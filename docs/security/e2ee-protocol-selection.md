@@ -1,4 +1,4 @@
-# Kotha-Barta E2EE Phase 2: protocol and library selection
+# KothaX E2EE Phase 2: protocol and library selection
 
 **Date:** 2026-10-24
 **Status:** Protocol direction recommended; production library choice gated on a cross-platform prototype and security review.
@@ -6,11 +6,11 @@
 
 ## Executive recommendation
 
-Adopt **Messaging Layer Security (MLS), RFC 9420**, as the target protocol for new encrypted conversations, with one MLS group per conversation and each enrolled device represented as a distinct member. RFC 9750 explicitly allows groups of two clients and notes that MLS is an end-to-end security layer that must be integrated into an application. This gives Kotha-Barta a single protocol direction for 1:1, future groups, multi-device membership, offline additions, membership changes, forward secrecy (FS), and post-compromise security (PCS), without implementing a custom ratchet.
+Adopt **Messaging Layer Security (MLS), RFC 9420**, as the target protocol for new encrypted conversations, with one MLS group per conversation and each enrolled device represented as a distinct member. RFC 9750 explicitly allows groups of two clients and notes that MLS is an end-to-end security layer that must be integrated into an application. This gives KothaX a single protocol direction for 1:1, future groups, multi-device membership, offline additions, membership changes, forward secrecy (FS), and post-compromise security (PCS), without implementing a custom ratchet.
 
-Keep **`mls-rs` as the lead implementation candidate**, not an approved production dependency. Its upstream project states RFC 9420 conformance, WASM build support, configurable storage, test vectors, and Apache-2.0/MIT licensing. However, its WebCrypto provider is marked experimental, the project says it has not received a full third-party security audit, and the public evidence reviewed here does not establish production support for the Android UniFFI wrapper or prove interoperable Android/Web persisted state in this app. Prototype that exact boundary before selecting a release. OpenMLS is a credible alternative but marks Android and WASM targets as built but unsupported/untested in CI. No library passes every Kotha-Barta requirement on documentation evidence alone.
+Keep **`mls-rs` as the lead implementation candidate**, not an approved production dependency. Its upstream project states RFC 9420 conformance, WASM build support, configurable storage, test vectors, and Apache-2.0/MIT licensing. However, its WebCrypto provider is marked experimental, the project says it has not received a full third-party security audit, and the public evidence reviewed here does not establish production support for the Android UniFFI wrapper or prove interoperable Android/Web persisted state in this app. Prototype that exact boundary before selecting a release. OpenMLS is a credible alternative but marks Android and WASM targets as built but unsupported/untested in CI. No library passes every KothaX requirement on documentation evidence alone.
 
-Do not use Signal `libsignal` as the default dependency for this app. Its protocol design is a strong 1:1 reference, but its upstream says use outside Signal is unsupported, its language APIs and bridge layers may change, and it is AGPL-3.0. It also does not by itself settle Kotha-Barta's multi-device directory, approval, history sync, recovery, or group policy. This is a product/legal/maintenance fit decision, not a claim that Signal's protocol is cryptographically weaker.
+Do not use Signal `libsignal` as the default dependency for this app. Its protocol design is a strong 1:1 reference, but its upstream says use outside Signal is unsupported, its language APIs and bridge layers may change, and it is AGPL-3.0. It also does not by itself settle KothaX's multi-device directory, approval, history sync, recovery, or group policy. This is a product/legal/maintenance fit decision, not a claim that Signal's protocol is cryptographically weaker.
 
 This is a conditional direction, not a security certification. The current application must keep its existing behavior until a later implementation phase has an approved protocol, library/version, device lifecycle, recovery policy, and no-downgrade rollout.
 
@@ -39,7 +39,7 @@ These findings are from Phase 1, not claims newly verified by an end-to-end runt
 | Ordering, replay, duplicates | Ratchet state and message counters help; storage, retry and duplicate policy remain application work | Epoch/commit ordering and delivery-service consistency are application concerns; MLS does not provide a complete chat transport |
 | Cross-platform library evidence | libsignal has Java, Swift and TypeScript APIs, but third-party use unsupported and APIs can change | mls-rs advertises WASM and has UniFFI crates; WebCrypto provider experimental. OpenMLS has WASM bindings; Android/WASM CI targets are explicitly unsupported/untested |
 | License / maintenance fit | AGPL-3.0; upstream release/API policy and third-party support require acceptance | mls-rs Apache-2.0 OR MIT; OpenMLS MIT. Both require ongoing dependency/security review |
-| Kotha-Barta conclusion | Reference only; do not select libsignal without explicit license and support acceptance plus app-level design | Preferred protocol family; mls-rs lead candidate, gated on a real Android/Web interop and persistence spike |
+| KothaX conclusion | Reference only; do not select libsignal without explicit license and support acceptance plus app-level design | Preferred protocol family; mls-rs lead candidate, gated on a real Android/Web interop and persistence spike |
 
 The FS/PCS statements describe protocol capabilities, not a guarantee against compromised endpoints, malicious credential issuance, unsafe storage, unavailable ratchet input, or implementation defects. MLS also requires compatible choices for protocol version, cipher suite, credentials, extensions, delivery ordering, and application payload conventions before two clients interoperate.
 
@@ -57,13 +57,13 @@ The FS/PCS statements describe protocol capabilities, not a guarantee against co
 
 - OpenMLS implements RFC 9420, is MIT-licensed, has an active release history and includes an `openmls-wasm` crate.
 - Its README lists `aarch64-linux-android` and `wasm32-unknown-unknown` among targets built on CI but explicitly says these are unsupported and not tested. It is therefore not stronger evidence for this project's two-platform requirement than mls-rs.
-- The implementation requires application-provided traits/providers and storage integration. Its own security policy excludes consumer application code and provider/storage backends from library vulnerability scope; those remain Kotha-Barta responsibilities.
+- The implementation requires application-provided traits/providers and storage integration. Its own security policy excludes consumer application code and provider/storage backends from library vulnerability scope; those remain KothaX responsibilities.
 
 ### Signal `libsignal` — not selected
 
 - Signal's Double Ratchet specification remains a useful reference for 1:1 ratchet behavior, and Sesame is a useful reference for multi-device session management.
 - The official `libsignal` repository says it is used by Signal clients, that external use is unsupported, and that Java/Swift/TypeScript APIs and bridge layers may change without notice. Its LICENSE is AGPL-3.0.
-- A Web TypeScript surface and Android Java surface do not, by themselves, demonstrate supported third-party release artifacts or compatible persisted session state across those platforms. Kotha-Barta would also need to build the surrounding device directory, account/device authorization, history, recovery, and group story.
+- A Web TypeScript surface and Android Java surface do not, by themselves, demonstrate supported third-party release artifacts or compatible persisted session state across those platforms. KothaX would also need to build the surrounding device directory, account/device authorization, history, recovery, and group story.
 
 ## Required architecture decisions before implementation
 
@@ -97,7 +97,7 @@ Assume an attacker can read/modify the database, control or observe delivery, re
 - **Metadata:** explain server-visible participants/devices, membership changes, timing, size, delivery/read indicators and network data. MLS does not make these private automatically.
 - **Recovery:** recovery credentials and any backup become part of the trust boundary. A PIN alone has low entropy and can be guessed offline if it protects a copied encrypted backup; a server rate limit cannot prevent offline guesses. Use a high-entropy recovery key or a carefully designed memory-hard derivation plus strong encrypted key backup, and make the residual risk clear.
 
-The future Kotha-Barta recovery PIN requirement, if a PIN-based option is approved after protocol and infrastructure review, is exactly five ASCII numeric digits held as a string (leading zeroes are valid). Five digits are still only 100,000 possibilities (~16.61 bits if uniformly random), so the PIN must not be the sole security boundary or be described as offline-brute-force safe. See the recovery audit for the candidate trust-service constraints and future validation/test plan.
+The future KothaX recovery PIN requirement, if a PIN-based option is approved after protocol and infrastructure review, is exactly five ASCII numeric digits held as a string (leading zeroes are valid). Five digits are still only 100,000 possibilities (~16.61 bits if uniformly random), so the PIN must not be the sole security boundary or be described as offline-brute-force safe. See the recovery audit for the candidate trust-service constraints and future validation/test plan.
 
 Do not preserve a silent plaintext fallback for conversations marked E2EE. Once a conversation has committed to an E2EE version, server APIs must reject plaintext send/edit payloads for that conversation. If keys or protocol state are unavailable, fail closed with a clear retry/recovery state. Legacy plaintext conversations must remain explicitly labeled as legacy until both participants and all participating devices have completed a deliberate transition.
 

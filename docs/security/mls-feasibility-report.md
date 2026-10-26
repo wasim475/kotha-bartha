@@ -1,4 +1,4 @@
-# Kotha-Barta Phase 3: MLS feasibility report
+# KothaX Phase 3: MLS feasibility report
 
 **Date:** 2026-10-24
 **Decision:** **CONDITIONAL** — the protocol/library direction is plausible, but this run could not build an isolated prototype or demonstrate Android↔Web interoperability. This is not a pass and does not approve production use.
@@ -6,7 +6,7 @@
 
 ## 1. Executive summary
 
-RFC 9420 MLS remains a plausible target for Kotha-Barta. The current `mls-rs` source advertises WASM builds, configurable storage, and an Android-facing UniFFI wrapper. Those are useful building blocks, but they do not demonstrate that a production Android build and browser build can exchange interoperable MLS messages and safely persist/restore their own state.
+RFC 9420 MLS remains a plausible target for KothaX. The current `mls-rs` source advertises WASM builds, configurable storage, and an Android-facing UniFFI wrapper. Those are useful building blocks, but they do not demonstrate that a production Android build and browser build can exchange interoperable MLS messages and safely persist/restore their own state.
 
 The decisive test was **not run**. This workspace has no Rust compiler or Cargo; `wasm-pack`, `wasm-bindgen`, and `adb` are also unavailable. The Gradle wrapper could not download its configured Gradle distribution because outbound network access failed. No Rust/WASM project or Android native library was created, so claiming group creation, Welcome, message exchange, restart restoration, or cross-platform interoperability would be false.
 
@@ -61,7 +61,7 @@ The requested prototype architecture is two independent MLS clients, A and B, wi
 
 - The app uses Kotlin `2.0.21`, AGP `8.8.0`, Java 17 bytecode and min SDK 26. There is no Rust/UniFFI module, native Rust build, generated binding, or MLS dependency in the app.
 - UniFFI is a technically plausible JNI boundary for a Rust engine, but it requires building and packaging matching `.so` libraries for the app's supported Android ABIs, generating bindings from a pinned wrapper, and maintaining version compatibility. None of these steps was validated here.
-- The published wrapper source maps only `Curve25519Aes128` to MLS cipher suite 1 and constructs `OpensslCryptoProvider` plus `BasicIdentityProvider`. That is a wrapper-specific configuration, not evidence that it matches a browser's provider or Kotha-Barta's future identity/credential design.
+- The published wrapper source maps only `Curve25519Aes128` to MLS cipher suite 1 and constructs `OpensslCryptoProvider` plus `BasicIdentityProvider`. That is a wrapper-specific configuration, not evidence that it matches a browser's provider or KothaX's future identity/credential design.
 - The wrapper's default `ClientConfig` creates `InMemoryGroupStateStorage`. The source exposes a `GroupStateStorage` interface and adapts stored state through byte arrays, so persistence may be implementable, but default configuration loses state on process death. Durable storage and transaction semantics need an actual binding test.
 - Android Keystore does not automatically protect arbitrary MLS state. A feasible app design would encrypt the database/state blob with a random local key protected by a Keystore key, subject to backup/device-transfer policy. This protects at-rest data under defined device conditions; it does not make MLS state portable, prevent a running compromised app from using it, or create group history on a new device.
 - Atomic state transitions need a single-writer transaction. Persisting an old snapshot after a newer epoch commit could roll state back; a process crash between accepting a commit and persisting the resulting state can desynchronize the client. No current Android behavior was tested.
@@ -71,7 +71,7 @@ The requested prototype architecture is two independent MLS clients, A and B, wi
 
 - The current client is React/Vite and has no MLS/WASM dependency or browser MLS test harness.
 - Upstream `mls-rs` says it supports WASM builds, but its README labels the WebCrypto provider experimental and unsupported. “Compiles to WASM” is not the same as a supported browser integration or an interoperable JS API.
-- No official, version-pinned browser binding or supported storage adapter was identified for this repository in the reviewed upstream interface. A custom `wasm-bindgen` wrapper may be technically possible but would be Kotha-Barta-owned FFI surface requiring its own review.
+- No official, version-pinned browser binding or supported storage adapter was identified for this repository in the reviewed upstream interface. A custom `wasm-bindgen` wrapper may be technically possible but would be KothaX-owned FFI surface requiring its own review.
 - Browser state persistence would need atomic IndexedDB writes tied to every state-changing operation. IndexedDB can store structured data and CryptoKeys, but ordinary MLS serialized state is not automatically a non-extractable key or protected from same-origin script execution. XSS can act through a live client even when storage bytes are encrypted.
 - Multi-tab state mutation must be serialized (for example, one elected writer or transactional version checks). Otherwise two tabs can apply operations from the same epoch and persist conflicting state. Account ID, group ID and device ID must be independently namespaced; logout and browser data eviction behavior need explicit UX.
 - No browser/runtime build or reload/crash recovery test ran.
@@ -170,7 +170,7 @@ This list is a setup checklist, not a claim that the above tests have been run.
 
 ## 13. Decision
 
-**CONDITIONAL.** Documentation suggests the engine has useful protocol functionality and storage extension points, but Kotha-Barta's required Android/Web build, durable storage, and interoperability are unproven. The prototype was not executable in this environment, and the public Android wrapper evidence is not yet sufficient for a production support decision. No production changes are authorized by this report.
+**CONDITIONAL.** Documentation suggests the engine has useful protocol functionality and storage extension points, but KothaX's required Android/Web build, durable storage, and interoperability are unproven. The prototype was not executable in this environment, and the public Android wrapper evidence is not yet sufficient for a production support decision. No production changes are authorized by this report.
 
 Do not claim MLS feasibility has passed and do not connect MLS to production messaging until the genuine cross-platform test and all separate security gates above are complete.
 

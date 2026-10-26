@@ -14,7 +14,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "kotha-barta"
+rootProject.name = "KothaX"
 
 // Only the modules built so far (foundation milestone + Phase 2's Home/
 // Profile/Friends/Notifications, see docs/architecture/android-implementation-plan.md)

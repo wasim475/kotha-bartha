@@ -1,4 +1,4 @@
-# KOTHA-BARTA
+# KothaX
 
 ## Phase 1: Architecture Specification
 
@@ -7,7 +7,7 @@ Target: Mobile-first social networking and real-time messaging platform
 
 ## 1. System Architecture
 
-KOTHA-BARTA is a two-application monorepo:
+KothaX is a two-application monorepo:
 
 - `client`: React single-page application using JavaScript, Tailwind CSS, MUI, React Router, Axios, and Socket.io Client.
 - `server`: Node.js and Express REST API using MongoDB/Mongoose, JWT, bcrypt, Cloudinary, and Socket.io.

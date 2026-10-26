@@ -22,7 +22,7 @@ export default function StudyTopbar({ theme, setTheme, onBack }) {
 
         <button type="button" className="study-back-button" onClick={onBack}>
           <ArrowBack fontSize="small" />
-          <span>Back to কথা-বার্তা</span>
+          <span>Back to KothaX</span>
         </button>
       </div>
     </header>

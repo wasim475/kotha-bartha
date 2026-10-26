@@ -28,7 +28,7 @@ import { LEGACY_BLOGS_ROUTE_PATH, legacyBlogsRedirectPath } from "./courses/cour
 const Courses = lazy(() => import("./courses/Courses"));
 
 const descriptions = {
-  courses: "Explore clear, structured lessons in the কথা-বার্তা learning space.",
+  courses: "Explore clear, structured lessons in the KothaX learning space.",
   quiz: "Test what you know with quick, bite-sized quizzes.",
   "class-study": "Class-wise study material and structured resources.",
 };

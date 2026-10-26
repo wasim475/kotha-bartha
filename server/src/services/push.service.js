@@ -117,7 +117,7 @@ function createPushDispatcher({
 }
 
 function createAdminMessaging(admin, projectId, serviceAccountJson) {
-  const name = `kotha-barta-${projectId}`;
+  const name = `KothaX-${projectId}`;
   const existingApp = admin.apps.find((app) => app.name === name);
   if (existingApp) return admin.messaging(existingApp);
 
@@ -135,7 +135,7 @@ const messagePushData = ({ conversationId, messageId }) => ({
   notificationId: String(messageId),
   conversationId: String(conversationId),
   messageId: String(messageId),
-  title: "Kotha-Barta",
+  title: "KothaX",
   body: "New message",
 });
 
@@ -148,7 +148,7 @@ function notificationPushData(notification) {
   const data = {
     notificationId: String(notification._id || notification.id || ""),
     type: String(notification.type || "notification"),
-    title: String(payload.title || notification.actorName || "Kotha-Barta"),
+    title: String(payload.title || notification.actorName || "KothaX"),
     body: String(body),
   };
   for (const key of ["postId", "commentId", "replyId"]) {
