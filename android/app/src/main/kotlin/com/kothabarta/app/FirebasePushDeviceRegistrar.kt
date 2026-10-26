@@ -1,8 +1,10 @@
 package com.kothabarta.app
 
 import android.content.Context
+import android.util.Log
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
+import com.kothabarta.core.common.ApiResult
 import com.kothabarta.core.network.PushDeviceRegistrar
 import com.kothabarta.core.network.safeApiCall
 import com.kothabarta.core.network.social.PushDeviceRequest
@@ -20,19 +22,30 @@ class FirebasePushDeviceRegistrar(
 ) : PushDeviceRegistrar {
     override suspend fun syncCurrentToken() {
         if (tokenStore.getToken().isNullOrBlank() || FirebaseApp.getApps(context).isEmpty()) return
-        val token = runCatching { currentToken() }.getOrNull() ?: return
+        val token = try {
+            currentToken()
+        } catch (error: Exception) {
+            Log.w(TAG, "Unable to retrieve the FCM registration token (${error.javaClass.simpleName})")
+            return
+        }
         registerToken(token)
     }
 
     override suspend fun registerToken(token: String) {
         if (tokenStore.getToken().isNullOrBlank() || FirebaseApp.getApps(context).isEmpty() || token.isBlank()) return
-        safeApiCall { api.register(PushDeviceRequest(installationId(), token)) }
+        when (val result = safeApiCall { api.register(PushDeviceRequest(installationId(), token)) }) {
+            is ApiResult.Success -> Unit
+            is ApiResult.Failure -> Log.w(TAG, "FCM registration failed (${result.error.code})")
+        }
     }
 
     override suspend fun unregister() {
         val installationId = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE).getString(INSTALLATION_ID, null) ?: return
         if (tokenStore.getToken().isNullOrBlank()) return
-        safeApiCall { api.unregister(installationId) }
+        when (val result = safeApiCall { api.unregister(installationId) }) {
+            is ApiResult.Success -> Unit
+            is ApiResult.Failure -> Log.w(TAG, "FCM unregistration failed (${result.error.code})")
+        }
     }
 
     private suspend fun currentToken(): String = suspendCancellableCoroutine { continuation ->
@@ -49,6 +62,7 @@ class FirebasePushDeviceRegistrar(
     }
 
     private companion object {
+        const val TAG = "PushDeviceRegistrar"
         const val PREFERENCES = "push_device"
         const val INSTALLATION_ID = "installation_id"
     }

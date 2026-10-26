@@ -115,6 +115,10 @@ const messageSchema = new mongoose.Schema(
       },
     ],
     senderPublicKey: String,
+    // Installation ids are claimed before message-push attempts so repeated
+    // dispatches cannot notify the same device twice. Failed FCM attempts are
+    // intentionally not retried without an outbox/queue.
+    pushAttemptedInstallationIds: { type: [String], default: [], select: false },
     // Set only on the plaintext "reacted to your Story"/"reacted to your
     // Note" and text-reply messages created from stories.routes.js /
     // notes.routes.js — never on a normal typed message. `snapshot` is a

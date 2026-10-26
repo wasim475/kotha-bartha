@@ -15,7 +15,7 @@ const { UNSEND_WINDOW_MS } = require("../utils/config");
 const { THEME_IDS } = require("../utils/conversationThemes");
 const { ACTIONS, requireAction } = require("../utils/moderation");
 const { otherParticipants, clearHiddenFor, bumpUnreadFor } = require("../utils/conversationHelpers");
-const { sendNewMessagePush } = require("../services/push.service");
+const { sendNewMessagePush, messagePushRecipients } = require("../services/push.service");
 const {
   assertMessageWriteAllowed,
   assertClientCannotChangeMessageSecurityMode,
@@ -1156,12 +1156,11 @@ router.post(
           : null,
       };
       broadcastToOthers(req, others, "message:new", payload);
-      const safePreview = message.encrypted
-        ? "New encrypted message"
-        : message.type === "text"
-          ? message.body.replace(/[\r\n]+/g, " ").slice(0, 140)
-          : "Sent an attachment";
-      void sendNewMessagePush({ recipientIds: others, senderName: req.user.fullName, conversationId: conversation._id, messageId: message._id, preview: safePreview })
+      void sendNewMessagePush({
+        recipientIds: messagePushRecipients(conversation, req.user._id),
+        conversationId: conversation._id,
+        messageId: message._id,
+      })
         .catch(() => console.error("message push dispatch failed"));
 
       res.status(201).json({
@@ -1330,7 +1329,11 @@ router.post(
       };
 
       broadcastToOthers(req, others, "message:new", payload);
-      void sendNewMessagePush({ recipientIds: others, senderName: req.user.fullName, conversationId: conversation._id, messageId: message._id, preview: "Sent an attachment" })
+      void sendNewMessagePush({
+        recipientIds: messagePushRecipients(conversation, req.user._id),
+        conversationId: conversation._id,
+        messageId: message._id,
+      })
         .catch(() => console.error("message push dispatch failed"));
 
       res.status(201).json({
@@ -1847,12 +1850,11 @@ router.post(
           },
         };
         broadcastToOthers(req, targetOthers, "message:new", payload);
-        const safePreview = forwarded.encrypted
-          ? "New encrypted message"
-          : forwarded.type === "text"
-            ? forwarded.body.replace(/[\r\n]+/g, " ").slice(0, 140)
-            : "Sent an attachment";
-        void sendNewMessagePush({ recipientIds: targetOthers, senderName: req.user.fullName, conversationId: target._id, messageId: forwarded._id, preview: safePreview })
+        void sendNewMessagePush({
+          recipientIds: messagePushRecipients(target, req.user._id),
+          conversationId: target._id,
+          messageId: forwarded._id,
+        })
           .catch(() => console.error("message push dispatch failed"));
         results.push(payload);
       }

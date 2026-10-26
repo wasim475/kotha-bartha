@@ -27,11 +27,13 @@ data class NotificationTarget(
 
 class MainActivity : ComponentActivity() {
     private var pendingNotification by mutableStateOf<NotificationTarget?>(null)
+    private var notificationHandled = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        pendingNotification = intent.toNotificationTarget()
+        notificationHandled = savedInstanceState?.getBoolean(STATE_NOTIFICATION_HANDLED) ?: false
+        pendingNotification = if (notificationHandled) null else intent.toNotificationTarget()
         setContent {
             val preferences = koinInject<AppPreferences>()
             val savedDarkTheme by preferences.darkTheme.collectAsState(initial = null)
@@ -42,7 +44,10 @@ class MainActivity : ComponentActivity() {
                 KothaBartaNavHost(
                     isDarkTheme = darkTheme,
                     notificationTarget = pendingNotification,
-                    onNotificationHandled = { pendingNotification = null },
+                    onNotificationHandled = {
+                        pendingNotification = null
+                        notificationHandled = true
+                    },
                     onToggleTheme = {
                         coroutineScope.launch { preferences.setDarkTheme(!darkTheme) }
                     },
@@ -54,7 +59,27 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        notificationHandled = false
         pendingNotification = intent.toNotificationTarget()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        PushNotificationState.setAppForeground(true)
+    }
+
+    override fun onStop() {
+        PushNotificationState.setAppForeground(false)
+        super.onStop()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean(STATE_NOTIFICATION_HANDLED, notificationHandled)
+        super.onSaveInstanceState(outState)
+    }
+
+    private companion object {
+        const val STATE_NOTIFICATION_HANDLED = "notification_handled"
     }
 }
 
@@ -65,4 +90,7 @@ private fun android.content.Intent.toNotificationTarget() = NotificationTarget(
     postId = getStringExtra("postId"),
     commentId = getStringExtra("commentId"),
     replyId = getStringExtra("replyId"),
-).takeIf { listOf(it.conversationId, it.postId).any { id -> !id.isNullOrBlank() } }
+).takeIf {
+    isValidConversationNotificationId(it.conversationId) ||
+        isValidConversationNotificationId(it.postId)
+}

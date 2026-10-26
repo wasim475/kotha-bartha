@@ -1,57 +1,143 @@
-const { GoogleAuth } = require("google-auth-library");
+const firebaseAdmin = require("firebase-admin");
 const User = require("../models/User");
+const Message = require("../models/Message");
 
-const FCM_SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
+const FCM_CONCURRENCY = 20;
 
-async function sendDataPush(recipientIds, data) {
-  const projectId = process.env.FCM_PROJECT_ID;
-  if (!projectId || !process.env.GOOGLE_APPLICATION_CREDENTIALS) return;
-
-  const auth = new GoogleAuth({ scopes: [FCM_SCOPE] });
-  const client = await auth.getClient();
-  const recipients = await User.find({ _id: { $in: recipientIds } }).select("+pushDevices").lean();
-  for (const recipient of recipients) {
-    for (const device of recipient.pushDevices || []) {
-      try {
-        await client.request({
-          url: `https://fcm.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/messages:send`,
-          method: "POST",
-          data: {
-            message: {
-              token: device.token,
-              data,
-              android: { priority: "high", ttl: "86400s" },
-            },
-          },
-        });
-      } catch (error) {
-        const status = error.response?.status;
-        const details = error.response?.data?.error?.details || [];
-        const invalidToken = status === 404 || details.some((detail) => detail.errorCode === "UNREGISTERED");
-        if (invalidToken) {
-          await User.updateOne(
-            { _id: recipient._id },
-            { $pull: { pushDevices: { token: device.token } } },
-          );
-        }
-        // Never log FCM tokens, message bodies, or response payloads.
-        console.error("message push delivery failed", { status: Number.isInteger(status) ? status : "network" });
-      }
-    }
-  }
+function messagePushRecipients(conversation, senderId) {
+  const sender = String(senderId);
+  return [...new Set((conversation.participantIds || []).map(String).filter((id) => id !== sender))];
 }
 
-/** Message previews are passed only after the caller has applied encryption/privacy rules. */
-const messagePushData = ({ senderName, conversationId, messageId, preview }) => ({
+function createPushDispatcher({
+  userModel = User,
+  messageModel = Message,
+  messagingFactory = createAdminMessaging,
+  env = process.env,
+  logger = console,
+} = {}) {
+  let missingConfigurationLogged = false;
+  let messagingPromise = null;
+
+  async function getMessaging(projectId) {
+    if (!messagingPromise) {
+      messagingPromise = Promise.resolve().then(() =>
+        messagingFactory(firebaseAdmin, projectId, env.FCM_SERVICE_ACCOUNT_JSON),
+      );
+    }
+    try {
+      return await messagingPromise;
+    } catch (error) {
+      messagingPromise = null;
+      throw error;
+    }
+  }
+
+  async function claimMessagePushAttempt(messageId, installationId) {
+    const result = await messageModel.updateOne(
+      { _id: messageId, pushAttemptedInstallationIds: { $ne: installationId } },
+      { $addToSet: { pushAttemptedInstallationIds: installationId } },
+    );
+    return result.modifiedCount === 1;
+  }
+
+  async function sendDataPush(recipientIds, data, messageId = null) {
+    const projectId = env.FCM_PROJECT_ID;
+    if (!projectId) {
+      if (!missingConfigurationLogged) {
+        logger.error("FCM push delivery is disabled: FCM_PROJECT_ID is not configured");
+        missingConfigurationLogged = true;
+      }
+      return;
+    }
+
+    let recipients;
+    try {
+      const messaging = await getMessaging(projectId);
+      recipients = await userModel.find({ _id: { $in: [...new Set(recipientIds.map(String))] } })
+        .select("+pushDevices")
+        .lean();
+      const devices = recipients.flatMap((recipient) =>
+        (recipient.pushDevices || []).map((device) => ({ recipient, device })),
+      );
+      for (let offset = 0; offset < devices.length; offset += FCM_CONCURRENCY) {
+        await Promise.all(devices.slice(offset, offset + FCM_CONCURRENCY).map(({ recipient, device }) =>
+          deliverToDevice(messaging, data, messageId, recipient, device),
+        ));
+      }
+    } catch (error) {
+      logger.error("message push initialization failed", { error: error.name || "Error" });
+    }
+  }
+
+  async function deliverToDevice(messaging, data, messageId, recipient, device) {
+    if (messageId) {
+      try {
+        if (!(await claimMessagePushAttempt(messageId, device.installationId))) return;
+      } catch (error) {
+        logger.error("message push deduplication failed", { error: error.name || "Error" });
+        return;
+      }
+    }
+    try {
+      await messaging.send({
+        token: device.token,
+        data,
+        android: { priority: "high", ttl: 86400000 },
+      });
+    } catch (error) {
+      const code = error.code || "unknown";
+      const invalidToken = [
+        "messaging/registration-token-not-registered",
+        "messaging/invalid-registration-token",
+      ].includes(code);
+      if (invalidToken) {
+        try {
+          await userModel.updateOne(
+            { _id: recipient._id },
+            { $pull: { pushDevices: { installationId: device.installationId, token: device.token } } },
+          );
+        } catch (cleanupError) {
+          logger.error("invalid push token cleanup failed", { error: cleanupError.name || "Error" });
+        }
+      }
+      logger.error("message push delivery failed", {
+        code,
+        invalidToken,
+      });
+    }
+  }
+
+  return {
+    sendDataPush,
+    sendNewMessagePush: ({ recipientIds, conversationId, messageId }) =>
+      sendDataPush(recipientIds, messagePushData({ conversationId, messageId }), String(messageId)),
+    claimMessagePushAttempt,
+  };
+}
+
+function createAdminMessaging(admin, projectId, serviceAccountJson) {
+  const name = `kotha-barta-${projectId}`;
+  const existingApp = admin.apps.find((app) => app.name === name);
+  if (existingApp) return admin.messaging(existingApp);
+
+  const credential = serviceAccountJson
+    ? admin.credential.cert(JSON.parse(serviceAccountJson))
+    : admin.credential.applicationDefault();
+  const app = admin.initializeApp({ credential, projectId }, name);
+  return admin.messaging(app);
+}
+
+const { sendDataPush, sendNewMessagePush, claimMessagePushAttempt } = createPushDispatcher();
+
+const messagePushData = ({ conversationId, messageId }) => ({
   type: "message",
   notificationId: String(messageId),
   conversationId: String(conversationId),
   messageId: String(messageId),
-  title: senderName || "New message",
-  body: String(preview || "You have a new message.").slice(0, 160),
+  title: "Kotha-Barta",
+  body: "New message",
 });
-
-const sendNewMessagePush = ({ recipientIds, ...details }) => sendDataPush(recipientIds, messagePushData(details));
 
 function notificationPushData(notification) {
   const payload = notification.payload || {};
@@ -88,4 +174,16 @@ const incomingCallPushData = ({ callerName, callId, conversationId, video }) => 
 
 const sendIncomingCallPush = ({ recipientId, ...details }) => sendDataPush([recipientId], incomingCallPushData(details));
 
-module.exports = { sendNewMessagePush, sendIncomingCallPush, sendNotificationPush, messagePushData, incomingCallPushData, notificationPushData };
+module.exports = {
+  sendNewMessagePush,
+  sendIncomingCallPush,
+  sendNotificationPush,
+  sendDataPush,
+  createPushDispatcher,
+  createAdminMessaging,
+  messagePushData,
+  messagePushRecipients,
+  claimMessagePushAttempt,
+  incomingCallPushData,
+  notificationPushData,
+};

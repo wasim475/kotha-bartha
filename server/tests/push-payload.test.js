@@ -2,17 +2,24 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { messagePushData, notificationPushData } = require("../src/services/push.service");
 
-test("message push contains stable destination IDs and never includes message content", () => {
-  const data = messagePushData({ senderName: "Amina", conversationId: "c1", messageId: "m1", body: "secret" });
+test("message push contains generic copy and stable destination IDs only", () => {
+  const data = messagePushData({
+    senderName: "Amina",
+    conversationId: "c1",
+    messageId: "m1",
+    body: "plaintext secret",
+    preview: "private preview",
+  });
   assert.deepEqual(data, {
     type: "message",
     notificationId: "m1",
     conversationId: "c1",
     messageId: "m1",
-    title: "Amina",
-    body: "You have a new message.",
+    title: "Kotha-Barta",
+    body: "New message",
   });
   assert.equal(JSON.stringify(data).includes("secret"), false);
+  assert.equal(JSON.stringify(data).includes("Amina"), false);
 });
 
 test("post reaction push carries post ID and the actual reaction type", () => {

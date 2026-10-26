@@ -10,6 +10,7 @@ const { blockedPairIds, isBlockedEitherWay } = require("../utils/blocks");
 const { upload } = require("../middleware/upload");
 const { uploadBuffer, destroyAsset } = require("../utils/cloudinary");
 const { ACTIONS, requireAction, VISIBLE_CONTENT } = require("../utils/moderation");
+const { parsePushDeviceRegistration, isValidPushInstallationId } = require("../utils/pushDevices");
 
 const router = express.Router();
 
@@ -17,11 +18,11 @@ const router = express.Router();
 // Moving a token removes its previous owner first, so tokens cannot be registered on two accounts.
 router.put("/users/me/push-device", async (req, res, next) => {
   try {
-    const installationId = String(req.body?.installationId || "");
-    const token = String(req.body?.token || "");
-    if (!/^[A-Za-z0-9_-]{16,128}$/.test(installationId) || token.length < 32 || token.length > 4096) {
+    const registration = parsePushDeviceRegistration(req.body);
+    if (!registration) {
       return res.status(400).json({ error: { code: "INVALID_PUSH_DEVICE", message: "Invalid push registration." } });
     }
+    const { installationId, token } = registration;
     await User.updateMany({ "pushDevices.token": token }, { $pull: { pushDevices: { token } } });
     await User.updateOne(
       { _id: req.user._id },
@@ -61,7 +62,7 @@ router.put("/users/me/push-device", async (req, res, next) => {
 router.delete("/users/me/push-device/:installationId", async (req, res, next) => {
   try {
     const installationId = String(req.params.installationId || "");
-    if (!/^[A-Za-z0-9_-]{16,128}$/.test(installationId)) {
+    if (!isValidPushInstallationId(installationId)) {
       return res.status(400).json({ error: { code: "INVALID_PUSH_DEVICE", message: "Invalid push registration." } });
     }
     await User.updateOne({ _id: req.user._id }, { $pull: { pushDevices: { installationId } } });

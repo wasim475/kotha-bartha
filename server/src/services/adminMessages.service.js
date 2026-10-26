@@ -12,6 +12,7 @@ const { UNSEND_WINDOW_MS } = require("../utils/config");
 const { logAdminAction } = require("./adminAudit.service");
 const { serializeReport } = require("./report.service");
 const { assertMessageWriteAllowed } = require("../utils/messageSecurity");
+const { sendNewMessagePush } = require("./push.service");
 
 // Messaging between users and administrators, built on what already exists:
 //   admin -> user : an ordinary Message in the normal 1-to-1 conversation (flagged
@@ -130,6 +131,11 @@ async function sendAdminMessage(admin, req, { userId, body, reportId } = {}) {
     replyTo: null,
   };
   req.app.get("io")?.to(`user:${target._id}`).emit("message:new", payload);
+  void sendNewMessagePush({
+    recipientIds: [target._id],
+    conversationId: conversation._id,
+    messageId: message._id,
+  }).catch(() => console.error("message push dispatch failed"));
 
   await logAdminAction(admin, {
     action: "admin.message_sent",

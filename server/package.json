@@ -1,12 +1,16 @@
 {
   "name": "server",
   "version": "1.0.0",
+  "engines": {
+    "node": ">=22"
+  },
   "description": "",
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "check": "node --check src/server.js && node --check src/app.js && node --check src/routes/auth.js && node --check src/routes/index.js && node --check src/routes/users.routes.js && node --check src/routes/posts.routes.js && node --check src/routes/comments.routes.js && node --check src/routes/friends.routes.js && node --check src/routes/chat.routes.js && node --check src/routes/notifications.routes.js && node --check src/routes/blocks.routes.js && node --check src/routes/link-preview.routes.js && node --check src/utils/ids.js && node --check src/utils/serializers.js && node --check src/utils/realtime.js && node --check src/utils/blocks.js && node --check src/utils/presence.js && node --check src/utils/cloudinary.js && node --check src/services/notification.service.js && node --check src/middleware/auth.js && node --check src/middleware/upload.js && node --check src/models/Block.js && node --check src/models/Message.js && node --check src/models/Conversation.js && node --check src/games/ludo/engine.js && node --check src/services/ludo.service.js && node --check src/routes/ludo.routes.js && node --check src/sockets/ludo.socket.js && node --check src/models/LudoGame.js && node --check src/models/LudoInvite.js && node --check src/models/Call.js && node --check src/services/call.service.js && node --check src/routes/call.routes.js && node --check src/sockets/call.socket.js && node --check src/utils/conversationHelpers.js",
+    "check:push": "node --check src/routes/users.routes.js && node --check src/routes/chat.routes.js && node --check src/services/push.service.js && node --check src/services/adminMessages.service.js && node --check src/utils/contextMessages.js && node --check src/utils/pushDevices.js && node --check src/models/Message.js",
     "test": "node --test",
     "sync:ludo": "node scripts/sync-ludo-engine.js",
     "test:ludo": "node --test \"tests/ludo/*.test.js\"",
@@ -28,6 +32,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
+    "firebase-admin": "^14.5.0",
     "google-auth-library": "^11.1.0",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",

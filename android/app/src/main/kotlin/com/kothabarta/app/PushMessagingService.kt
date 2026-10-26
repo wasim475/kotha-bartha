@@ -3,9 +3,12 @@ package com.kothabarta.app
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
+import androidx.core.content.ContextCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -33,8 +36,15 @@ class PushMessagingService : FirebaseMessagingService(), KoinComponent {
         if (type !in setOf("message", "call", "post_like", "post_reaction", "post_comment", "comment_reaction", "friend_request", "friend_accepted", "missed_call")) return
         val conversationId = data["conversationId"]?.takeIf(String::isNotBlank)
         val isPostTarget = type in setOf("post_like", "post_reaction", "post_comment", "comment_reaction")
-        if ((type == "message" || type == "call" || type == "missed_call") && conversationId == null) return
+        if ((type == "message" || type == "call" || type == "missed_call") &&
+            !isValidConversationNotificationId(conversationId)
+        ) return
+        if (type == "message" && !isValidConversationNotificationId(data["messageId"])) return
         if (isPostTarget && data["postId"].isNullOrBlank()) return
+        if (type == "message" && PushNotificationState.shouldSuppressMessageNotification(this, conversationId!!)) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) return
         val channelId = if (type == "call") CALL_CHANNEL_ID else MESSAGE_CHANNEL_ID
         ensureChannel(channelId, if (type == "call") "Calls" else "Messages")
         val intent = Intent(this, MainActivity::class.java).apply {
@@ -50,16 +60,21 @@ class PushMessagingService : FirebaseMessagingService(), KoinComponent {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val notificationTitle = if (type == "message") "Kotha-Barta"
+        else data["title"] ?: if (type == "call") "Incoming call" else "New message"
+        val notificationBody = if (type == "message") "New message"
+        else data["body"] ?: if (type == "call") "Incoming call" else "You have a new message."
         val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.sym_action_chat)
-            .setContentTitle(data["title"] ?: if (type == "call") "Incoming call" else "New message")
-            .setContentText(data["body"] ?: if (type == "call") "Incoming call" else "You have a new message.")
-            .setStyle(NotificationCompat.BigTextStyle().bigText(data["body"] ?: if (type == "call") "Incoming call" else "You have a new message."))
+            .setContentTitle(notificationTitle)
+            .setContentText(notificationBody)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(notificationBody))
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPriority(if (type == "call") NotificationCompat.PRIORITY_MAX else NotificationCompat.PRIORITY_HIGH)
             .build()
-        runCatching { NotificationManagerCompat.from(this).notify((data["notificationId"] ?: destinationId).hashCode(), notification) }
+        NotificationManagerCompat.from(this).notify((data["notificationId"] ?: destinationId).hashCode(), notification)
     }
 
     private fun ensureChannel(channelId: String, name: String) {

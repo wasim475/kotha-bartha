@@ -2,6 +2,7 @@ const Conversation = require("../models/Conversation");
 const Message = require("../models/Message");
 const { pairKey } = require("./ids");
 const { emitToUser } = require("./realtime");
+const { sendNewMessagePush, messagePushRecipients } = require("../services/push.service");
 const { UNSEND_WINDOW_MS } = require("./config");
 const { assertMessageWriteAllowed } = require("./messageSecurity");
 
@@ -132,6 +133,11 @@ async function sendContextMessage(req, { owner, body, storyContext }) {
   const payload = buildPayload(req, message, conversation._id);
 
   others.forEach((id) => emitToUser(req, id, "message:new", payload));
+  void sendNewMessagePush({
+    recipientIds: messagePushRecipients(conversation, req.user._id),
+    conversationId: conversation._id,
+    messageId: message._id,
+  }).catch(() => console.error("message push dispatch failed"));
 
   return { message, conversation, payload, deduped: false };
 }

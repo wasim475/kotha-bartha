@@ -34,6 +34,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -71,6 +72,7 @@ import androidx.navigation.navArgument
 import com.kothabarta.core.common.ApiResult
 import com.kothabarta.app.BuildConfig
 import com.kothabarta.app.NotificationTarget
+import com.kothabarta.app.PushNotificationState
 import com.kothabarta.core.navigation.NavigationEvent
 import com.kothabarta.core.navigation.Routes
 import com.kothabarta.core.network.social.SafeUserDto
@@ -164,9 +166,18 @@ fun MainScreen(
     LaunchedEffect(notificationTarget) {
         val target = notificationTarget ?: return@LaunchedEffect
         when {
-            !target.conversationId.isNullOrBlank() -> navController.navigate(
-                Routes.chat(target.conversationId, messageId = target.messageId),
-            ) { popUpTo(navController.graph.findStartDestination().id) }
+            !target.conversationId.isNullOrBlank() -> {
+                val current = navController.currentBackStackEntry
+                val alreadyShowingTarget = current?.destination?.route == Routes.CHAT_PATTERN &&
+                    current.arguments?.getString(Routes.CHAT_CONVERSATION_ARG) == target.conversationId &&
+                    (target.messageId.isNullOrBlank() ||
+                        current.arguments?.getString(Routes.CHAT_MESSAGE_ARG) == target.messageId)
+                if (!alreadyShowingTarget) {
+                    navController.navigate(Routes.chat(target.conversationId, messageId = target.messageId)) {
+                        popUpTo(navController.graph.findStartDestination().id)
+                    }
+                }
+            }
             !target.postId.isNullOrBlank() -> navController.navigate(Routes.post(target.postId)) {
                 popUpTo(navController.graph.findStartDestination().id)
             }
@@ -218,6 +229,19 @@ fun MainScreen(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val isConversationOpen = backStackEntry?.destination?.route == Routes.CHAT_PATTERN
     val isImeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val activeConversationId = if (isConversationOpen) {
+        backStackEntry?.arguments?.getString(Routes.CHAT_CONVERSATION_ARG)
+    } else {
+        null
+    }
+    DisposableEffect(context, activeConversationId) {
+        PushNotificationState.setActiveConversation(context, activeConversationId)
+        onDispose {
+            if (activeConversationId != null) {
+                PushNotificationState.clearActiveConversation(context, activeConversationId)
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
