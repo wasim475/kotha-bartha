@@ -218,6 +218,24 @@ class ChatViewModelTest {
         assertEquals("✓✓", deliveryTick("read"))
     }
 
+    @Test
+    fun `messages group only for same sender within five minutes`() {
+        val first = MessageDto(
+            id = "first",
+            body = "বাংলা message",
+            createdAt = "2026-10-26T10:00:00Z",
+            senderId = "peer-1",
+        )
+        val nearby = first.copy(id = "nearby", createdAt = "2026-10-26T10:04:59Z")
+        val later = first.copy(id = "later", createdAt = "2026-10-26T10:05:01Z")
+        val otherSender = nearby.copy(senderId = "me")
+
+        assertTrue(messagesBelongToSameGroup(first, nearby))
+        assertFalse(messagesBelongToSameGroup(first, later))
+        assertFalse(messagesBelongToSameGroup(first, otherSender))
+        assertFalse(messagesBelongToSameGroup(first, first.copy(createdAt = "invalid")))
+    }
+
     private fun historyMessage(id: String) = MessageDto(id = id, body = "hi", createdAt = "now", senderId = "peer-1")
 
     private class FakeAuthApi : AuthApi {

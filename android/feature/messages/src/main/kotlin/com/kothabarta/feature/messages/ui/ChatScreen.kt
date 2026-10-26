@@ -24,7 +24,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -33,7 +33,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -48,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -71,6 +71,7 @@ import com.kothabarta.core.ui.theme.Spacing
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.IOException
+import java.time.Duration
 import java.time.Instant
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -94,9 +95,11 @@ fun ChatScreen(
     ),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val chatPalette = chatPalette()
     val callLauncher = koinInject<CallLauncher>()
     val context = LocalContext.current
     val listState = rememberLazyListState()
+    val displayMessages = remember(state.messages) { state.messages.asReversed() }
     val coroutineScope = rememberCoroutineScope()
     var showEmojiPicker by remember { mutableStateOf(false) }
     var voiceRecorder by remember { mutableStateOf<MediaRecorder?>(null) }
@@ -221,14 +224,14 @@ fun ChatScreen(
         }
     }
 
-    MaterialTheme(colorScheme = ChatColorScheme) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .imePadding()
-                .background(ChatColors.background),
-        ) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .imePadding()
+            .background(chatPalette.background),
+    ) {
             ChatHeader(
+                palette = chatPalette,
                 peerName = viewModel.peerName,
                 peerAvatarUrl = peerAvatarUrl,
                 isPeerTyping = state.isPeerTyping,
@@ -264,11 +267,15 @@ fun ChatScreen(
                         reverseLayout = true,
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(ChatColors.background),
+                            .background(chatPalette.background),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(Spacing.md),
                         verticalArrangement = Arrangement.spacedBy(4.dp, alignment = Alignment.Bottom),
                     ) {
-                        items(state.messages.asReversed(), key = { it.id }) { message ->
+                        itemsIndexed(displayMessages, key = { _, message -> message.id }) { index, message ->
+                            val newerMessage = displayMessages.getOrNull(index - 1)
+                            val olderMessage = displayMessages.getOrNull(index + 1)
+                            val groupedWithNewer = newerMessage?.let { messagesBelongToSameGroup(message, it) } == true
+                            val groupedWithOlder = olderMessage?.let { messagesBelongToSameGroup(message, it) } == true
                             MessageBubble(
                                 message = message,
                                 isOwn = message.senderId == state.myUserId,
@@ -280,7 +287,13 @@ fun ChatScreen(
                                 onDeleteForMe = { viewModel.deleteForMe(message.id) },
                                 onRetry = { viewModel.retrySend(message.id) },
                                 onDiscard = { viewModel.discardFailed(message.id) },
+                                modifier = Modifier.padding(
+                                    vertical = if (groupedWithNewer || groupedWithOlder) 0.dp else 2.dp,
+                                ),
                                 decryptionState = state.decryptionStates[message.id],
+                                palette = chatPalette,
+                                groupedWithNewer = groupedWithNewer,
+                                groupedWithOlder = groupedWithOlder,
                             )
                         }
                     }
@@ -333,7 +346,7 @@ fun ChatScreen(
                     .fillMaxWidth()
                     .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                 shape = RoundedCornerShape(28.dp),
-                color = ChatColors.header,
+                color = chatPalette.header,
             ) {
                 Row(
                     modifier = Modifier
@@ -355,7 +368,7 @@ fun ChatScreen(
                             AppSymbol.ATTACHMENT,
                             contentDescription = null,
                             modifier = Modifier.size(24.dp),
-                            tint = ChatColors.primaryText,
+                            tint = chatPalette.primaryText,
                         )
                     }
 
@@ -374,7 +387,7 @@ fun ChatScreen(
                                 AppSymbol.REACTIONS,
                                 contentDescription = null,
                                 modifier = Modifier.size(24.dp),
-                                tint = ChatColors.primaryText,
+                                tint = chatPalette.primaryText,
                             )
                         }
                         DropdownMenu(
@@ -408,7 +421,7 @@ fun ChatScreen(
                         if (state.composerText.isEmpty()) {
                             Text(
                                 text = "Type a message",
-                                color = ChatColors.secondaryText,
+                                color = chatPalette.secondaryText,
                                 style = MaterialTheme.typography.bodyLarge,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -421,10 +434,10 @@ fun ChatScreen(
                             singleLine = true,
                             enabled = voiceRecorder == null,
                             textStyle = TextStyle(
-                                color = ChatColors.primaryText,
+                                color = chatPalette.primaryText,
                                 fontSize = 16.sp,
                             ),
-                            cursorBrush = SolidColor(ChatColors.online),
+                            cursorBrush = SolidColor(chatPalette.online),
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                             keyboardActions = KeyboardActions(onSend = { viewModel.sendText() }),
                         )
@@ -436,7 +449,7 @@ fun ChatScreen(
                             .size(44.dp)
                             .then(
                                 if (hasMessage) Modifier
-                                    .background(ChatColors.online, CircleShape)
+                                    .background(chatPalette.outgoingBubble, CircleShape)
                                     .clickable(onClick = viewModel::sendText)
                                 else if (voiceRecorder != null) Modifier
                                     .background(MaterialTheme.colorScheme.error, CircleShape)
@@ -469,39 +482,51 @@ fun ChatScreen(
                             },
                             contentDescription = null,
                             modifier = Modifier.size(24.dp),
-                            tint = if (hasMessage || voiceRecorder != null) Color.White else ChatColors.primaryText,
+                            tint = if (hasMessage || voiceRecorder != null) Color.White else chatPalette.primaryText,
                         )
                     }
                 }
             }
-            }
     }
 }
 
-internal object ChatColors {
-    val background = Color(0xFF0B141A)
-    val header = Color(0xFF202C33)
-    val incomingBubble = Color(0xFF202C33)
-    val outgoingBubble = Color(0xFF005C4B)
-    val primaryText = Color(0xFFE9EDEF)
-    val secondaryText = Color(0xFF8696A0)
-    val online = Color(0xFF25D366)
-}
-
-private val ChatColorScheme = darkColorScheme(
-    primary = ChatColors.online,
-    onPrimary = ChatColors.primaryText,
-    background = ChatColors.background,
-    onBackground = ChatColors.primaryText,
-    surface = ChatColors.header,
-    onSurface = ChatColors.primaryText,
-    surfaceVariant = ChatColors.incomingBubble,
-    onSurfaceVariant = ChatColors.secondaryText,
-    outline = ChatColors.secondaryText,
+data class ChatPalette(
+    val background: Color,
+    val header: Color,
+    val incomingBubble: Color,
+    val outgoingBubble: Color,
+    val primaryText: Color,
+    val outgoingText: Color,
+    val secondaryText: Color,
+    val online: Color,
 )
 
 @Composable
+internal fun chatPalette(): ChatPalette {
+    val scheme = MaterialTheme.colorScheme
+    val isDark = scheme.background.luminance() < 0.5f
+    return ChatPalette(
+        background = scheme.background,
+        header = scheme.surface,
+        incomingBubble = if (isDark) Color(0xFF292825) else Color.White,
+        outgoingBubble = scheme.primaryContainer,
+        primaryText = scheme.onSurface,
+        outgoingText = scheme.onPrimaryContainer,
+        secondaryText = scheme.onSurfaceVariant,
+        online = Color(0xFF25D366),
+    )
+}
+
+internal fun messagesBelongToSameGroup(first: MessageDto, second: MessageDto): Boolean {
+    if (first.senderId != second.senderId) return false
+    val firstTime = runCatching { Instant.parse(first.createdAt) }.getOrNull() ?: return false
+    val secondTime = runCatching { Instant.parse(second.createdAt) }.getOrNull() ?: return false
+    return kotlin.math.abs(Duration.between(firstTime, secondTime).toMillis()) <= 5 * 60 * 1000
+}
+
+@Composable
 private fun ChatHeader(
+    palette: ChatPalette,
     peerName: String?,
     peerAvatarUrl: String?,
     isPeerTyping: Boolean,
@@ -512,13 +537,13 @@ private fun ChatHeader(
     onAudioCall: () -> Unit,
     onVideoCall: () -> Unit,
 ) {
-    Surface(color = ChatColors.header) {
+    Surface(color = palette.header) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
-                Text("←", color = ChatColors.primaryText, fontSize = 28.sp, lineHeight = 28.sp)
+                Text("←", color = palette.primaryText, fontSize = 28.sp, lineHeight = 28.sp)
             }
             Box(modifier = Modifier.padding(end = Spacing.sm)) {
                 AvatarImage(
@@ -531,7 +556,7 @@ private fun ChatHeader(
                         modifier = Modifier
                             .size(12.dp)
                             .align(Alignment.BottomEnd)
-                            .background(ChatColors.online, androidx.compose.foundation.shape.CircleShape)
+                            .background(palette.online, androidx.compose.foundation.shape.CircleShape)
                             .semantics { contentDescription = "Online" },
                     )
                 }
@@ -540,7 +565,7 @@ private fun ChatHeader(
                 Text(
                     peerName ?: "Chat",
                     style = MaterialTheme.typography.titleMedium,
-                    color = ChatColors.primaryText,
+                    color = palette.primaryText,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                 )
@@ -553,17 +578,17 @@ private fun ChatHeader(
                     Text(
                         subtitle,
                         style = MaterialTheme.typography.labelMedium,
-                        color = if (isPeerTyping || peerIsOnline) ChatColors.online else ChatColors.secondaryText,
+                        color = if (isPeerTyping || peerIsOnline) palette.online else palette.secondaryText,
                         maxLines = 1,
                     )
                 }
             }
             if (canCall) {
                 IconButton(onClick = onVideoCall) {
-                    AppIcon(AppSymbol.VIDEO_CALL, contentDescription = "Start video call", tint = ChatColors.primaryText)
+                    AppIcon(AppSymbol.VIDEO_CALL, contentDescription = "Start video call", tint = palette.primaryText)
                 }
                 IconButton(onClick = onAudioCall) {
-                    AppIcon(AppSymbol.AUDIO_CALL, contentDescription = "Start audio call", tint = ChatColors.primaryText)
+                    AppIcon(AppSymbol.AUDIO_CALL, contentDescription = "Start audio call", tint = palette.primaryText)
                 }
             }
         }

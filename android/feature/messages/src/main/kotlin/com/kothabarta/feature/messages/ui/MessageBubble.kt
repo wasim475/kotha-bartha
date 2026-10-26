@@ -1,9 +1,7 @@
 package com.kothabarta.feature.messages.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -27,8 +25,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.kothabarta.core.network.messages.MessageDto
 import com.kothabarta.feature.messages.data.MessageDecryptionState
 import com.kothabarta.core.ui.components.NetworkImage
@@ -51,6 +49,9 @@ fun MessageBubble(
     onDiscard: () -> Unit,
     modifier: Modifier = Modifier,
     decryptionState: MessageDecryptionState? = null,
+    palette: ChatPalette = chatPalette(),
+    groupedWithNewer: Boolean = false,
+    groupedWithOlder: Boolean = false,
 ) {
     var actionsOpen by remember(message.id) { mutableStateOf(false) }
     val canUnsend = isOwn && !isPending && message.unsendExpiresAt?.let { runCatching { Instant.parse(it).isAfter(Instant.now()) }.getOrDefault(false) } == true
@@ -61,22 +62,22 @@ fun MessageBubble(
     ) {
         Surface(
             modifier = Modifier
-                .widthIn(max = 320.dp)
+                .widthIn(max = 520.dp)
                 .clip(
                     RoundedCornerShape(
-                        topStart = 16.dp,
-                        topEnd = 16.dp,
-                        bottomStart = if (isOwn) 16.dp else 4.dp,
-                        bottomEnd = if (isOwn) 4.dp else 16.dp,
+                        topStart = if (!isOwn && groupedWithOlder) 6.dp else 18.dp,
+                        topEnd = if (isOwn && groupedWithOlder) 6.dp else 18.dp,
+                        bottomStart = if (!isOwn && groupedWithNewer) 6.dp else if (isOwn) 18.dp else 6.dp,
+                        bottomEnd = if (isOwn && groupedWithNewer) 6.dp else if (isOwn) 6.dp else 18.dp,
                     ),
                 )
                 .clickable { actionsOpen = !actionsOpen },
-            color = if (isOwn) ChatColors.outgoingBubble else ChatColors.incomingBubble,
+            color = if (isOwn) palette.outgoingBubble else palette.incomingBubble,
         ) {
-            Column(modifier = Modifier.padding(Spacing.sm)) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 11.dp)) {
                 message.replyTo?.let { reply ->
                     Surface(
-                        color = MaterialTheme.colorScheme.background.copy(alpha = 0.3f),
+                        color = (if (isOwn) palette.outgoingText else palette.primaryText).copy(alpha = 0.1f),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = Spacing.xs),
@@ -85,6 +86,7 @@ fun MessageBubble(
                             text = if (reply.encrypted) "🔒 Encrypted message" else (reply.body ?: ""),
                             modifier = Modifier.padding(Spacing.xs),
                             style = MaterialTheme.typography.labelMedium,
+                            color = if (isOwn) palette.outgoingText else palette.primaryText,
                             maxLines = 2,
                         )
                     }
@@ -97,12 +99,17 @@ fun MessageBubble(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(4f / 3f)
+                                .widthIn(max = 488.dp)
                                 .clip(RoundedCornerShape(12.dp)),
                         )
                     } else {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             AppIcon(AppSymbol.ATTACHMENT, contentDescription = null, modifier = Modifier.padding(end = Spacing.xs))
-                            Text(attachment.fileName ?: "File", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                attachment.fileName ?: "File",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (isOwn) palette.outgoingText else palette.primaryText,
+                            )
                         }
                     }
                 }
@@ -110,34 +117,41 @@ fun MessageBubble(
                 if (bodyText.isNotBlank()) {
                     Text(
                         text = bodyText,
-                        color = ChatColors.primaryText,
-                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (isOwn) palette.outgoingText else palette.primaryText,
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Normal),
+                        softWrap = true,
                     )
                 }
                 if (message.reactions.isNotEmpty()) {
                     Text(
                         message.reactions.joinToString(" ") { it.emoji },
                         style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(top = 4.dp),
                     )
                 }
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .align(Alignment.End),
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (isFailed) {
                         Text("Failed to send", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
                     } else if (isPending) {
-                        Text("Sending…", color = ChatColors.secondaryText, style = MaterialTheme.typography.labelSmall)
+                        Text("Sending…", color = if (isOwn) palette.outgoingText.copy(alpha = 0.72f) else palette.secondaryText, style = MaterialTheme.typography.labelSmall)
                     } else {
-                        Text(messageTime(message.createdAt), color = ChatColors.secondaryText, style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            messageTime(message.createdAt),
+                            color = if (isOwn) palette.outgoingText.copy(alpha = 0.72f) else palette.secondaryText,
+                            style = MaterialTheme.typography.labelSmall,
+                        )
                         if (isOwn) {
                             Text(
                                 text = deliveryTick(message.status),
                                 modifier = Modifier
                                     .padding(start = 4.dp)
                                     .semantics { contentDescription = deliveryDescription(message.status) },
-                                color = if (message.status == "read") Color(0xFF53BDEB) else ChatColors.secondaryText,
+                                color = if (message.status == "read") Color(0xFF53BDEB) else palette.outgoingText.copy(alpha = 0.72f),
                                 fontSize = 14.sp,
                                 lineHeight = 14.sp,
                                 fontWeight = FontWeight.Medium,
