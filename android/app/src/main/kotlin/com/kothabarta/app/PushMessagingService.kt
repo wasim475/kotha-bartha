@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -27,24 +28,48 @@ class PushMessagingService : FirebaseMessagingService(), KoinComponent {
     override fun onNewToken(token: String) {
         // AuthRepository also syncs the current token after sign-in/session restore,
         // covering refreshes that happened before authentication.
-        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch { runCatching { pushDeviceRegistrar.registerToken(token) } }
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            runCatching { pushDeviceRegistrar.registerToken(token) }
+                .onFailure { error ->
+                    Log.w(TAG, "FCM token refresh registration failed (${error.javaClass.simpleName})")
+                }
+        }
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
         val data = message.data
         val type = data["type"]
-        if (type !in setOf("message", "call", "post_like", "post_reaction", "post_comment", "comment_reaction", "friend_request", "friend_accepted", "missed_call")) return
+        if (type !in SUPPORTED_TYPES) {
+            Log.w(TAG, "FCM push ignored (unsupported type)")
+            return
+        }
+        Log.i(TAG, "FCM push received (type=$type)")
         val conversationId = data["conversationId"]?.takeIf(String::isNotBlank)
         val isPostTarget = type in setOf("post_like", "post_reaction", "post_comment", "comment_reaction")
         if ((type == "message" || type == "call" || type == "missed_call") &&
             !isValidConversationNotificationId(conversationId)
-        ) return
-        if (type == "message" && !isValidConversationNotificationId(data["messageId"])) return
-        if (isPostTarget && data["postId"].isNullOrBlank()) return
-        if (type == "message" && PushNotificationState.shouldSuppressMessageNotification(this, conversationId!!)) return
+        ) {
+            Log.w(TAG, "FCM push ignored (invalid conversation route)")
+            return
+        }
+        if (type == "message" && !isValidConversationNotificationId(data["messageId"])) {
+            Log.w(TAG, "FCM push ignored (invalid message route)")
+            return
+        }
+        if (isPostTarget && data["postId"].isNullOrBlank()) {
+            Log.w(TAG, "FCM push ignored (missing post route)")
+            return
+        }
+        if (type == "message" && PushNotificationState.shouldSuppressMessageNotification(this, conversationId!!)) {
+            Log.i(TAG, "Message notification suppressed (conversation is active)")
+            return
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) return
+        ) {
+            Log.w(TAG, "FCM push received but notification permission is not granted")
+            return
+        }
         val channelId = if (type == "call") CALL_CHANNEL_ID else MESSAGE_CHANNEL_ID
         ensureChannel(channelId, if (type == "call") "Calls" else "Messages")
         val intent = Intent(this, MainActivity::class.java).apply {
@@ -74,7 +99,12 @@ class PushMessagingService : FirebaseMessagingService(), KoinComponent {
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPriority(if (type == "call") NotificationCompat.PRIORITY_MAX else NotificationCompat.PRIORITY_HIGH)
             .build()
-        NotificationManagerCompat.from(this).notify((data["notificationId"] ?: destinationId).hashCode(), notification)
+        try {
+            NotificationManagerCompat.from(this).notify((data["notificationId"] ?: destinationId).hashCode(), notification)
+            Log.i(TAG, "FCM notification displayed (type=$type)")
+        } catch (error: Exception) {
+            Log.w(TAG, "FCM notification display failed (${error.javaClass.simpleName})")
+        }
     }
 
     private fun ensureChannel(channelId: String, name: String) {
@@ -84,6 +114,18 @@ class PushMessagingService : FirebaseMessagingService(), KoinComponent {
     }
 
     companion object {
+        private const val TAG = "PushMessagingService"
+        private val SUPPORTED_TYPES = setOf(
+            "message",
+            "call",
+            "post_like",
+            "post_reaction",
+            "post_comment",
+            "comment_reaction",
+            "friend_request",
+            "friend_accepted",
+            "missed_call",
+        )
         const val EXTRA_CONVERSATION_ID = "conversationId"
         const val EXTRA_CALL_ID = "callId"
         const val ACTION_OPEN_NOTIFICATION = "com.kothabarta.app.OPEN_NOTIFICATION"

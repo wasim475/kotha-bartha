@@ -9,6 +9,12 @@ function messagePushRecipients(conversation, senderId) {
   return [...new Set((conversation.participantIds || []).map(String).filter((id) => id !== sender))];
 }
 
+function safeFirebaseErrorCode(error) {
+  return typeof error?.code === "string" && /^[a-z0-9-]+\/[a-z0-9-]+$/.test(error.code)
+    ? error.code
+    : "unknown";
+}
+
 function createPushDispatcher({
   userModel = User,
   messageModel = Message,
@@ -60,23 +66,43 @@ function createPushDispatcher({
       const devices = recipients.flatMap((recipient) =>
         (recipient.pushDevices || []).map((device) => ({ recipient, device })),
       );
+      if (devices.length === 0) {
+        logger.warn?.("FCM push skipped: no registered recipient devices", {
+          recipientCount: recipients.length,
+        });
+        return;
+      }
+
+      const totals = { sent: 0, failed: 0, deduplicated: 0, missingToken: 0 };
       for (let offset = 0; offset < devices.length; offset += FCM_CONCURRENCY) {
-        await Promise.all(devices.slice(offset, offset + FCM_CONCURRENCY).map(({ recipient, device }) =>
+        const outcomes = await Promise.all(devices.slice(offset, offset + FCM_CONCURRENCY).map(({ recipient, device }) =>
           deliverToDevice(messaging, data, messageId, recipient, device),
         ));
+        for (const outcome of outcomes) totals[outcome] += 1;
       }
+      logger.info?.("FCM push attempt completed", {
+        recipientCount: recipients.length,
+        deviceCount: devices.length,
+        sentCount: totals.sent,
+        failedCount: totals.failed,
+        deduplicatedCount: totals.deduplicated,
+        missingTokenCount: totals.missingToken,
+      });
     } catch (error) {
-      logger.error("message push initialization failed", { error: error.name || "Error" });
+      logger.error("FCM push initialization or lookup failed", {
+        code: safeFirebaseErrorCode(error),
+      });
     }
   }
 
   async function deliverToDevice(messaging, data, messageId, recipient, device) {
+    if (typeof device.token !== "string" || device.token.length === 0) return "missingToken";
     if (messageId) {
       try {
-        if (!(await claimMessagePushAttempt(messageId, device.installationId))) return;
+        if (!(await claimMessagePushAttempt(messageId, device.installationId))) return "deduplicated";
       } catch (error) {
-        logger.error("message push deduplication failed", { error: error.name || "Error" });
-        return;
+        logger.error("FCM push deduplication failed", { code: safeFirebaseErrorCode(error) });
+        return "failed";
       }
     }
     try {
@@ -85,8 +111,9 @@ function createPushDispatcher({
         data,
         android: { priority: "high", ttl: 86400000 },
       });
+      return "sent";
     } catch (error) {
-      const code = error.code || "unknown";
+      const code = safeFirebaseErrorCode(error);
       const invalidToken = [
         "messaging/registration-token-not-registered",
         "messaging/invalid-registration-token",
@@ -98,13 +125,16 @@ function createPushDispatcher({
             { $pull: { pushDevices: { installationId: device.installationId, token: device.token } } },
           );
         } catch (cleanupError) {
-          logger.error("invalid push token cleanup failed", { error: cleanupError.name || "Error" });
+          logger.error("invalid FCM token cleanup failed", {
+            code: safeFirebaseErrorCode(cleanupError),
+          });
         }
       }
-      logger.error("message push delivery failed", {
+      logger.error("FCM push delivery failed", {
         code,
         invalidToken,
       });
+      return "failed";
     }
   }
 
@@ -185,6 +215,7 @@ module.exports = {
   createAdminMessaging,
   messagePushData,
   messagePushRecipients,
+  safeFirebaseErrorCode,
   claimMessagePushAttempt,
   incomingCallPushData,
   notificationPushData,

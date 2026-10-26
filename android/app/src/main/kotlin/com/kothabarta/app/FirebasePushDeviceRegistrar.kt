@@ -21,7 +21,14 @@ class FirebasePushDeviceRegistrar(
     private val tokenStore: TokenStore,
 ) : PushDeviceRegistrar {
     override suspend fun syncCurrentToken() {
-        if (tokenStore.getToken().isNullOrBlank() || FirebaseApp.getApps(context).isEmpty()) return
+        if (tokenStore.getToken().isNullOrBlank()) {
+            Log.i(TAG, "FCM token sync skipped (no authenticated session)")
+            return
+        }
+        if (FirebaseApp.getApps(context).isEmpty()) {
+            Log.w(TAG, "FCM token sync skipped (Firebase is not initialized)")
+            return
+        }
         val token = try {
             currentToken()
         } catch (error: Exception) {
@@ -32,10 +39,33 @@ class FirebasePushDeviceRegistrar(
     }
 
     override suspend fun registerToken(token: String) {
-        if (tokenStore.getToken().isNullOrBlank() || FirebaseApp.getApps(context).isEmpty() || token.isBlank()) return
-        when (val result = safeApiCall { api.register(PushDeviceRequest(installationId(), token)) }) {
-            is ApiResult.Success -> Unit
-            is ApiResult.Failure -> Log.w(TAG, "FCM registration failed (${result.error.code})")
+        if (tokenStore.getToken().isNullOrBlank()) {
+            Log.i(TAG, "FCM token registration skipped (no authenticated session)")
+            return
+        }
+        if (FirebaseApp.getApps(context).isEmpty()) {
+            Log.w(TAG, "FCM token registration skipped (Firebase is not initialized)")
+            return
+        }
+        if (token.isBlank()) {
+            Log.w(TAG, "FCM token registration skipped (empty token)")
+            return
+        }
+
+        val response = try {
+            api.register(PushDeviceRequest(installationId(), token))
+        } catch (error: Exception) {
+            Log.w(TAG, "FCM token registration request failed (${error.javaClass.simpleName})")
+            return
+        }
+        if (!response.isSuccessful) {
+            Log.w(TAG, "FCM token registration failed (HTTP ${response.code()})")
+            return
+        }
+        if (response.body()?.data?.registered == true) {
+            Log.i(TAG, "FCM token registration succeeded (HTTP ${response.code()})")
+        } else {
+            Log.w(TAG, "FCM token registration returned no confirmation (HTTP ${response.code()})")
         }
     }
 

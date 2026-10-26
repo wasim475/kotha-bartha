@@ -6,6 +6,7 @@ const {
   createPushDispatcher,
   createAdminMessaging,
   incomingCallPushData,
+  safeFirebaseErrorCode,
 } = require("../../src/services/push.service");
 
 test("message push has generic copy and the conversation deep link, without message content", () => {
@@ -80,6 +81,7 @@ test("Firebase Admin reuses an existing app for the configured project", () => {
 
 test("message dispatch fans out across devices once per message and installation", async () => {
   const sent = [];
+  const logs = [];
   const claimed = new Set();
   const devices = [
     { installationId: "install-a", token: "token-a" },
@@ -110,7 +112,11 @@ test("message dispatch fans out across devices once per message and installation
       });
       assert.equal(JSON.stringify(message).includes("plaintext"), false);
     }),
-    logger: silentLogger,
+    logger: {
+      ...silentLogger,
+      info: (message, details) => logs.push({ level: "info", message, details }),
+      warn: (message, details) => logs.push({ level: "warn", message, details }),
+    },
   });
 
   await dispatcher.sendNewMessagePush({
@@ -125,6 +131,44 @@ test("message dispatch fans out across devices once per message and installation
   });
 
   assert.deepEqual(sent, ["token-a", "token-b"]);
+  assert.deepEqual(logs.map(({ details }) => details), [
+    { recipientCount: 1, deviceCount: 2, sentCount: 2, failedCount: 0, deduplicatedCount: 0, missingTokenCount: 0 },
+    { recipientCount: 1, deviceCount: 2, sentCount: 0, failedCount: 0, deduplicatedCount: 2, missingTokenCount: 0 },
+  ]);
+  assert.equal(JSON.stringify(logs).includes("token-a"), false);
+  assert.equal(JSON.stringify(logs).includes("message-1"), false);
+});
+
+test("push diagnostics report no registered recipient devices without exposing identifiers", async () => {
+  const logs = [];
+  const dispatcher = createPushDispatcher({
+    userModel: fakeUserModel([]),
+    messageModel: { updateOne: async () => ({ modifiedCount: 1 }) },
+    env: { FCM_PROJECT_ID: "test-project" },
+    messagingFactory: fakeMessagingFactory(async () => {}),
+    logger: {
+      ...silentLogger,
+      warn: (message, details) => logs.push({ message, details }),
+    },
+  });
+
+  await dispatcher.sendNewMessagePush({
+    recipientIds: ["user-secret-id"],
+    conversationId: "conversation-1",
+    messageId: "message-4",
+  });
+
+  assert.deepEqual(logs, [{
+    message: "FCM push skipped: no registered recipient devices",
+    details: { recipientCount: 1 },
+  }]);
+  assert.equal(JSON.stringify(logs).includes("user-secret-id"), false);
+});
+
+test("Firebase error diagnostics accept only sanitized SDK code strings", () => {
+  assert.equal(safeFirebaseErrorCode({ code: "messaging/invalid-argument" }), "messaging/invalid-argument");
+  assert.equal(safeFirebaseErrorCode({ code: "invalid code with token-secret" }), "unknown");
+  assert.equal(safeFirebaseErrorCode(new Error("private failure detail")), "unknown");
 });
 
 test("FCM failure on one device does not throw or stop another device", async () => {
