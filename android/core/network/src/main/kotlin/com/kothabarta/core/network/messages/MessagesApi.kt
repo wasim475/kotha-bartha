@@ -19,11 +19,20 @@ interface MessagesApi {
     @GET("conversations")
     suspend fun getConversations(): Response<ApiEnvelope<List<ConversationDto>>>
 
+    @GET("conversations/{conversationId}")
+    suspend fun getConversation(@Path("conversationId") conversationId: String): Response<ApiEnvelope<ConversationHeaderDto>>
+
     @POST("conversations")
     suspend fun createOrOpenConversation(@Body body: CreateConversationRequest): Response<ApiEnvelope<ConversationDto>>
 
     @GET("conversations/{conversationId}/messages")
     suspend fun getMessages(@Path("conversationId") conversationId: String): Response<ApiEnvelope<List<MessageDto>>>
+
+    @GET("conversations/{conversationId}/messages/{messageId}/notification-preview")
+    suspend fun getNotificationPreviewMessage(
+        @Path("conversationId") conversationId: String,
+        @Path("messageId") messageId: String,
+    ): Response<ApiEnvelope<MessageDto>>
 
     @POST("conversations/{conversationId}/messages")
     suspend fun sendMessage(

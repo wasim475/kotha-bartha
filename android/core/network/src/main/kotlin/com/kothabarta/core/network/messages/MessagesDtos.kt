@@ -22,6 +22,20 @@ data class ConversationDto(
     val unreadCount: Int = 0,
 )
 
+data class ConversationHeaderDto(
+    val id: String,
+    val isGroup: Boolean = false,
+    val group: GroupHeaderDto? = null,
+    val user: ConversationPeerDto? = null,
+)
+
+data class GroupHeaderDto(
+    val id: String,
+    val name: String? = null,
+    val avatar: MediaRefDto? = null,
+    val memberCount: Int = 0,
+)
+
 data class ConversationPeerDto(
     val id: String,
     val fullName: String,

@@ -33,7 +33,8 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         notificationHandled = savedInstanceState?.getBoolean(STATE_NOTIFICATION_HANDLED) ?: false
-        pendingNotification = if (notificationHandled) null else intent.toNotificationTarget()
+        pendingNotification = if (notificationHandled) null else
+            savedInstanceState?.toNotificationTarget() ?: intent.toNotificationTarget()
         setContent {
             val preferences = koinInject<AppPreferences>()
             val savedDarkTheme by preferences.darkTheme.collectAsState(initial = null)
@@ -75,6 +76,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean(STATE_NOTIFICATION_HANDLED, notificationHandled)
+        pendingNotification?.let { target ->
+            outState.putString("notification_type", target.type)
+            outState.putString("notification_conversation", target.conversationId)
+            outState.putString("notification_message", target.messageId)
+            outState.putString("notification_post", target.postId)
+            outState.putString("notification_comment", target.commentId)
+            outState.putString("notification_reply", target.replyId)
+        }
         super.onSaveInstanceState(outState)
     }
 
@@ -90,6 +99,18 @@ private fun android.content.Intent.toNotificationTarget() = NotificationTarget(
     postId = getStringExtra("postId"),
     commentId = getStringExtra("commentId"),
     replyId = getStringExtra("replyId"),
+).takeIf {
+    isValidConversationNotificationId(it.conversationId) ||
+        isValidConversationNotificationId(it.postId)
+}
+
+private fun Bundle.toNotificationTarget() = NotificationTarget(
+    type = getString("notification_type"),
+    conversationId = getString("notification_conversation"),
+    messageId = getString("notification_message"),
+    postId = getString("notification_post"),
+    commentId = getString("notification_comment"),
+    replyId = getString("notification_reply"),
 ).takeIf {
     isValidConversationNotificationId(it.conversationId) ||
         isValidConversationNotificationId(it.postId)

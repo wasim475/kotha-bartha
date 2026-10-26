@@ -876,6 +876,54 @@ router.patch("/conversations/:conversationId/like-emoji", async (req, res, next)
 // that conversation's unread messages as read.
 // ============================================================
 
+// Push previews need one exact message without opening the conversation (the
+// history endpoint below marks unread messages as read). Keep this lookup
+// participant scoped and side-effect free.
+router.get(
+  "/conversations/:conversationId/messages/:messageId/notification-preview",
+  async (req, res, next) => {
+    try {
+      const conversation = await Conversation.findOne({
+        _id: req.params.conversationId,
+        participantIds: req.user._id,
+      }).select("_id");
+      if (!conversation) {
+        return res.status(404).json({ error: { code: "NOT_FOUND", message: "Message not found." } });
+      }
+      const message = await Message.findOne({
+        _id: req.params.messageId,
+        conversationId: conversation._id,
+        deletedAt: null,
+        deletedFor: { $ne: req.user._id },
+      }).populate("senderId", "fullName avatar").lean();
+      if (!message) {
+        return res.status(404).json({ error: { code: "NOT_FOUND", message: "Message not found." } });
+      }
+      res.json({
+        data: {
+          id: message._id.toString(),
+          conversationId: conversation._id.toString(),
+          ...contentFields(message),
+          type: message.type || "text",
+          attachment: message.attachment || null,
+          createdAt: message.createdAt,
+          senderId: message.senderId?._id?.toString() || message.senderId?.toString() || "",
+          sender: message.senderId?._id
+            ? {
+                id: message.senderId._id.toString(),
+                fullName: message.senderId.fullName,
+                avatar: message.senderId.avatar,
+              }
+            : null,
+          status: message.status || "sent",
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 router.get(
   "/conversations/:conversationId/messages",
   async (req, res, next) => {

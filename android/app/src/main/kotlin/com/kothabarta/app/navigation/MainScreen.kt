@@ -24,6 +24,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -73,6 +74,8 @@ import com.kothabarta.core.common.ApiResult
 import com.kothabarta.app.BuildConfig
 import com.kothabarta.app.NotificationTarget
 import com.kothabarta.app.PushNotificationState
+import com.kothabarta.core.datastore.AppPreferences
+import com.kothabarta.core.datastore.MessageNotificationPrivacy
 import com.kothabarta.core.navigation.NavigationEvent
 import com.kothabarta.core.navigation.Routes
 import com.kothabarta.core.network.social.SafeUserDto
@@ -139,6 +142,8 @@ fun MainScreen(
     val notificationBadge = koinInject<NotificationBadge>()
     val profileRepository = koinInject<ProfileRepository>()
     val sessionManager = koinInject<SessionManager>()
+    val appPreferences = koinInject<AppPreferences>()
+    val notificationPrivacy by appPreferences.messageNotificationPrivacy.collectAsState(initial = MessageNotificationPrivacy.SHOW_SENDER_ONLY)
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val unreadCount by notificationBadge.unreadCount.collectAsState()
@@ -236,6 +241,7 @@ fun MainScreen(
     }
     DisposableEffect(context, activeConversationId) {
         PushNotificationState.setActiveConversation(context, activeConversationId)
+        if (activeConversationId != null) PushNotificationState.clearConversationNotification(context, activeConversationId)
         onDispose {
             if (activeConversationId != null) {
                 PushNotificationState.clearActiveConversation(context, activeConversationId)
@@ -308,7 +314,14 @@ fun MainScreen(
                 composable(Routes.MESSAGES_CALLS) { MessagesHubScreen(showCalls = true, navController = navController, onNavigate = onNavigate) }
                 composable(Routes.NOTIFICATIONS) { NotificationsScreen(onNavigate = onNavigate) }
                 composable(Routes.MY_PROFILE) { ProfileScreen(userId = null, onNavigate = onNavigate) }
-                composable(Routes.SETTINGS) { SettingsScreen(isDarkTheme = isDarkTheme, onToggleTheme = onToggleTheme) }
+                composable(Routes.SETTINGS) {
+                    SettingsScreen(
+                        isDarkTheme = isDarkTheme,
+                        onToggleTheme = onToggleTheme,
+                        notificationPrivacy = notificationPrivacy,
+                        onNotificationPrivacyChange = { value -> coroutineScope.launch { appPreferences.setMessageNotificationPrivacy(value) } },
+                    )
+                }
                 composable(
                     Routes.PROFILE_PATTERN,
                     arguments = listOf(navArgument(Routes.PROFILE_ARG) {}),
@@ -615,7 +628,12 @@ private fun MainTopBar(
 }
 
 @Composable
-private fun SettingsScreen(isDarkTheme: Boolean, onToggleTheme: () -> Unit) {
+private fun SettingsScreen(
+    isDarkTheme: Boolean,
+    onToggleTheme: () -> Unit,
+    notificationPrivacy: MessageNotificationPrivacy,
+    onNotificationPrivacyChange: (MessageNotificationPrivacy) -> Unit,
+) {
     Column(Modifier.fillMaxSize().padding(com.kothabarta.core.ui.theme.Spacing.lg)) {
         Text("Settings", style = MaterialTheme.typography.headlineSmall)
         Surface(
@@ -630,6 +648,21 @@ private fun SettingsScreen(isDarkTheme: Boolean, onToggleTheme: () -> Unit) {
                 AppIcon(AppSymbol.DARK_MODE, contentDescription = null)
                 Text("Dark theme", modifier = Modifier.weight(1f).padding(start = 16.dp), style = MaterialTheme.typography.bodyLarge)
                 Switch(checked = isDarkTheme, onCheckedChange = { onToggleTheme() })
+            }
+        }
+        Text("Message notifications", modifier = Modifier.padding(top = 24.dp), style = MaterialTheme.typography.titleMedium)
+        Text("Choose what appears in message alerts", style = MaterialTheme.typography.bodyMedium)
+        listOf(
+            MessageNotificationPrivacy.SHOW_SENDER_AND_PREVIEW to "Sender and message preview",
+            MessageNotificationPrivacy.SHOW_SENDER_ONLY to "Sender only",
+            MessageNotificationPrivacy.HIDE_NOTIFICATION_CONTENT to "Hide notification content",
+        ).forEach { (value, label) ->
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable { onNotificationPrivacyChange(value) }.padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(selected = notificationPrivacy == value, onClick = { onNotificationPrivacyChange(value) })
+                Text(label, modifier = Modifier.padding(start = 8.dp))
             }
         }
     }

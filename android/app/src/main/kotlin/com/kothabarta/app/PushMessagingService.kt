@@ -9,12 +9,23 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
+import android.graphics.Bitmap
+import androidx.core.graphics.drawable.toBitmap
 import androidx.core.content.ContextCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import coil.ImageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import com.kothabarta.core.network.PushDeviceRegistrar
+import com.kothabarta.core.datastore.AppPreferences
+import com.kothabarta.core.datastore.MessageNotificationPrivacy
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -24,6 +35,9 @@ import org.koin.core.component.inject
 
 class PushMessagingService : FirebaseMessagingService(), KoinComponent {
     private val pushDeviceRegistrar: PushDeviceRegistrar by inject()
+    private val preferences: AppPreferences by inject()
+    private val previewResolver: MessageNotificationPreviewResolver by inject()
+    private val avatarImageLoader by lazy { ImageLoader.Builder(applicationContext).build() }
 
     override fun onNewToken(token: String) {
         // AuthRepository also syncs the current token after sign-in/session restore,
@@ -70,6 +84,10 @@ class PushMessagingService : FirebaseMessagingService(), KoinComponent {
             Log.w(TAG, "FCM push received but notification permission is not granted")
             return
         }
+        if (type == "message") {
+            showMessageNotification(conversationId!!, data["messageId"]!!)
+            return
+        }
         val channelId = if (type == "call") CALL_CHANNEL_ID else MESSAGE_CHANNEL_ID
         ensureChannel(channelId, if (type == "call") "Calls" else "Messages")
         val intent = Intent(this, MainActivity::class.java).apply {
@@ -107,6 +125,78 @@ class PushMessagingService : FirebaseMessagingService(), KoinComponent {
         }
     }
 
+    private fun showMessageNotification(conversationId: String, messageId: String) {
+        val count = PushNotificationState.recordMessage(this, conversationId, messageId)
+        val (privacy, content) = runCatching {
+            runBlocking {
+                val privacy = preferences.messageNotificationPrivacy.first()
+                val content = withTimeoutOrNull(PREVIEW_TIMEOUT_MS) {
+                    previewResolver.resolve(conversationId, messageId, privacy)
+                } ?: MessageNotificationContent("KothaX", "New message")
+                privacy to content
+            }
+        }.getOrNull() ?: (MessageNotificationPrivacy.SHOW_SENDER_ONLY to MessageNotificationContent("KothaX", "New message"))
+        ensureChannel(MESSAGE_CHANNEL_ID, "Messages")
+        val intent = Intent(this, MainActivity::class.java).apply {
+            action = ACTION_OPEN_NOTIFICATION
+            putExtra("type", "message")
+            putExtra("conversationId", conversationId)
+            putExtra("messageId", messageId)
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val notificationId = PushNotificationState.conversationNotificationId(conversationId)
+        val pendingIntent = PendingIntent.getActivity(
+            this, notificationId, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val avatar = content.avatarUrl?.takeIf { it.startsWith("https://", ignoreCase = true) }?.let { url ->
+            runCatching {
+                runBlocking {
+                    withTimeoutOrNull(1_200L) {
+                        withContext(Dispatchers.IO) {
+                            val request = ImageRequest.Builder(applicationContext)
+                                .data(url)
+                                .allowHardware(false)
+                                .size(96)
+                                .build()
+                            val result = avatarImageLoader.execute(request)
+                            if (result is SuccessResult) result.drawable.toBitmap(96, 96) else null
+                        }
+                    }
+                }
+            }.getOrNull()
+        }
+        val notification = NotificationCompat.Builder(this, MESSAGE_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.sym_action_chat)
+            .setLargeIcon(avatar)
+            .setContentTitle(content.title)
+            .setContentText(content.body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(content.body))
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .setVisibility(
+                if (privacy == MessageNotificationPrivacy.HIDE_NOTIFICATION_CONTENT)
+                    NotificationCompat.VISIBILITY_SECRET else NotificationCompat.VISIBILITY_PRIVATE,
+            )
+            .setPublicVersion(
+                NotificationCompat.Builder(this, MESSAGE_CHANNEL_ID)
+                    .setSmallIcon(android.R.drawable.sym_action_chat)
+                    .setContentTitle("KothaX")
+                    .setContentText("New message")
+                    .build(),
+            )
+            .setGroup(PushNotificationState.conversationGroupKey(conversationId))
+            .setNumber(count.count)
+            .setOnlyAlertOnce(count.duplicate)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+        try {
+            NotificationManagerCompat.from(this).notify(notificationId, notification)
+        } catch (error: Exception) {
+            Log.w(TAG, "FCM notification display failed (${error.javaClass.simpleName})")
+        }
+    }
+
     private fun ensureChannel(channelId: String, name: String) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -132,5 +222,6 @@ class PushMessagingService : FirebaseMessagingService(), KoinComponent {
         val ROUTING_EXTRAS = listOf("notificationId", "type", "conversationId", "messageId", "postId", "commentId", "replyId")
         private const val MESSAGE_CHANNEL_ID = "messages"
         private const val CALL_CHANNEL_ID = "calls"
+        private const val PREVIEW_TIMEOUT_MS = 4_000L
     }
 }

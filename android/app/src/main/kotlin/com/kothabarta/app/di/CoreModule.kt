@@ -2,6 +2,10 @@ package com.kothabarta.app.di
 
 import com.kothabarta.app.BuildConfig
 import com.kothabarta.app.FirebasePushDeviceRegistrar
+import com.kothabarta.app.AuthenticatedPushMessageDataSource
+import com.kothabarta.app.MessageNotificationPreviewResolver
+import com.kothabarta.app.PushMessageDataSource
+import com.kothabarta.feature.messages.data.MessageDecrypting
 import com.kothabarta.core.datastore.AppPreferences
 import com.kothabarta.core.network.ApiClientFactory
 import com.kothabarta.core.network.PushDeviceRegistrar
@@ -47,6 +51,8 @@ val coreModule = module {
     single { UnauthorizedNotifier() }
     single { AppPreferences(androidContext()) }
     single<PushDeviceRegistrar> { FirebasePushDeviceRegistrar(androidContext(), get(), get()) }
+    single<PushMessageDataSource> { AuthenticatedPushMessageDataSource(get(), get(), get()) }
+    single { MessageNotificationPreviewResolver(get(), get<MessageDecrypting>()) }
     single { SocketManager(BuildConfig.SOCKET_URL) }
     single {
         ApiClientFactory.create(
