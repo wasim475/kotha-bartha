@@ -12,7 +12,16 @@ function messagePushRecipients(conversation, senderId) {
 function safeFirebaseErrorCode(error) {
   return typeof error?.code === "string" && /^[a-z0-9-]+\/[a-z0-9-]+$/.test(error.code)
     ? error.code
-    : "unknown";
+    : undefined;
+}
+
+function safeErrorDetails(error, stage) {
+  const name = typeof error?.name === "string" && /^[A-Za-z][A-Za-z0-9]{0,79}$/.test(error.name) ? error.name : "Error";
+  const details = { stage, errorClass: name };
+  const firebaseCode = safeFirebaseErrorCode(error);
+  if (firebaseCode) details.firebaseCode = firebaseCode;
+  if (typeof error?.code === "number" && Number.isFinite(error.code)) details.databaseCode = error.code;
+  return details;
 }
 
 function createPushDispatcher({
@@ -58,11 +67,14 @@ function createPushDispatcher({
     }
 
     let recipients;
+    let stage = "firebase-initialization";
     try {
       const messaging = await getMessaging(projectId);
+      stage = "recipient-lookup";
       recipients = await userModel.find({ _id: { $in: [...new Set(recipientIds.map(String))] } })
         .select("+pushDevices")
         .lean();
+      stage = "device-lookup";
       const devices = recipients.flatMap((recipient) =>
         (recipient.pushDevices || []).map((device) => ({ recipient, device })),
       );
@@ -90,7 +102,7 @@ function createPushDispatcher({
       });
     } catch (error) {
       logger.error("FCM push initialization or lookup failed", {
-        code: safeFirebaseErrorCode(error),
+        ...safeErrorDetails(error, stage),
       });
     }
   }
@@ -101,7 +113,7 @@ function createPushDispatcher({
       try {
         if (!(await claimMessagePushAttempt(messageId, device.installationId))) return "deduplicated";
       } catch (error) {
-        logger.error("FCM push deduplication failed", { code: safeFirebaseErrorCode(error) });
+        logger.error("FCM push deduplication failed", safeErrorDetails(error, "deduplication-claim"));
         return "failed";
       }
     }
@@ -126,12 +138,12 @@ function createPushDispatcher({
           );
         } catch (cleanupError) {
           logger.error("invalid FCM token cleanup failed", {
-            code: safeFirebaseErrorCode(cleanupError),
+            ...safeErrorDetails(cleanupError, "token-cleanup"),
           });
         }
       }
       logger.error("FCM push delivery failed", {
-        code,
+        ...safeErrorDetails(error, "send"),
         invalidToken,
       });
       return "failed";

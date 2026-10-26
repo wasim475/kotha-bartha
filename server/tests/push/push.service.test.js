@@ -167,8 +167,8 @@ test("push diagnostics report no registered recipient devices without exposing i
 
 test("Firebase error diagnostics accept only sanitized SDK code strings", () => {
   assert.equal(safeFirebaseErrorCode({ code: "messaging/invalid-argument" }), "messaging/invalid-argument");
-  assert.equal(safeFirebaseErrorCode({ code: "invalid code with token-secret" }), "unknown");
-  assert.equal(safeFirebaseErrorCode(new Error("private failure detail")), "unknown");
+  assert.equal(safeFirebaseErrorCode({ code: "invalid code with token-secret" }), undefined);
+  assert.equal(safeFirebaseErrorCode(new Error("private failure detail")), undefined);
 });
 
 test("FCM failure on one device does not throw or stop another device", async () => {

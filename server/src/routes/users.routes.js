@@ -23,9 +23,19 @@ router.put("/users/me/push-device", async (req, res, next) => {
       return res.status(400).json({ error: { code: "INVALID_PUSH_DEVICE", message: "Invalid push registration." } });
     }
     const { installationId, token } = registration;
-    await User.updateMany({ "pushDevices.token": token }, { $pull: { pushDevices: { token } } });
-    await User.updateOne(
-      { _id: req.user._id },
+    // Move this token away from any stale account record, then update only the
+    // authenticated account's installation. Mongo transactions keep the
+    // ownership change and registration atomic.
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        await User.updateMany(
+          { "pushDevices.token": token, _id: { $ne: req.user._id } },
+          { $pull: { pushDevices: { token } } },
+          { session },
+        );
+        await User.updateOne(
+          { _id: req.user._id },
       [{
         $set: {
           pushDevices: {
@@ -52,7 +62,12 @@ router.put("/users/me/push-device", async (req, res, next) => {
           },
         },
       }],
-    );
+          { updatePipeline: true, session },
+        );
+      });
+    } finally {
+      await session.endSession();
+    }
     res.json({ data: { registered: true } });
   } catch (error) {
     next(error);
