@@ -2,12 +2,14 @@ package com.kothabarta.app.navigation
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -47,6 +49,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import com.google.firebase.FirebaseApp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -212,6 +215,10 @@ fun MainScreen(
         }
     }
 
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val isConversationOpen = backStackEntry?.destination?.route == Routes.CHAT_PATTERN
+    val isImeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+
     Scaffold(
         topBar = {
             MainTopBar(
@@ -240,21 +247,22 @@ fun MainScreen(
             )
         },
         bottomBar = {
-            val backStackEntry by navController.currentBackStackEntryAsState()
-            val currentRoute = backStackEntry?.destination
-            NavigationBar {
-                BOTTOM_NAV_ITEMS.forEach { item ->
-                    val selected = currentRoute?.hierarchy?.any { it.route == item.route } == true ||
-                        (item.route == Routes.MESSAGES && currentRoute?.route == Routes.MESSAGES_CALLS) ||
-                        (item.route == Routes.HOME && currentRoute?.route?.startsWith("post/") == true)
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = { navigateToTopLevel(item.route) },
-                        icon = { AppIcon(item.symbol, contentDescription = null) },
-                        label = {
-                            Text(if (item.route == Routes.NOTIFICATIONS && unreadCount > 0) "${item.label} ($unreadCount)" else item.label)
-                        },
-                    )
+            if (!isConversationOpen || !isImeVisible) {
+                val currentRoute = backStackEntry?.destination
+                NavigationBar {
+                    BOTTOM_NAV_ITEMS.forEach { item ->
+                        val selected = currentRoute?.hierarchy?.any { it.route == item.route } == true ||
+                            (item.route == Routes.MESSAGES && currentRoute?.route == Routes.MESSAGES_CALLS) ||
+                            (item.route == Routes.HOME && currentRoute?.route?.startsWith("post/") == true)
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = { navigateToTopLevel(item.route) },
+                            icon = { AppIcon(item.symbol, contentDescription = null) },
+                            label = {
+                                Text(if (item.route == Routes.NOTIFICATIONS && unreadCount > 0) "${item.label} ($unreadCount)" else item.label)
+                            },
+                        )
+                    }
                 }
             }
         },
