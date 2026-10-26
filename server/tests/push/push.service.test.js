@@ -63,6 +63,21 @@ test("Firebase Admin Messaging is initialized with server credentials or ADC", (
   });
 });
 
+test("Firebase Admin reuses an existing app for the configured project", () => {
+  const existingApp = { name: "[DEFAULT]", options: { projectId: "kothax-14bd0" } };
+  const admin = {
+    apps: [existingApp],
+    credential: { applicationDefault: () => ({ type: "application-default" }) },
+    initializeApp() { throw new Error("must not initialize a duplicate app"); },
+    messaging: (app) => ({ app }),
+  };
+
+  const messaging = createAdminMessaging(admin, "kothax-14bd0", null);
+
+  assert.equal(messaging.app, existingApp);
+  assert.equal(admin.apps.length, 1);
+});
+
 test("message dispatch fans out across devices once per message and installation", async () => {
   const sent = [];
   const claimed = new Set();
