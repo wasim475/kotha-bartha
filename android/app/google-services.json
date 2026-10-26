@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "315828602874",
+    "project_id": "kothax-14bd0",
+    "storage_bucket": "kothax-14bd0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:315828602874:android:c15769294d1f60082e4643",
+        "android_client_info": {
+          "package_name": "com.kothabarta.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAkgbSlqAUdg_CyMw0RA3Ihl1NAj35k7qI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

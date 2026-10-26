@@ -117,7 +117,7 @@ function createPushDispatcher({
 }
 
 function createAdminMessaging(admin, projectId, serviceAccountJson) {
-  const name = `KothaX-${projectId}`;
+  const name = `kotha-barta-${projectId}`;
   const existingApp = admin.apps.find((app) => app.name === name);
   if (existingApp) return admin.messaging(existingApp);
 

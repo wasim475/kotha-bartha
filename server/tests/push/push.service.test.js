@@ -55,7 +55,7 @@ test("Firebase Admin Messaging is initialized with server credentials or ADC", (
   createAdminMessaging(admin, "test-project", null);
 
   assert.equal(initialized.length, 1);
-  assert.equal(initialized[0].name, "KothaX-test-project");
+  assert.equal(initialized[0].name, "kotha-barta-test-project");
   assert.equal(initialized[0].projectId, "test-project");
   assert.deepEqual(initialized[0].credential, {
     type: "service-account",
