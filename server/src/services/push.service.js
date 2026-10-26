@@ -228,6 +228,7 @@ module.exports = {
   messagePushData,
   messagePushRecipients,
   safeFirebaseErrorCode,
+  safeErrorDetails,
   claimMessagePushAttempt,
   incomingCallPushData,
   notificationPushData,

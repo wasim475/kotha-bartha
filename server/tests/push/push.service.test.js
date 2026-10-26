@@ -7,6 +7,7 @@ const {
   createAdminMessaging,
   incomingCallPushData,
   safeFirebaseErrorCode,
+  safeErrorDetails,
 } = require("../../src/services/push.service");
 
 test("message push has generic copy and the conversation deep link, without message content", () => {
@@ -170,6 +171,84 @@ test("Firebase error diagnostics accept only sanitized SDK code strings", () => 
   assert.equal(safeFirebaseErrorCode({ code: "invalid code with token-secret" }), undefined);
   assert.equal(safeFirebaseErrorCode(new Error("private failure detail")), undefined);
 });
+
+test("Firebase initialization failure logs stage, safe class, and provider code without secrets", async () => {
+  const logs = capturedErrors();
+  const dispatcher = createPushDispatcher({
+    userModel: fakeUserModel([]),
+    env: { FCM_PROJECT_ID: "test-project", FCM_SERVICE_ACCOUNT_JSON: "private-key-secret" },
+    messagingFactory: () => { const error = new Error("private-key-secret token-secret"); error.code = "app/invalid-credential"; return Promise.reject(error); },
+    logger: logs.logger,
+  });
+  await dispatcher.sendDataPush(["user-secret-id"], { body: "plaintext-secret" });
+  assert.deepEqual(logs.entries[0].details, { stage: "firebase-initialization", errorClass: "Error", firebaseCode: "app/invalid-credential" });
+  assertSanitized(logs.entries);
+});
+
+test("recipient lookup failure identifies its stage and sanitized database code", async () => {
+  const logs = capturedErrors();
+  const userModel = { find: () => { const error = new Error("token-secret user-secret-id"); error.name = "MongoServerError"; error.code = 91; throw error; } };
+  const dispatcher = createPushDispatcher({
+    userModel,
+    env: { FCM_PROJECT_ID: "test-project" },
+    messagingFactory: fakeMessagingFactory(async () => {}),
+    logger: logs.logger,
+  });
+  await dispatcher.sendDataPush(["user-secret-id"], { body: "ciphertext-secret" });
+  assert.deepEqual(logs.entries[0].details, { stage: "recipient-lookup", errorClass: "MongoServerError", databaseCode: 91 });
+  assertSanitized(logs.entries);
+});
+
+test("device lookup failure and errors without codes retain stage and error class", async () => {
+  const logs = capturedErrors();
+  const dispatcher = createPushDispatcher({
+    userModel: { find: () => ({ select() { return this; }, lean: async () => ({ pushDevices: [{ token: "raw-fcm-token-secret" }] }) }) },
+    env: { FCM_PROJECT_ID: "test-project" },
+    messagingFactory: fakeMessagingFactory(async () => {}),
+    logger: logs.logger,
+  });
+  await dispatcher.sendDataPush(["recipient-id-secret"], { body: "plaintext-secret" });
+  assert.deepEqual(logs.entries[0].details, { stage: "device-lookup", errorClass: "TypeError" });
+  assert.deepEqual(safeErrorDetails(new Error("service-account-secret"), "firebase-initialization"), {
+    stage: "firebase-initialization", errorClass: "Error",
+  });
+  assertSanitized(logs.entries);
+});
+
+test("failed message sends stay claimed and are not automatically retried", async () => {
+  let claims = 0;
+  let sends = 0;
+  const claimed = new Set();
+  const dispatcher = createPushDispatcher({
+    userModel: fakeUserModel([{ installationId: "install-secret", token: "raw-fcm-token-secret" }]),
+    messageModel: { updateOne: async (filter) => {
+      claims += 1;
+      const key = `${filter._id}:${filter.pushAttemptedInstallationIds.$ne}`;
+      if (claimed.has(key)) return { modifiedCount: 0 };
+      claimed.add(key);
+      return { modifiedCount: 1 };
+    } },
+    env: { FCM_PROJECT_ID: "test-project" },
+    messagingFactory: fakeMessagingFactory(async () => { sends += 1; throw new Error("transient-secret"); }),
+    logger: { error() {}, info() {} },
+  });
+  await dispatcher.sendNewMessagePush({ recipientIds: ["recipient-id-secret"], conversationId: "conversation-secret", messageId: "message-secret" });
+  await dispatcher.sendNewMessagePush({ recipientIds: ["recipient-id-secret"], conversationId: "conversation-secret", messageId: "message-secret" });
+  assert.equal(claims, 2);
+  assert.equal(sends, 1);
+});
+
+function capturedErrors() {
+  const entries = [];
+  return { entries, logger: { ...silentLogger, error: (message, details) => entries.push({ message, details }) } };
+}
+
+function assertSanitized(entries) {
+  const serialized = JSON.stringify(entries);
+  for (const secret of ["raw-fcm-token-secret", "private-key-secret", "service-account-secret", "plaintext-secret", "ciphertext-secret", "user-secret-id", "recipient-id-secret", "install-secret"]) {
+    assert.equal(serialized.includes(secret), false, `diagnostics exposed ${secret}`);
+  }
+}
 
 test("FCM failure on one device does not throw or stop another device", async () => {
   const sent = [];

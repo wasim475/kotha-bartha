@@ -14,65 +14,66 @@ const { parsePushDeviceRegistration, isValidPushInstallationId } = require("../u
 
 const router = express.Router();
 
+function createPushDeviceRegistrationHandler({ mongoose: mongooseInstance = mongoose, userModel = User } = {}) {
+  return async function registerPushDevice(req, res, next) {
+    try {
+      const registration = parsePushDeviceRegistration(req.body);
+      if (!registration) {
+        return res.status(400).json({ error: { code: "INVALID_PUSH_DEVICE", message: "Invalid push registration." } });
+      }
+      const { installationId, token } = registration;
+      const session = await mongooseInstance.startSession();
+      try {
+        await session.withTransaction(async () => {
+          await userModel.updateMany(
+            { "pushDevices.token": token, _id: { $ne: req.user._id } },
+            { $pull: { pushDevices: { token } } },
+            { session },
+          );
+          await userModel.updateOne(
+            { _id: req.user._id },
+            [{
+              $set: {
+                pushDevices: {
+                  $slice: [
+                    {
+                      $concatArrays: [
+                        {
+                          $filter: {
+                            input: { $ifNull: ["$pushDevices", []] },
+                            as: "device",
+                            cond: {
+                              $and: [
+                                { $ne: ["$$device.installationId", installationId] },
+                                { $ne: ["$$device.token", token] },
+                              ],
+                            },
+                          },
+                        },
+                        [{ installationId, token, updatedAt: new Date() }],
+                      ],
+                    },
+                    -8,
+                  ],
+                },
+              },
+            }],
+            { updatePipeline: true, session },
+          );
+        });
+      } finally {
+        await session.endSession();
+      }
+      return res.json({ data: { registered: true } });
+    } catch (error) {
+      return next(error);
+    }
+  };
+}
+
 // FCM registration is bound to the authenticated account and a stable per-installation id.
 // Moving a token removes its previous owner first, so tokens cannot be registered on two accounts.
-router.put("/users/me/push-device", async (req, res, next) => {
-  try {
-    const registration = parsePushDeviceRegistration(req.body);
-    if (!registration) {
-      return res.status(400).json({ error: { code: "INVALID_PUSH_DEVICE", message: "Invalid push registration." } });
-    }
-    const { installationId, token } = registration;
-    // Move this token away from any stale account record, then update only the
-    // authenticated account's installation. Mongo transactions keep the
-    // ownership change and registration atomic.
-    const session = await mongoose.startSession();
-    try {
-      await session.withTransaction(async () => {
-        await User.updateMany(
-          { "pushDevices.token": token, _id: { $ne: req.user._id } },
-          { $pull: { pushDevices: { token } } },
-          { session },
-        );
-        await User.updateOne(
-          { _id: req.user._id },
-      [{
-        $set: {
-          pushDevices: {
-            $slice: [
-              {
-                $concatArrays: [
-                  {
-                    $filter: {
-                      input: { $ifNull: ["$pushDevices", []] },
-                      as: "device",
-                      cond: {
-                        $and: [
-                          { $ne: ["$$device.installationId", installationId] },
-                          { $ne: ["$$device.token", token] },
-                        ],
-                      },
-                    },
-                  },
-                  [{ installationId, token, updatedAt: new Date() }],
-                ],
-              },
-              -8,
-            ],
-          },
-        },
-      }],
-          { updatePipeline: true, session },
-        );
-      });
-    } finally {
-      await session.endSession();
-    }
-    res.json({ data: { registered: true } });
-  } catch (error) {
-    next(error);
-  }
-});
+router.put("/users/me/push-device", createPushDeviceRegistrationHandler());
 
 router.delete("/users/me/push-device/:installationId", async (req, res, next) => {
   try {
@@ -497,3 +498,4 @@ router.get("/users/:userId/photos", async (req, res, next) => {
 // ============================================================
 
 module.exports = router;
+module.exports.createPushDeviceRegistrationHandler = createPushDeviceRegistrationHandler;
