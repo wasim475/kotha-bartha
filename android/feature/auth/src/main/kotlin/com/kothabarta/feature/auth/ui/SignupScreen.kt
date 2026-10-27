@@ -16,6 +16,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import com.kothabarta.core.navigation.NavigationEvent
@@ -30,6 +33,8 @@ fun SignupScreen(
     viewModel: SignupViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    var isPasswordVisible by remember { mutableStateOf(false) }
+    var isConfirmPasswordVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.navigationEvents.collect(onNavigate)
@@ -63,6 +68,8 @@ fun SignupScreen(
             onValueChange = viewModel::onPasswordChange,
             label = "Password",
             isPassword = true,
+            isPasswordVisible = isPasswordVisible,
+            onTogglePasswordVisibility = { isPasswordVisible = !isPasswordVisible },
         )
         Spacer(modifier = Modifier.height(Spacing.md))
         AppTextField(
@@ -70,6 +77,8 @@ fun SignupScreen(
             onValueChange = viewModel::onConfirmPasswordChange,
             label = "Confirm password",
             isPassword = true,
+            isPasswordVisible = isConfirmPasswordVisible,
+            onTogglePasswordVisibility = { isConfirmPasswordVisible = !isConfirmPasswordVisible },
             errorText = state.errorMessage,
         )
         Spacer(modifier = Modifier.height(Spacing.lg))

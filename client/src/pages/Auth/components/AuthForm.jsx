@@ -1,4 +1,5 @@
-import { Send } from "@mui/icons-material";
+import { Send, Visibility, VisibilityOff } from "@mui/icons-material";
+import { useState } from "react";
 import GoogleLoginButton from './GoogleLogin';
 
 export default function AuthForm({
@@ -10,6 +11,21 @@ export default function AuthForm({
   onSubmit,
   onGoogleLogin,
 }) {
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
+
+  const passwordToggle = (visible, setVisible) => (
+    <button
+      type="button"
+      className="auth-password-toggle"
+      aria-label={visible ? "Hide password" : "Show password"}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() => setVisible((current) => !current)}
+    >
+      {visible ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+    </button>
+  );
+
   return (
     <form onSubmit={onSubmit} className="auth-form">
       {signup && (
@@ -37,26 +53,34 @@ export default function AuthForm({
 
       <label>
         Password
-        <input
-          required
-          type="password"
-          minLength="8"
-          value={form.password}
-          onChange={update("password")}
-          placeholder="8 characters minimum"
-        />
+        <span className="auth-password-field">
+          <input
+            required
+            type={passwordVisible ? "text" : "password"}
+            minLength="8"
+            autoComplete={signup ? "new-password" : "current-password"}
+            value={form.password}
+            onChange={update("password")}
+            placeholder="8 characters minimum"
+          />
+          {passwordToggle(passwordVisible, setPasswordVisible)}
+        </span>
       </label>
 
       {signup && (
         <label>
           Confirm password
-          <input
-            required
-            type="password"
-            value={form.confirmPassword}
-            onChange={update("confirmPassword")}
-            placeholder="Repeat your password"
-          />
+          <span className="auth-password-field">
+            <input
+              required
+              type={confirmPasswordVisible ? "text" : "password"}
+              autoComplete="new-password"
+              value={form.confirmPassword}
+              onChange={update("confirmPassword")}
+              placeholder="Repeat your password"
+            />
+            {passwordToggle(confirmPasswordVisible, setConfirmPasswordVisible)}
+          </span>
         </label>
       )}
 

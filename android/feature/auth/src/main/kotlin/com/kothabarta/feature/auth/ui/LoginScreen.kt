@@ -55,6 +55,7 @@ fun LoginScreen(
     val credentialManager = remember(context) { CredentialManager.create(context) }
     val coroutineScope = rememberCoroutineScope()
     var isGooglePickerLoading by remember { mutableStateOf(false) }
+    var isPasswordVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.navigationEvents.collect(onNavigate)
@@ -82,6 +83,8 @@ fun LoginScreen(
             onValueChange = viewModel::onPasswordChange,
             label = "Password",
             isPassword = true,
+            isPasswordVisible = isPasswordVisible,
+            onTogglePasswordVisibility = { isPasswordVisible = !isPasswordVisible },
         )
         state.errorMessage?.let { message ->
             Spacer(modifier = Modifier.height(Spacing.xs))
