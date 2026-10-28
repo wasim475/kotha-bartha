@@ -44,6 +44,12 @@ data class LudoPlayerDto(
 
 data class LudoLegalMoveDto(val tokenId: Int, val from: Int = -1, val to: Int = -1, val kind: String? = null)
 
+data class LudoRulesDto(
+    val safeCells: List<Int> = listOf(0, 8, 13, 21, 26, 34, 39, 47),
+    val safeCellsProtect: Boolean = true,
+    val allowHomeEntry: Boolean = true,
+)
+
 /**
  * The server already computes exactly which tokens can move — [legal] is
  * what Android highlights, never something it infers itself (see
@@ -60,6 +66,7 @@ data class LudoBoardStateDto(
     val turnDeadline: Long? = null,
     val dice: Int? = null,
     val legal: List<LudoLegalMoveDto> = emptyList(),
+    val rules: LudoRulesDto = LudoRulesDto(),
     val winnerSeat: Int? = null,
     val finishReason: String? = null,
 )

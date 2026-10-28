@@ -17,7 +17,11 @@ data class LudoStateEvent(
     val turnNumber: Int? = null,
     val turnDeadline: Long? = null,
     val phase: String? = null,
+    val events: List<LudoGameEventDto> = emptyList(),
 )
+
+/** Small authoritative event shape used to identify a confirmed dice result in a full state snapshot. */
+data class LudoGameEventDto(val type: String = "", val seat: Int? = null, val value: Int? = null)
 
 data class LudoLobbyEvent(val gameId: String, val game: LudoGameDto? = null)
 data class LudoTakeoverEvent(val gameId: String)

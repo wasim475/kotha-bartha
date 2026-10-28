@@ -2,6 +2,7 @@ package com.kothabarta.feature.ludo.data
 
 import com.kothabarta.core.network.ludo.LudoBoardStateDto
 import com.kothabarta.core.network.ludo.LudoGameDto
+import com.kothabarta.core.network.ludo.LudoGameEventDto
 
 /**
  * Request/ack payload shapes for the `ludo:*` socket actions — kept local to
@@ -19,7 +20,7 @@ data class LudoReactionRequest(val gameId: String, val type: String)
 /** `ludo:join`/`ludo:ready`/`ludo:start` acks — `game` is the lobby-wrapping view, same shape REST returns. */
 data class LudoLobbyAck(val ok: Boolean = false, val game: LudoGameDto? = null)
 
-/** `ludo:roll`/`ludo:move` acks — `game` here is the board-state view, matching `LudoStateEvent.game`; `events` is ignored. */
-data class LudoBoardAck(val ok: Boolean = false, val game: LudoBoardStateDto? = null)
+/** `ludo:roll`/`ludo:move` acks — `game` is authoritative and `events` includes a confirmed dice result when rolling. */
+data class LudoBoardAck(val ok: Boolean = false, val game: LudoBoardStateDto? = null, val events: List<LudoGameEventDto> = emptyList())
 
 data class LudoSimpleAck(val ok: Boolean = false)

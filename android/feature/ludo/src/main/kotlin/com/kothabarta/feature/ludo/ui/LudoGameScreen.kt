@@ -7,7 +7,28 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.Canvas
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -30,9 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.kothabarta.core.navigation.NavigationEvent
-import com.kothabarta.core.network.ludo.LudoLegalMoveDto
 import com.kothabarta.core.network.ludo.LudoMemberDto
-import com.kothabarta.core.network.ludo.LudoPlayerDto
 import com.kothabarta.core.network.ludo.LudoResultDto
 import com.kothabarta.core.ui.components.AvatarImage
 import com.kothabarta.core.ui.components.EmptyState
@@ -142,36 +161,144 @@ private fun LudoActiveBoard(state: LudoGameUiState, viewModel: LudoGameViewModel
     }
     val isMyTurn = state.mySeat != null && state.mySeat == board.turnSeat
 
-    Column(modifier = Modifier.fillMaxSize().padding(Spacing.md)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column {
-                Text(if (isMyTurn) "Your turn" else "Seat ${board.turnSeat ?: "-"}'s turn", style = MaterialTheme.typography.titleMedium)
-                Text("Turn ${board.turnNumber} · ${board.phase}", style = MaterialTheme.typography.bodySmall)
+    val playerBySeat = board.players.associateBy { it.seat }
+    Column(
+        modifier = Modifier.fillMaxSize().background(Color(0xFF07529A)).padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            LudoPlayerPanel(playerBySeat[0], board, state, viewModel, Modifier.weight(1f))
+            LudoPlayerPanel(playerBySeat[1], board, state, viewModel, Modifier.weight(1f))
+        }
+
+        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+            LudoBoardCanvas(
+                board,
+                state.mySeat,
+                allowMoves = !state.isControlledElsewhere && state.movingTokenId == null,
+                onMove = viewModel::moveToken,
+                modifier = Modifier.widthIn(max = 680.dp),
+            )
+        }
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            LudoPlayerPanel(playerBySeat[3], board, state, viewModel, Modifier.weight(1f))
+            LudoPlayerPanel(playerBySeat[2], board, state, viewModel, Modifier.weight(1f))
+        }
+
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 46.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF123D68)).padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(if (isMyTurn) if (board.phase == "ROLL") "Your turn · roll" else "Your turn · move a token" else "Seat ${board.turnSeat ?: "-"}'s turn", color = Color.White, style = MaterialTheme.typography.titleSmall)
+                Text("Turn ${board.turnNumber} · ${board.phase}", color = Color(0xFFCFDFF0), style = MaterialTheme.typography.labelSmall)
             }
             TurnCountdown(board.turnDeadline)
         }
+    }
+}
 
-        board.dice?.let { Text("Dice: $it", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(vertical = Spacing.sm)) }
-
-        Button(
-            onClick = viewModel::rollDice,
-            enabled = isMyTurn && board.phase == "ROLL" && !state.isRolling && !state.isControlledElsewhere,
-            modifier = Modifier.fillMaxWidth().padding(bottom = Spacing.md),
-        ) {
-            Text(if (state.isRolling) "Rolling..." else "Roll dice")
-        }
-
-        LazyColumn(modifier = Modifier.weight(1f, fill = true)) {
-            items(board.players, key = { it.seat }) { player ->
-                PlayerTokensRow(
-                    player = player,
-                    legal = board.legal,
-                    isMyRow = player.seat == state.mySeat,
-                    isMovingTokenId = state.movingTokenId,
-                    enabled = isMyTurn && !state.isControlledElsewhere,
-                    onTokenClick = viewModel::moveToken,
+@Composable
+private fun LudoPlayerPanel(
+    player: com.kothabarta.core.network.ludo.LudoPlayerDto?,
+    board: com.kothabarta.core.network.ludo.LudoBoardStateDto,
+    state: LudoGameUiState,
+    viewModel: LudoGameViewModel,
+    modifier: Modifier = Modifier,
+) {
+    if (player == null) {
+        Box(modifier.heightIn(min = 58.dp))
+        return
+    }
+    val color = when (player.seat) { 0 -> Color(0xFFED1C24); 1 -> Color(0xFF00A651); 2 -> Color(0xFFFFD814); else -> Color(0xFF168DD0) }
+    val active = board.turnSeat == player.seat
+    val canRoll = active && player.seat == state.mySeat && board.phase == "ROLL" && !state.isRolling && !state.isControlledElsewhere
+    val animateConfirmedDice = viewModel.shouldAnimateDice(player.seat, board.turnNumber)
+    val shownDiceValue = if (active && board.phase == "MOVE") board.dice
+    else if (animateConfirmedDice) state.confirmedDiceValue else null
+    Card(
+        modifier = modifier.heightIn(min = 58.dp).border(if (active) 2.dp else 1.dp, color, RoundedCornerShape(12.dp)),
+        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = Color(0xFFF9F6EF)),
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 5.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            AvatarImage(avatarUrl = player.user?.avatar?.secureUrl, initials = player.user?.initials ?: player.color.orEmpty().take(2))
+            Column(Modifier.weight(1f)) {
+                Text(player.user?.fullName ?: player.color ?: "Player ${player.seat + 1}", maxLines = 1, style = MaterialTheme.typography.labelMedium, color = Color(0xFF20252B))
+                Text(if (!player.connected) "Offline" else if (active) "Playing" else "Waiting", maxLines = 1, style = MaterialTheme.typography.labelSmall, color = if (!player.connected) Color(0xFFB3261E) else Color(0xFF66717C))
+            }
+            androidx.compose.material3.FilledTonalButton(
+                onClick = viewModel::rollDice,
+                enabled = canRoll,
+                modifier = Modifier.size(46.dp),
+                contentPadding = PaddingValues(0.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(containerColor = color.copy(alpha = .22f), contentColor = color),
+                shape = RoundedCornerShape(10.dp),
+            ) {
+                LudoDiceFace(
+                    value = shownDiceValue,
+                    rolling = active && state.isRolling,
+                    animateConfirmed = animateConfirmedDice,
+                    animationId = state.diceAnimationId,
+                    turnNumber = board.turnNumber,
+                    claimAnimation = viewModel::claimDiceAnimation,
+                    onAnimationFinished = viewModel::finishDiceAnimation,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun LudoDiceFace(
+    value: Int?,
+    rolling: Boolean,
+    animateConfirmed: Boolean,
+    animationId: Long,
+    turnNumber: Int,
+    claimAnimation: (Long) -> Boolean,
+    onAnimationFinished: (Long) -> Unit,
+) {
+    val confirmedRotation = remember { Animatable(0f) }
+    LaunchedEffect(animationId, turnNumber) {
+        if (animateConfirmed && claimAnimation(animationId)) {
+            confirmedRotation.snapTo(0f)
+            confirmedRotation.animateTo(720f, tween(durationMillis = 720, easing = FastOutSlowInEasing))
+            confirmedRotation.snapTo(0f)
+            onAnimationFinished(animationId)
+        } else {
+            confirmedRotation.snapTo(0f)
+        }
+    }
+    val pendingTransition = rememberInfiniteTransition(label = "ludo-dice-pending")
+    val pendingRotation by pendingTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = if (rolling) 360f else 0f,
+        animationSpec = infiniteRepeatable(tween(durationMillis = 600, easing = LinearEasing)),
+        label = "ludo-dice-pending-rotation",
+    )
+    val positions = when (value) {
+        1 -> listOf(4)
+        2 -> listOf(0, 8)
+        3 -> listOf(0, 4, 8)
+        4 -> listOf(0, 2, 6, 8)
+        5 -> listOf(0, 2, 4, 6, 8)
+        6 -> listOf(0, 2, 3, 5, 6, 8)
+        else -> emptyList()
+    }
+    Canvas(Modifier.size(34.dp).graphicsLayer {
+        rotationZ = if (rolling) pendingRotation else 0f
+        rotationY = if (animateConfirmed) confirmedRotation.value else 0f
+    }) {
+        drawRoundRect(Color.White, cornerRadius = CornerRadius(size.width * .18f))
+        drawRoundRect(Color(0xFF343A40), cornerRadius = CornerRadius(size.width * .18f), style = Stroke(size.width * .045f))
+        val step = size.width / 4f
+        positions.forEach { index ->
+            val x = (index % 3 + 1) * step
+            val y = (index / 3 + 1) * step
+            drawCircle(if (value == 1) Color(0xFFDD2525) else Color(0xFF28313A), size.width * .075f, Offset(x, y))
         }
     }
 }
@@ -187,55 +314,6 @@ private fun TurnCountdown(turnDeadline: Long?) {
         }
     }
     Text("${remainingMs / 1000}s", style = MaterialTheme.typography.titleLarge)
-}
-
-@Composable
-private fun PlayerTokensRow(
-    player: LudoPlayerDto,
-    legal: List<LudoLegalMoveDto>,
-    isMyRow: Boolean,
-    isMovingTokenId: Int?,
-    enabled: Boolean,
-    onTokenClick: (Int) -> Unit,
-) {
-    Card(modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.xs)) {
-        Column(modifier = Modifier.padding(Spacing.sm)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                AvatarImage(avatarUrl = player.user?.avatar?.secureUrl, initials = player.user?.initials ?: player.color.orEmpty().take(2))
-                Text(
-                    "${player.user?.fullName ?: player.color ?: "Seat ${player.seat}"}${if (isMyRow) " (you)" else ""}",
-                    modifier = Modifier.padding(start = Spacing.sm).weight(1f),
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                if (!player.connected) Text("disconnected", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-                Text("captures: ${player.captures}", style = MaterialTheme.typography.labelSmall)
-            }
-            Row(modifier = Modifier.fillMaxWidth().padding(top = Spacing.xs), horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                player.tokens.forEach { token ->
-                    val isLegal = isMyRow && legal.any { it.tokenId == token.id }
-                    Button(
-                        onClick = { onTokenClick(token.id) },
-                        enabled = isLegal && enabled && isMovingTokenId != token.id,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isLegal) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                            contentColor = if (isLegal) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        ),
-                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.xs),
-                    ) {
-                        Text(tokenLabel(token.pos), style = MaterialTheme.typography.labelSmall)
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun tokenLabel(pos: Int): String = when {
-    pos == -1 -> "Base"
-    pos in 0..50 -> "T$pos"
-    pos in 51..55 -> "H${pos - 50}"
-    pos == 56 -> "Home"
-    else -> "?"
 }
 
 @Composable

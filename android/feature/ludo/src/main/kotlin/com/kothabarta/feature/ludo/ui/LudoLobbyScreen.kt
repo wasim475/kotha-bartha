@@ -10,7 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -92,28 +92,41 @@ private fun VariantPicker(
     isCreating: Boolean,
     viewModel: LudoLobbyViewModel,
 ) {
+    val quick = variants.firstOrNull { it.id == "QUICK_CAPTURE" }
+    val classic = variants.firstOrNull { it.id == "CLASSIC_RANKED" }
+    val choices = listOf(
+        OnlineModeChoice("Quick", quick, "First capture wins."),
+        OnlineModeChoice("One Kill", null, "This rule set is not available on the server yet."),
+        OnlineModeChoice("Classic", classic, "Bring all four tokens Home; finish order sets the ranking."),
+    )
     Column(modifier = Modifier.padding(bottom = Spacing.lg)) {
-        Text("Play Ludo", style = MaterialTheme.typography.headlineSmall)
-        if (variants.isEmpty()) {
-            EmptyState("No online Ludo variants available right now.")
-            return
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = Spacing.sm),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+        Text("Play With Friend", style = MaterialTheme.typography.headlineSmall)
+        Text("Choose an online mode. Create a lobby, then invite a friend.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
-            variants.forEach { variant ->
-                FilterChip(
-                    selected = selectedVariantId == variant.id,
-                    onClick = { viewModel.selectVariant(variant.id) },
-                    label = { Text(variant.title) },
-                )
+            choices.forEach { choice ->
+                val selected = choice.variant?.id == selectedVariantId
+                Card(
+                    onClick = { choice.variant?.let { viewModel.selectVariant(it.id) } },
+                    enabled = choice.variant != null && !isCreating,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    ),
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(Spacing.md)) {
+                        Text(choice.title, style = MaterialTheme.typography.titleMedium)
+                        Text(choice.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (choice.variant == null) {
+                            Text("Coming soon", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xs))
+                        }
+                    }
+                }
             }
         }
-        val selected = variants.firstOrNull { it.id == selectedVariantId }
-        selected?.description?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
         Button(
             onClick = viewModel::createLobby,
             enabled = !isCreating && selectedVariantId != null,
@@ -123,6 +136,8 @@ private fun VariantPicker(
         }
     }
 }
+
+private data class OnlineModeChoice(val title: String, val variant: LudoVariantDto?, val description: String)
 
 @Composable
 private fun SectionTitle(text: String) {

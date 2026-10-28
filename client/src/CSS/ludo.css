@@ -47,14 +47,23 @@
 .ludo-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .ludo-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .ludo-screen[data-layout="game"] {
-  grid-template-areas: "turn" "players" "main" "aside";
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-areas: "turn turn" "p0 p1" "main main" "p3 p2" "aside aside";
 }
 .ludo-area-turn { grid-area: turn; min-width: 0; }
-.ludo-area-players { grid-area: players; min-width: 0; }
+.ludo-area-players { min-width: 0; }
 .ludo-area-main { grid-area: main; }
 .ludo-area-aside { grid-area: aside; }
 /* The layout follows the room the page actually has (the Study shell is narrower than the window). */
 .ludo-frame { container-type: inline-size; width: 100%; min-width: 0; }
+@container (max-width: 879px) {
+  .ludo-area-players, .ludo-players { display: contents; }
+  .ludo-player[data-seat="0"] { grid-area: p0; }
+  .ludo-player[data-seat="1"] { grid-area: p1; }
+  .ludo-player[data-seat="2"] { grid-area: p2; }
+  .ludo-player[data-seat="3"] { grid-area: p3; }
+  .ludo-screen[data-layout="game"] { row-gap: 6px; }
+}
 @container (min-width: 880px) {
   .ludo-screen[data-layout="game"] {
     grid-template-columns: minmax(0, 1fr) 340px;
@@ -62,7 +71,7 @@
     grid-template-rows: auto auto 1fr;
     align-items: start;
   }
-  .ludo-board-wrap { max-width: min(100%, 720px, calc(100dvh - 130px)); }
+  .ludo-board-wrap { max-width: min(100%, 720px, calc(100svh - 150px)); }
   .ludo-players { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -70,8 +79,8 @@
 .ludo-board-wrap {
   position: relative;
   width: 100%;
-  max-width: min(100%, 640px, calc(100dvh - 210px));
-  min-width: 250px;
+  max-width: min(100%, 640px, max(250px, calc(100svh - 400px)));
+  min-width: 0;
   margin-inline: auto;
 }
 .ludo-board {
@@ -104,13 +113,19 @@
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background:
-    radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 32%),
-    radial-gradient(circle at 34% 30%, color-mix(in srgb, #fff 55%, var(--seat)) 0%, var(--seat) 48%, color-mix(in srgb, #000 32%, var(--seat)) 100%);
-  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.4), inset 0 0 0 2px rgba(255, 255, 255, 0.6), inset 0 -3px 4px rgba(0, 0, 0, 0.22);
-  color: #fff;
+  background: transparent;
+  box-shadow: none;
   pointer-events: none;
   cursor: default;
+}
+.ludo-token-art {
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(0 22%, 5% 12%, 17% 4%, 34% 0, 50% 0, 66% 0, 83% 4%, 95% 12%, 100% 22%, 97% 42%, 90% 58%, 78% 72%, 62% 86%, 50% 100%, 38% 86%, 22% 72%, 10% 58%, 3% 42%);
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0) 32%),
+    radial-gradient(circle at 34% 30%, color-mix(in srgb, #fff 55%, var(--seat)) 0%, var(--seat) 48%, color-mix(in srgb, #000 32%, var(--seat)) 100%);
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.45));
 }
 .ludo-token::before {
   /* Grounds the piece on the cell, like a cast shadow. */
@@ -195,6 +210,12 @@
   cursor: pointer;
   perspective: 500px;
   transition: border-color 0.2s, box-shadow 0.25s, transform 0.15s;
+}
+.ludo-player .ludo-dice-btn {
+  flex: 0 0 auto;
+  width: 50px;
+  height: 50px;
+  border-radius: 13px;
 }
 .ludo-dice-btn[data-ready="true"] {
   border-color: var(--seat, var(--accent));

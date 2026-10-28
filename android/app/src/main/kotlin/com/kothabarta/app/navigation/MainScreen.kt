@@ -95,6 +95,8 @@ import com.kothabarta.feature.home.ui.FeedViewer
 import com.kothabarta.feature.home.ui.PostDetailScreen
 import com.kothabarta.feature.leaderboard.ui.LeaderboardScreen
 import com.kothabarta.feature.ludo.ui.LudoGameScreen
+import com.kothabarta.feature.ludo.ui.LudoHomeScreen
+import com.kothabarta.feature.ludo.ui.LudoLocalModesScreen
 import com.kothabarta.feature.ludo.ui.LudoLobbyScreen
 import com.kothabarta.feature.messages.ui.ChatScreen
 import com.kothabarta.feature.messages.ui.ConversationsScreen
@@ -401,7 +403,9 @@ fun MainScreen(
                     val matchId = backStackEntry.arguments?.getString(Routes.CHALLENGE_MATCH_ARG).orEmpty()
                     ChallengePlayScreen(matchId = matchId)
                 }
-                composable(Routes.LUDO) { LudoLobbyScreen(onNavigate = onNavigate) }
+                composable(Routes.LUDO) { LudoHomeScreen(onNavigate = onNavigate) }
+                composable(Routes.LUDO_ONLINE) { LudoLobbyScreen(onNavigate = onNavigate) }
+                composable(Routes.LUDO_LOCAL) { LudoLocalModesScreen() }
                 composable(
                     Routes.LUDO_GAME_PATTERN,
                     arguments = listOf(navArgument(Routes.LUDO_GAME_ARG) { type = NavType.StringType }),

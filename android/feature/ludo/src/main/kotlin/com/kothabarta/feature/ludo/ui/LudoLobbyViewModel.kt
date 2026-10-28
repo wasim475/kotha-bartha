@@ -52,8 +52,8 @@ private val INVITE_LIFECYCLE_EVENTS = listOf(
 )
 
 /**
- * Variant catalog (LOCAL_CLASSIC and any `online == false` variant filtered
- * out — Android isn't implementing offline pass-and-play this pass) + online
+ * Variant catalog (only the server-backed Quick and Classic choices are
+ * selectable; One Kill has no matching server rule set) + online
  * friends + pending invites + resumable active games, following the same
  * shape as `TttLobbyViewModel`. Unlike Tic-Tac-Toe, `LudoInviteRequest`
  * requires an existing lobby `gameId` (there's no "invite a friend and a
@@ -104,7 +104,9 @@ class LudoLobbyViewModel(
             _uiState.update { it.copy(isLoading = true, error = null) }
             when (val catalogResult = repository.getCatalog()) {
                 is ApiResult.Success -> {
-                    val variants = catalogResult.data.variants.filter { it.id != "LOCAL_CLASSIC" && it.online }
+                    val variants = catalogResult.data.variants.filter {
+                        it.online && it.id in setOf("QUICK_CAPTURE", "CLASSIC_RANKED")
+                    }
                     _uiState.update {
                         it.copy(
                             isLoading = false,

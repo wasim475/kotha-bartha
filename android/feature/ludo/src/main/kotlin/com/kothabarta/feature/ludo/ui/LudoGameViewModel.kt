@@ -11,6 +11,7 @@ import com.kothabarta.core.network.encodeSocketPayload
 import com.kothabarta.core.network.ludo.LudoBoardStateDto
 import com.kothabarta.core.network.ludo.LudoChatEvent
 import com.kothabarta.core.network.ludo.LudoGameDto
+import com.kothabarta.core.network.ludo.LudoGameEventDto
 import com.kothabarta.core.network.ludo.LudoInviteLifecycleEvent
 import com.kothabarta.core.network.ludo.LudoLobbyEvent
 import com.kothabarta.core.network.ludo.LudoMemberDto
@@ -42,6 +43,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 data class LudoGameUiState(
@@ -59,6 +61,12 @@ data class LudoGameUiState(
     val isTogglingReady: Boolean = false,
     val isStarting: Boolean = false,
     val isRolling: Boolean = false,
+    val diceAnimationId: Long = 0,
+    val confirmedDiceValue: Int? = null,
+    val diceRollSeat: Int? = null,
+    val diceRollTurnNumber: Int? = null,
+    val lastDiceRollVersion: Int = -1,
+    val pendingRollActionId: String? = null,
     val movingTokenId: Int? = null,
     val isRequestingRematch: Boolean = false,
     val rematchRequestSent: Boolean = false,
@@ -83,6 +91,8 @@ private val REMATCH_LIFECYCLE_EVENTS = listOf(
     "ludo:rematch:expired",
 )
 
+private const val ROLL_ACK_TIMEOUT_MS = 12_000L
+
 /**
  * One online Ludo lobby+game, combined into a single screen/ViewModel per
  * spec: pre-game ready/start plus the active simplified board plus the
@@ -98,6 +108,7 @@ class LudoGameViewModel(
     private val repository: LudoRepository,
     private val authApi: AuthApi,
     private val socketManager: SocketManager,
+    private val rollEmitter: ((String, Any, Ack) -> Unit)? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LudoGameUiState())
@@ -112,6 +123,7 @@ class LudoGameViewModel(
     /** `internal` purely so a unit test can verify the reconnect-triggers-rejoin rule without a live socket ever delivering a real ack. */
     internal var joinCallCount = 0
         private set
+    private var lastClaimedDiceAnimationId = 0L
 
     private val stateListener = Emitter.Listener { args -> args.firstOrNull()?.decodeSocketPayload<LudoStateEvent>()?.let(::applyStateEvent) }
     private val rollListener = Emitter.Listener { args -> args.firstOrNull()?.decodeSocketPayload<LudoStateEvent>()?.let(::onRollEvent) }
@@ -226,22 +238,35 @@ class LudoGameViewModel(
      */
     internal fun applyStateEvent(event: LudoStateEvent) {
         if (event.gameId != gameId) return
+        val confirmedRoll = event.events.lastOrNull { it.type == "DICE_ROLLED" }
+            ?.takeIf { it.value?.let { value -> value in 1..6 } == true && it.seat?.let { seat -> seat in 0..3 } == true }
         _uiState.update { state ->
             val incoming = event.game
             val currentVersion = state.board?.version
             if (incoming != null && currentVersion != null && incoming.version < currentVersion) return@update state
+            if (incoming == null && confirmedRoll != null && currentVersion != null && event.version < currentVersion) return@update state
+            val newConfirmedRoll = confirmedRoll?.takeIf { event.version > state.lastDiceRollVersion }
             state.copy(
                 isLoading = false,
                 board = incoming ?: state.board,
                 results = event.results ?: state.results,
                 status = event.status ?: state.status,
+                isRolling = if (newConfirmedRoll != null) false else state.isRolling,
+                pendingRollActionId = if (newConfirmedRoll != null) null else state.pendingRollActionId,
+                diceAnimationId = if (newConfirmedRoll != null) state.diceAnimationId + 1 else state.diceAnimationId,
+                confirmedDiceValue = newConfirmedRoll?.value ?: state.confirmedDiceValue,
+                diceRollSeat = newConfirmedRoll?.seat ?: state.diceRollSeat,
+                diceRollTurnNumber = if (newConfirmedRoll != null) {
+                    state.board?.takeIf { it.turnSeat == newConfirmedRoll.seat }?.turnNumber ?: incoming?.turnNumber
+                } else state.diceRollTurnNumber,
+                lastDiceRollVersion = if (newConfirmedRoll != null) event.version else state.lastDiceRollVersion,
             )
         }
     }
 
     internal fun onRollEvent(event: LudoStateEvent) {
         applyStateEvent(event)
-        if (event.gameId == gameId) _toastMessages.tryEmit(event.game?.dice?.let { "Rolled a $it" } ?: "Dice rolled")
+        if (event.gameId == gameId) _toastMessages.tryEmit(event.events.lastOrNull { it.type == "DICE_ROLLED" }?.value?.let { "Rolled a $it" } ?: "Dice rolled")
     }
 
     internal fun onMoveEvent(event: LudoStateEvent) {
@@ -367,16 +392,71 @@ class LudoGameViewModel(
         val board = state.board ?: return
         if (state.isControlledElsewhere || state.isRolling) return
         if (state.mySeat == null || board.turnSeat != state.mySeat || board.phase != "ROLL") return
-        _uiState.update { it.copy(isRolling = true) }
-        socketManager.emitWithAck(
+        val actionId = UUID.randomUUID().toString()
+        _uiState.update { it.copy(isRolling = true, error = null, pendingRollActionId = actionId) }
+        (rollEmitter ?: socketManager::emitWithAck).invoke(
             "ludo:roll",
-            LudoRollRequest(gameId, board.version, UUID.randomUUID().toString()).encodeSocketPayload(),
+            LudoRollRequest(gameId, board.version, actionId).encodeSocketPayload(),
             Ack { args ->
                 val ack = args.firstOrNull()?.decodeSocketPayload<LudoBoardAck>()
-                _uiState.update { it.copy(isRolling = false) }
-                ack?.game?.let { applyStateEvent(LudoStateEvent(gameId = gameId, version = it.version, game = it)) }
+                onRollAck(actionId, ack)
             },
         )
+        viewModelScope.launch {
+            delay(ROLL_ACK_TIMEOUT_MS)
+            onRollAck(actionId, null)
+        }
+    }
+
+    internal fun onRollAck(actionId: String, ack: LudoBoardAck?) {
+        if (ack?.ok == true && ack.game != null) {
+            applyStateEvent(LudoStateEvent(gameId = gameId, version = ack.game.version, game = ack.game, events = ack.events))
+            _uiState.update {
+                if (it.pendingRollActionId == actionId) it.copy(isRolling = false, error = null, pendingRollActionId = null) else it
+            }
+        } else {
+            val wasStillPending = _uiState.value.pendingRollActionId == actionId && _uiState.value.isRolling
+            _uiState.update {
+                if (wasStillPending) {
+                    it.copy(isRolling = false, pendingRollActionId = null, error = "Dice roll failed. Please try again.")
+                } else it
+            }
+            if (wasStillPending) {
+                _toastMessages.tryEmit("Dice roll failed. Please try again.")
+                join()
+            }
+        }
+    }
+
+    internal fun shouldAnimateDice(seat: Int, turnNumber: Int): Boolean {
+        val state = _uiState.value
+        val board = state.board
+        val isCurrentRoll = board != null && board.version == state.lastDiceRollVersion &&
+            board.turnSeat == seat && board.turnNumber == state.diceRollTurnNumber && board.turnNumber == turnNumber && board.phase == "MOVE"
+        val rollTurn = state.diceRollTurnNumber
+        val hasTransientConfirmedResult = board != null && rollTurn != null &&
+            board.version == state.lastDiceRollVersion && board.phase == "ROLL" && board.dice == null &&
+            board.turnNumber in rollTurn..(rollTurn + 1) && board.turnNumber == turnNumber &&
+            state.confirmedDiceValue?.let { it in 1..6 } == true
+        return state.diceAnimationId > 0 &&
+            state.diceRollSeat == seat &&
+            (isCurrentRoll || hasTransientConfirmedResult)
+    }
+
+    internal fun finishDiceAnimation(animationId: Long) {
+        _uiState.update { state ->
+            val board = state.board
+            if (state.diceAnimationId == animationId && board != null && board.phase != "MOVE") {
+                state.copy(confirmedDiceValue = null)
+            } else state
+        }
+    }
+
+    /** A ViewModel-owned claim prevents the same confirmed result animating again after recomposition or screen recreation. */
+    internal fun claimDiceAnimation(animationId: Long): Boolean {
+        if (animationId <= lastClaimedDiceAnimationId) return false
+        lastClaimedDiceAnimationId = animationId
+        return true
     }
 
     /** [tokenId] must be present in the current board's `legal` list — a tap on anything else is silently ignored, never sent. */

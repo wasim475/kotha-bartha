@@ -189,6 +189,7 @@ export default function Board({ tokens, movable, targets, selectedKey, onPick, s
                 animate={hop && token.pos >= 0 && token.stepping ? { y: ["0%", "-22%", "0%"] } : { y: "0%" }}
                 transition={{ duration: 0.14 }}
               >
+                <span className="ludo-token-art" aria-hidden="true" />
                 {isMovable && <span className="ludo-token-tap" aria-hidden="true" />}
               </Motion.button>
             </Motion.div>

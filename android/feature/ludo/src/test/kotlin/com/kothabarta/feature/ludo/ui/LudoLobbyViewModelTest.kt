@@ -54,7 +54,7 @@ class LudoLobbyViewModelTest {
     @Test
     fun `catalog loads and LOCAL_CLASSIC and offline-only variants are filtered out of the online lobby`() = runTest {
         val api = FakeLudoApi(
-            variants = listOf(variant("QUICK_CAPTURE"), variant("CLASSIC_RANKED"), variant("LOCAL_CLASSIC"), variant("OFFLINE_ONLY", online = false)),
+            variants = listOf(variant("QUICK_CAPTURE"), variant("CAPTURE_AND_HOME"), variant("CLASSIC_RANKED"), variant("LOCAL_CLASSIC"), variant("OFFLINE_ONLY", online = false)),
         )
         val viewModel = LudoLobbyViewModel(LudoRepository(api), SocketManager("http://localhost"))
         advanceUntilIdle()

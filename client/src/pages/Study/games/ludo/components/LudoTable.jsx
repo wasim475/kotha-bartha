@@ -13,14 +13,14 @@ import Dice from "./Dice";
 const WARN_SECONDS = [10, 5, 3, 2, 1];
 const ordinal = (n) => ["", "1st", "2nd", "3rd", "4th"][n] || `${n}th`;
 
-function PlayerCard({ player, active, isMe, isTurn, local, result }) {
+function PlayerCard({ player, active, isMe, local, result, dice, rolling, canRoll, onRoll }) {
   const color = SEAT_COLORS[player.seat];
   const home = tokensHome(player);
   const gone = player.status === "LEFT";
   const away = !local && !player.connected && !gone;
   const name = player.user?.fullName || player.name;
   return (
-    <div className="ludo-player" data-color={color} data-active={active ? "true" : "false"} data-gone={gone ? "true" : "false"} data-testid={`ludo-player-${player.seat}`}>
+    <div className="ludo-player" data-color={color} data-seat={player.seat} data-active={active ? "true" : "false"} data-gone={gone ? "true" : "false"} data-testid={`ludo-player-${player.seat}`}>
       {player.user?.id ? (
         <Avatar person={player.user} size="md" />
       ) : (
@@ -42,12 +42,23 @@ function PlayerCard({ player, active, isMe, isTurn, local, result }) {
           <span>{player.captures} ✕</span>
           {result ? <strong className="text-ink">{ordinal(result.rank)}</strong> : null}
         </p>
-        {(away || gone || isTurn) && (
+        {(away || gone || active) && (
           <p className="text-[11px] font-semibold" style={{ color: away ? "var(--danger)" : "var(--seat)" }} role="status">
             {gone ? "Left the game" : away ? "Reconnecting…" : isMe ? "Your turn" : "Playing…"}
           </p>
         )}
       </div>
+      <Dice
+        value={dice}
+        rolling={active && rolling}
+        landed={active && dice != null}
+        ready={canRoll}
+        disabled={!canRoll}
+        onRoll={onRoll}
+        color={color}
+        label={canRoll ? "Roll the dice" : dice != null ? `Dice shows ${dice}` : `${color} player's dice`}
+        size={34}
+      />
     </div>
   );
 }
@@ -181,10 +192,13 @@ export default function LudoTable({ state, director, actingSeat, local = false, 
               key={player.seat}
               player={player}
               active={!finished && player.seat === state.turnSeat}
-              isTurn={!finished && player.seat === state.turnSeat}
               isMe={actingSeat === player.seat && !local}
               local={local}
               result={finished ? state.rankings?.find((row) => row.seat === player.seat) : null}
+              dice={player.seat === state.turnSeat && state.phase === "MOVE" ? director.dice.value : null}
+              rolling={director.dice.rolling}
+              canRoll={canRoll && player.seat === state.turnSeat}
+              onRoll={onRoll}
             />
           ))}
         </div>
@@ -210,17 +224,7 @@ export default function LudoTable({ state, director, actingSeat, local = false, 
           {children}
         </div>
 
-        <div className="flex items-center gap-3 rounded-2xl border border-line bg-panel p-2.5" data-color={turnColor}>
-          <Dice
-            value={director.dice.value}
-            rolling={director.dice.rolling}
-            landed={director.dice.landed}
-            ready={canRoll}
-            disabled={!canRoll}
-            onRoll={onRoll}
-            color={turnColor}
-            size={58}
-          />
+        <div className="flex min-h-14 items-center gap-3 rounded-2xl border border-line bg-panel p-2.5" data-color={turnColor}>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold text-ink" role="status" data-testid="ludo-status">
               {status}

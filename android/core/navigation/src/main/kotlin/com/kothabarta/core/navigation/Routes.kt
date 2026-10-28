@@ -86,6 +86,8 @@ object Routes {
     const val LEADERBOARD = "leaderboard"
     const val TIC_TAC_TOE = "tic_tac_toe"
     const val LUDO = "ludo"
+    const val LUDO_ONLINE = "ludo/online"
+    const val LUDO_LOCAL = "ludo/local"
 
     const val QUIZ_CHAPTER_ARG = "chapterId"
     const val QUIZ_SET_ARG = "setNumber"

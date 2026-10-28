@@ -3,6 +3,7 @@ package com.kothabarta.feature.ludo.ui
 import com.kothabarta.core.navigation.NavigationEvent
 import com.kothabarta.core.navigation.Routes
 import com.kothabarta.core.network.ApiEnvelope
+import com.kothabarta.core.network.encodeSocketPayload
 import com.kothabarta.core.network.auth.AuthApi
 import com.kothabarta.core.network.auth.GoogleLoginRequest
 import com.kothabarta.core.network.auth.LoginRequest
@@ -13,6 +14,7 @@ import com.kothabarta.core.network.ludo.LudoApi
 import com.kothabarta.core.network.ludo.LudoBoardStateDto
 import com.kothabarta.core.network.ludo.LudoCatalogResponse
 import com.kothabarta.core.network.ludo.LudoGameDto
+import com.kothabarta.core.network.ludo.LudoGameEventDto
 import com.kothabarta.core.network.ludo.LudoGameWrapperDto
 import com.kothabarta.core.network.ludo.LudoInviteDto
 import com.kothabarta.core.network.ludo.LudoInviteLifecycleEvent
@@ -28,7 +30,9 @@ import com.kothabarta.core.network.ludo.LudoTakeoverEvent
 import com.kothabarta.core.network.ludo.LudoTokenDto
 import com.kothabarta.core.network.social.SafeUserDto
 import com.kothabarta.core.websocket.SocketManager
+import com.kothabarta.feature.ludo.data.LudoBoardAck
 import com.kothabarta.feature.ludo.data.LudoRepository
+import io.socket.client.Ack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -71,8 +75,11 @@ class LudoGameViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun newViewModel(api: FakeLudoApi = FakeLudoApi(), authApi: FakeAuthApi = FakeAuthApi()) =
-        LudoGameViewModel("g1", LudoRepository(api), authApi, SocketManager("http://localhost"))
+    private fun newViewModel(
+        api: FakeLudoApi = FakeLudoApi(),
+        authApi: FakeAuthApi = FakeAuthApi(),
+        rollEmitter: ((String, Any, Ack) -> Unit)? = null,
+    ) = LudoGameViewModel("g1", LudoRepository(api), authApi, SocketManager("http://localhost"), rollEmitter)
 
     private fun playerSeat(
         seat: Int,
@@ -177,6 +184,144 @@ class LudoGameViewModelTest {
         viewModel.onRollEvent(LudoStateEvent(gameId = "g1", version = 2, game = boardWith(version = 2, dice = 4)))
 
         assertEquals(4, viewModel.uiState.value.board?.dice)
+    }
+
+    @Test
+    fun `confirmed server roll publishes one animation with the authoritative face`() = runTest {
+        val viewModel = newViewModel()
+        runCurrent()
+        seedActive(viewModel, boardWith(turnSeat = 0, phase = "ROLL"), mySeat = 0)
+
+        viewModel.applyStateEvent(
+            LudoStateEvent(
+                gameId = "g1",
+                version = 2,
+                game = boardWith(version = 2, turnSeat = 0, phase = "MOVE", dice = 5),
+                events = listOf(LudoGameEventDto(type = "DICE_ROLLED", seat = 0, value = 5)),
+            ),
+        )
+
+        assertEquals(5, viewModel.uiState.value.board?.dice)
+        assertEquals(5, viewModel.uiState.value.confirmedDiceValue)
+        assertEquals(1L, viewModel.uiState.value.diceAnimationId)
+        assertTrue(viewModel.shouldAnimateDice(seat = 0, turnNumber = 1))
+    }
+
+    @Test
+    fun `duplicate state and roll events do not enqueue another dice animation`() = runTest {
+        val viewModel = newViewModel()
+        runCurrent()
+        seedActive(viewModel, boardWith(turnSeat = 0), mySeat = 0)
+        val roll = LudoStateEvent(
+            gameId = "g1",
+            version = 2,
+            game = boardWith(version = 2, turnSeat = 0, phase = "MOVE", dice = 3),
+            events = listOf(LudoGameEventDto(type = "DICE_ROLLED", seat = 0, value = 3)),
+        )
+
+        viewModel.applyStateEvent(roll)
+        viewModel.applyStateEvent(roll)
+        viewModel.onRollEvent(roll)
+
+        assertEquals(1L, viewModel.uiState.value.diceAnimationId)
+        assertTrue(viewModel.claimDiceAnimation(1L))
+        assertFalse(viewModel.claimDiceAnimation(1L))
+    }
+
+    @Test
+    fun `turn change during a confirmed roll cancels its pending animation`() = runTest {
+        val viewModel = newViewModel()
+        runCurrent()
+        seedActive(viewModel, boardWith(turnSeat = 0), mySeat = 0)
+        viewModel.applyStateEvent(
+            LudoStateEvent(
+                gameId = "g1",
+                version = 2,
+                game = boardWith(version = 2, turnSeat = 0, phase = "MOVE", dice = 6),
+                events = listOf(LudoGameEventDto(type = "DICE_ROLLED", seat = 0, value = 6)),
+            ),
+        )
+        assertTrue(viewModel.shouldAnimateDice(seat = 0, turnNumber = 1))
+
+        viewModel.applyStateEvent(LudoStateEvent(gameId = "g1", version = 3, game = boardWith(version = 3, turnSeat = 1, turnNumber = 2)))
+
+        assertFalse(viewModel.shouldAnimateDice(seat = 0, turnNumber = 2))
+        assertEquals(6, viewModel.uiState.value.confirmedDiceValue)
+    }
+
+    @Test
+    fun `confirmed roll that immediately passes the turn animates briefly then clears`() = runTest {
+        val viewModel = newViewModel()
+        runCurrent()
+        seedActive(viewModel, boardWith(turnSeat = 0, turnNumber = 1), mySeat = 0)
+        viewModel.applyStateEvent(
+            LudoStateEvent(
+                gameId = "g1",
+                version = 2,
+                game = boardWith(version = 2, turnSeat = 1, turnNumber = 2, phase = "ROLL"),
+                events = listOf(LudoGameEventDto(type = "DICE_ROLLED", seat = 0, value = 4)),
+            ),
+        )
+
+        assertEquals(4, viewModel.uiState.value.confirmedDiceValue)
+        assertTrue(viewModel.shouldAnimateDice(seat = 0, turnNumber = 2))
+
+        viewModel.finishDiceAnimation(viewModel.uiState.value.diceAnimationId)
+
+        assertNull(viewModel.uiState.value.confirmedDiceValue)
+        assertFalse(viewModel.shouldAnimateDice(seat = 0, turnNumber = 2))
+    }
+
+    @Test
+    fun `failed online roll clears duplicate tap lock and exposes retry error`() = runTest {
+        var rollAck: Ack? = null
+        val viewModel = newViewModel(rollEmitter = { _, _, ack -> rollAck = ack })
+        runCurrent()
+        seedActive(viewModel, boardWith(turnSeat = 0), mySeat = 0)
+
+        viewModel.rollDice()
+        rollAck!!.call(LudoBoardAck(ok = false).encodeSocketPayload())
+
+        assertFalse(viewModel.uiState.value.isRolling)
+        assertEquals("Dice roll failed. Please try again.", viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun `repeated tap while awaiting the server keeps one roll request pending`() = runTest {
+        var requestCount = 0
+        val viewModel = newViewModel(rollEmitter = { _, _, _ -> requestCount++ })
+        runCurrent()
+        seedActive(viewModel, boardWith(turnSeat = 0), mySeat = 0)
+
+        viewModel.rollDice()
+        viewModel.rollDice()
+
+        assertTrue(viewModel.uiState.value.isRolling)
+        assertEquals(1, requestCount)
+        assertEquals(0L, viewModel.uiState.value.diceAnimationId)
+    }
+
+    @Test
+    fun `successful roll acknowledgement animates the server supplied value`() = runTest {
+        var rollAck: Ack? = null
+        val viewModel = newViewModel(rollEmitter = { _, _, ack -> rollAck = ack })
+        runCurrent()
+        seedActive(viewModel, boardWith(turnSeat = 0), mySeat = 0)
+
+        viewModel.rollDice()
+        val result = boardWith(version = 2, turnSeat = 0, phase = "MOVE", dice = 2)
+        rollAck!!.call(
+            LudoBoardAck(
+                ok = true,
+                game = result,
+                events = listOf(LudoGameEventDto(type = "DICE_ROLLED", seat = 0, value = 2)),
+            ).encodeSocketPayload(),
+        )
+
+        assertEquals(2, viewModel.uiState.value.board?.dice)
+        assertEquals(2, viewModel.uiState.value.confirmedDiceValue)
+        assertEquals(1L, viewModel.uiState.value.diceAnimationId)
+        assertFalse(viewModel.uiState.value.isRolling)
     }
 
     @Test
