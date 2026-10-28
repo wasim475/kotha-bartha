@@ -33,6 +33,19 @@ class LudoDiceTargetTest {
     }
 
     @Test
+    fun `dice owner follows roller through reveal and movement before settling on new turn`() {
+        assertEquals(2, dicePresentationSeat(1, 2, false, true, false))
+        assertEquals(2, dicePresentationSeat(1, 2, false, false, true))
+        assertEquals(1, dicePresentationSeat(1, 2, false, false, false))
+        assertEquals(1, dicePresentationSeat(1, 2, true, false, false))
+    }
+
+    @Test
+    fun `bonus turn keeps the same dice owner`() {
+        assertEquals(2, dicePresentationSeat(2, 2, false, false, false))
+    }
+
+    @Test
     fun `quick home entrance barrier follows the authoritative rule and finished phase`() {
         val activeQuick = LudoBoardStateDto(
             variantId = "QUICK_CAPTURE",

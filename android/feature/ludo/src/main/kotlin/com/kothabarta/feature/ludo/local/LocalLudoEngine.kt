@@ -36,6 +36,40 @@ class LocalLudoEngine(private val roller: DieRoller) {
         return LocalLudoState(mode, playerNames.mapIndexed { i, n -> LocalPlayer(seats[i], n.ifBlank { "Player ${i + 1}" }.take(24)) }, turnSeat = seats.first())
     }
 
+    fun leave(state: LocalLudoState, seat: Int): LocalLudoState {
+        require(state.players.any { it.seat == seat }) { "Player is not part of this game" }
+        val remaining = state.players.filterNot { it.seat == seat }
+        if (remaining.size <= 1) {
+            return state.copy(
+                players = remaining,
+                turnSeat = remaining.singleOrNull()?.seat ?: -1,
+                phase = "FINISHED",
+                dice = null,
+                legalMoves = emptyList(),
+                winnerSeat = remaining.singleOrNull()?.seat,
+                version = state.version + 1,
+            )
+        }
+        if (state.turnSeat != seat) {
+            val updated = state.copy(players = remaining, version = state.version + 1)
+            return if (updated.phase == "MOVE" && updated.dice != null) {
+                updated.copy(legalMoves = legalMoves(updated, updated.dice))
+            } else updated
+        }
+        val nextSeat = nextActiveSeat(remaining, seat)
+        return state.copy(
+            players = remaining,
+            turnSeat = nextSeat ?: -1,
+            turnNumber = state.turnNumber + 1,
+            phase = if (nextSeat == null) "FINISHED" else "ROLL",
+            dice = null,
+            legalMoves = emptyList(),
+            consecutiveSixes = 0,
+            winnerSeat = null,
+            version = state.version + 1,
+        )
+    }
+
     fun roll(state: LocalLudoState): LocalLudoState {
         check(state.phase == "ROLL") { "A roll is not expected now" }
         if (state.winnerSeat != null) return state
@@ -95,12 +129,16 @@ class LocalLudoEngine(private val roller: DieRoller) {
 
     private fun pass(s: LocalLudoState): LocalLudoState = advance(s.copy(dice = null, legalMoves = emptyList(), consecutiveSixes = 0))
     private fun advance(s: LocalLudoState): LocalLudoState {
-        val order = s.players.map { it.seat }
-        val start = order.indexOf(s.turnSeat)
-        val next = (1..order.size).asSequence().map { order[(start + it) % order.size] }
-            .firstOrNull { seat -> s.players.first { it.seat == seat }.status == "ACTIVE" }
+        val next = nextActiveSeat(s.players, s.turnSeat)
         return if (next == null) s.copy(phase = "FINISHED", dice = null, legalMoves = emptyList(), version = s.version + 1)
         else s.copy(turnSeat = next, turnNumber = s.turnNumber + 1, phase = "ROLL", dice = null, legalMoves = emptyList(), version = s.version + 1)
+    }
+
+    private fun nextActiveSeat(players: List<LocalPlayer>, currentSeat: Int): Int? {
+        if (players.none { it.status == "ACTIVE" }) return null
+        return (1..4).asSequence()
+            .map { (currentSeat + it) % 4 }
+            .firstOrNull { seat -> players.any { it.seat == seat && it.status == "ACTIVE" } }
     }
 
     companion object {

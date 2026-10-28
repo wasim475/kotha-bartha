@@ -9,13 +9,16 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
@@ -29,6 +32,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -43,6 +48,18 @@ internal fun diceAnimationIdForSeat(animationId: Long, rollerSeat: Int?, seat: I
 
 internal fun isActiveLudoPlayer(turnSeat: Int?, seat: Int): Boolean = turnSeat == seat
 
+internal fun dicePresentationSeat(
+    turnSeat: Int?,
+    rollerSeat: Int?,
+    isRolling: Boolean,
+    isRevealing: Boolean,
+    isMoving: Boolean,
+): Int? = when {
+    isRolling -> turnSeat
+    isRevealing || isMoving -> rollerSeat ?: turnSeat
+    else -> turnSeat
+}
+
 @Composable
 internal fun LudoAnimatedDiceFace(
     value: Int?,
@@ -52,12 +69,15 @@ internal fun LudoAnimatedDiceFace(
     claimAnimation: (Long) -> Boolean,
     onAnimationFinished: (Long) -> Unit = {},
     tint: Color,
+    visible: Boolean = true,
+    onPositioned: ((Offset) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val lift = remember { Animatable(0f) }
     val rotationX = remember { Animatable(0f) }
     val rotationY = remember { Animatable(0f) }
     val rotationZ = remember { Animatable(0f) }
+    var animating by remember { mutableStateOf(false) }
     val latestOnFinished by rememberUpdatedState(onAnimationFinished)
     val targetedAnimationId = diceAnimationIdForSeat(animationId, rollerSeat, seat)
     LaunchedEffect(targetedAnimationId) {
@@ -66,6 +86,7 @@ internal fun LudoAnimatedDiceFace(
             latestOnFinished(targetedAnimationId)
             return@LaunchedEffect
         }
+        animating = true
         try {
             coroutineScope {
                 launch {
@@ -102,14 +123,22 @@ internal fun LudoAnimatedDiceFace(
                 rotationX.snapTo(0f)
                 rotationY.snapTo(0f)
                 rotationZ.snapTo(0f)
+                animating = false
                 latestOnFinished(targetedAnimationId)
             }
         }
     }
 
     Canvas(
-        Modifier.size(46.dp).then(modifier),
+        Modifier.size(50.dp).then(
+            if (onPositioned != null) {
+                Modifier.onGloballyPositioned { coordinates ->
+                    onPositioned(coordinates.positionInRoot() + Offset(coordinates.size.width / 2f, coordinates.size.height / 2f))
+                }
+            } else Modifier,
+        ).then(modifier),
     ) {
+        if (!visible) return@Canvas
         val maxDimension = size.minDimension
         val liftPx = lift.value * density
         val shadowScale = 1f - (lift.value / 22f) * .42f
@@ -121,15 +150,137 @@ internal fun LudoAnimatedDiceFace(
             ),
             size = Size(maxDimension * .34f * shadowScale, maxDimension * .12f * shadowScale),
         )
+        val center = Offset(size.width / 2f, size.height / 2f - liftPx)
+        if (animating) {
+            drawDiceCube(
+                value = value,
+                tint = tint,
+                center = center,
+                unit = maxDimension * .4f,
+                rotationX = rotationX.value,
+                rotationY = rotationY.value,
+                rotationZ = rotationZ.value,
+            )
+        } else {
+            drawStableDice(value, tint, center, maxDimension * .78f)
+        }
+    }
+}
+
+internal class LudoDiceTransferState(initialOwner: Int?) {
+    var settledOwner by mutableStateOf(initialOwner)
+        private set
+    var start by mutableStateOf<Offset?>(null)
+        private set
+    var end by mutableStateOf<Offset?>(null)
+        private set
+    val progress = Animatable(1f)
+    val isTransferring: Boolean get() = start != null && end != null
+
+    suspend fun transfer(owner: Int, from: Offset, to: Offset) {
+        start = from
+        end = to
+        progress.snapTo(0f)
+        try {
+            progress.animateTo(1f, tween(420, easing = FastOutSlowInEasing))
+        } finally {
+            withContext(NonCancellable) {
+                settledOwner = owner
+                progress.snapTo(1f)
+                start = null
+                end = null
+            }
+        }
+    }
+
+    fun settle(owner: Int) {
+        settledOwner = owner
+        start = null
+        end = null
+    }
+}
+
+@Composable
+internal fun rememberLudoDiceTransferState(
+    ownerSeat: Int?,
+    isBusy: Boolean,
+    anchors: Map<Int, Offset>,
+): LudoDiceTransferState {
+    val state = remember { LudoDiceTransferState(ownerSeat) }
+    val anchorSnapshot = anchors.toMap()
+    LaunchedEffect(ownerSeat, isBusy, anchorSnapshot) {
+        val target = ownerSeat ?: return@LaunchedEffect
+        if (target == state.settledOwner || isBusy) return@LaunchedEffect
+        val source = state.settledOwner
+        val from = source?.let(anchorSnapshot::get)
+        val to = anchorSnapshot[target]
+        if (from != null && to != null) state.transfer(target, from, to)
+        else state.settle(target)
+    }
+    return state
+}
+
+@Composable
+internal fun LudoDiceTransferOverlay(
+    transfer: LudoDiceTransferState,
+    tintBySeat: Map<Int, Color>,
+    modifier: Modifier = Modifier,
+) {
+    val start = transfer.start
+    val end = transfer.end
+    val progress = transfer.progress.value
+    if (start == null || end == null || progress >= 1f) return
+    Canvas(modifier.fillMaxSize()) {
+        val lift = sin(progress * PI.toFloat()) * size.minDimension * .055f
+        val point = quadraticPoint(start, Offset((start.x + end.x) / 2f, minOf(start.y, end.y) - size.minDimension * .16f), end, progress)
         drawDiceCube(
-            value = value,
-            tint = tint,
-            center = Offset(size.width / 2f, size.height / 2f - liftPx),
-            unit = maxDimension * .4f,
-            rotationX = -12f + rotationX.value,
-            rotationY = 16f + rotationY.value,
-            rotationZ = rotationZ.value,
+            value = 6,
+            tint = tintBySeat[transfer.settledOwner] ?: Color(0xFFE34263),
+            center = point.copy(y = point.y - lift),
+            unit = 20.dp.toPx(),
+            rotationX = progress * 300f,
+            rotationY = progress * 360f,
+            rotationZ = sin(progress * PI.toFloat()) * 5f,
         )
+    }
+}
+
+private fun quadraticPoint(start: Offset, control: Offset, end: Offset, fraction: Float): Offset {
+    val inverse = 1f - fraction
+    return Offset(
+        inverse * inverse * start.x + 2f * inverse * fraction * control.x + fraction * fraction * end.x,
+        inverse * inverse * start.y + 2f * inverse * fraction * control.y + fraction * fraction * end.y,
+    )
+}
+
+private fun DrawScope.drawStableDice(value: Int?, tint: Color, center: Offset, faceSize: Float) {
+    val topLeft = Offset(center.x - faceSize / 2f, center.y - faceSize / 2f)
+    val corner = faceSize * .2f
+    drawRoundRect(
+        brush = Brush.linearGradient(
+            listOf(Color.White, Color(0xFFF3F4F7), Color(0xFFE6E9F0)),
+            start = topLeft,
+            end = Offset(topLeft.x + faceSize, topLeft.y + faceSize),
+        ),
+        topLeft = topLeft,
+        size = Size(faceSize, faceSize),
+        cornerRadius = CornerRadius(corner),
+    )
+    drawRoundRect(
+        color = Color(0xFF293446),
+        topLeft = topLeft,
+        size = Size(faceSize, faceSize),
+        cornerRadius = CornerRadius(corner),
+        style = Stroke(width = faceSize * .045f),
+    )
+    if (value != null) {
+        pipPositions(value.coerceIn(1, 6)).forEach { (horizontal, vertical) ->
+            drawCircle(
+                color = if (value == 1) tint else Color(0xFF293446),
+                radius = faceSize * .072f,
+                center = Offset(center.x + horizontal * faceSize, center.y + vertical * faceSize),
+            )
+        }
     }
 }
 

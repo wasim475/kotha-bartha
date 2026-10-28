@@ -13,9 +13,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -83,35 +90,90 @@ private fun LudoModeEntryCard(title: String, subtitle: String, symbol: AppSymbol
 
 @Composable
 fun LudoLocalModesScreen(onNavigate: (NavigationEvent) -> Unit) {
+    var playerCount by rememberSaveable { mutableIntStateOf(4) }
+    var mode by rememberSaveable { mutableStateOf(LocalLudoMode.CLASSIC.variantId) }
+    val selectedMode = remember(mode) { LocalLudoMode.entries.first { it.variantId == mode } }
     LazyColumn(contentPadding = PaddingValues(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         item {
             Column(modifier = Modifier.padding(bottom = Spacing.sm)) {
-                Text("Play Local", style = MaterialTheme.typography.headlineSmall)
+                Text("Local game setup", style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    "Four players share this device. Local games work offline.",
+                    "Choose a single-player game and how many people will share this device.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
-        items(3) { index ->
-            val mode = when (index) { 0 -> LocalLudoMode.QUICK; 2 -> LocalLudoMode.CLASSIC; else -> null }
-            val title = mode?.title ?: "One Kill"
-            val description = when (mode) {
-                LocalLudoMode.QUICK -> "First capture wins. Tokens stay on the shared track."
-                LocalLudoMode.CLASSIC -> "Bring all four tokens Home; finishing order ranks players."
-                null -> "No authoritative One Kill rules are defined yet."
+        item {
+            Text("Game type", style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.padding(top = Spacing.xs)) {
+                SetupChoiceCard("Single Game", "Players compete individually", true, Modifier.weight(1f))
+                SetupChoiceCard("Team Game", "Unavailable until team rules are defined", false, Modifier.weight(1f), enabled = false)
             }
-            Card(
-                modifier = Modifier.fillMaxWidth().clickable(enabled = mode != null) { mode?.let { onNavigate(NavigationEvent.NavigateTo(Routes.ludoLocalGame(it.variantId))) } },
-                colors = CardDefaults.cardColors(containerColor = if (mode != null) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceVariant),
-            ) {
-                Column(modifier = Modifier.fillMaxWidth().padding(Spacing.md)) {
-                    Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(if (mode != null) "Play offline" else "Unavailable · rules not documented", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xs))
+        }
+        item {
+            Text("Players", style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.padding(top = Spacing.xs)) {
+                (2..4).forEach { count ->
+                    SetupChoiceCard(
+                        "$count Players",
+                        if (count == playerCount) "Selected" else "Select",
+                        count == playerCount,
+                        Modifier.weight(1f),
+                        onClick = { playerCount = count },
+                    )
                 }
             }
+        }
+        items(LocalLudoMode.entries.toList(), key = { it.variantId }) { gameMode ->
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable { mode = gameMode.variantId },
+                colors = CardDefaults.cardColors(
+                    containerColor = if (mode == gameMode.variantId) MaterialTheme.colorScheme.primaryContainer
+                    else MaterialTheme.colorScheme.surfaceContainerHigh,
+                ),
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().padding(Spacing.md)) {
+                    Text(gameMode.title, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (gameMode == LocalLudoMode.QUICK) "First capture wins. Tokens stay on the shared track."
+                        else "Bring all four tokens Home. Each player competes individually.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        item {
+            Button(
+                onClick = { onNavigate(NavigationEvent.NavigateTo(Routes.ludoLocalGame(selectedMode.variantId, playerCount))) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Start ${selectedMode.title} · $playerCount players")
+            }
+        }
+    }
+}
+
+@Composable
+private fun SetupChoiceCard(
+    title: String,
+    subtitle: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit = {},
+) {
+    Card(
+        modifier = modifier.clickable(enabled = enabled, onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(Spacing.sm)) {
+            Text(title, style = MaterialTheme.typography.labelLarge)
+            Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

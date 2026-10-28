@@ -83,5 +83,55 @@ class LocalLudoEngineTest {
         val third = e.roll(s)
         assertEquals(1, third.turnSeat); assertEquals("ROLL", third.phase)
     }
-}
 
+    @Test fun localSetupCreatesTheSelectedPlayerCountAtNonOverlappingSupportedSeats() {
+        val e = engine(1)
+
+        assertEquals(listOf(0, 2), e.newGame(LocalLudoMode.CLASSIC, listOf("A", "B")).players.map { it.seat })
+        assertEquals(listOf(0, 1, 2), e.newGame(LocalLudoMode.CLASSIC, listOf("A", "B", "C")).players.map { it.seat })
+        assertEquals(listOf(0, 1, 2, 3), e.newGame(LocalLudoMode.CLASSIC).players.map { it.seat })
+    }
+
+    @Test fun exitingTheActivePlayerAdvancesToTheNextConfiguredSeatAndRemovesTheirTokens() {
+        val e = engine(3)
+        val threePlayers = e.newGame(LocalLudoMode.CLASSIC, listOf("A", "B", "C"))
+        val afterExit = e.leave(threePlayers.copy(phase = "MOVE", dice = 3), seat = 0)
+
+        assertEquals(listOf(1, 2), afterExit.players.map { it.seat })
+        assertEquals(1, afterExit.turnSeat)
+        assertEquals("ROLL", afterExit.phase)
+        assertNull(afterExit.dice)
+        assertTrue(afterExit.legalMoves.isEmpty())
+    }
+
+    @Test fun exitingTheOnlyRemainingParticipantFinishesWithoutInventingAWinner() {
+        val e = engine(1)
+        val onePlayerLeft = e.newGame(LocalLudoMode.CLASSIC, listOf("A", "B")).let { state ->
+            e.leave(state, seat = 0)
+        }
+        val noPlayersLeft = e.leave(onePlayerLeft, seat = 2)
+
+        assertEquals("FINISHED", noPlayersLeft.phase)
+        assertNull(noPlayersLeft.winnerSeat)
+        assertTrue(noPlayersLeft.players.isEmpty())
+    }
+
+    @Test fun leavingDuringMoveRecomputesCapturesAgainstRemainingParticipants() {
+        val e = engine(2)
+        val initial = setup(LocalLudoMode.QUICK, listOf(0, 10, -1, -1)).copy(
+            players = setup(LocalLudoMode.QUICK, listOf(0, 10, -1, -1)).players.map { player ->
+                if (player.seat == 2) player.copy(tokens = listOf(LocalToken(0, 28), LocalToken(1), LocalToken(2), LocalToken(3)))
+                else player
+            },
+        )
+        val moveState = e.roll(initial)
+        assertTrue(moveState.legalMoves.first { it.tokenId == 0 }.captures.isNotEmpty())
+
+        val afterExit = e.leave(moveState, seat = 2)
+        assertTrue(afterExit.legalMoves.first { it.tokenId == 0 }.captures.isEmpty())
+        val moved = e.move(afterExit, 0)
+
+        assertNull(moved.winnerSeat)
+        assertEquals("ROLL", moved.phase)
+    }
+}

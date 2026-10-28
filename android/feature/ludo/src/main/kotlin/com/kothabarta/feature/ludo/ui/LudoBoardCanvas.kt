@@ -25,6 +25,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -170,6 +172,29 @@ private fun DrawScope.drawLudoBoard(
     homes.forEachIndexed { seat, (row, col) ->
         drawRect(seats[seat], Offset(col * unit, row * unit), Size(6 * unit, 6 * unit))
         drawRect(Color.White, Offset((col + .8f) * unit, (row + .8f) * unit), Size(4.4f * unit, 4.4f * unit))
+        if (seat == activeSeat) {
+            val topLeft = Offset((col + .12f) * unit, (row + .12f) * unit)
+            val homeSize = Size(5.76f * unit, 5.76f * unit)
+            val gradient = Brush.linearGradient(
+                colors = listOf(Color(0xFFE34263), Color(0xFF7653E8), Color(0xFFE34263)),
+                start = topLeft,
+                end = Offset(topLeft.x + homeSize.width, topLeft.y + homeSize.height),
+            )
+            drawRoundRect(
+                color = Color(0xFFE34263).copy(alpha = .14f * pulse),
+                topLeft = topLeft,
+                size = homeSize,
+                cornerRadius = CornerRadius(.42f * unit),
+                style = Stroke(width = .42f * unit),
+            )
+            drawRoundRect(
+                brush = gradient,
+                topLeft = topLeft,
+                size = homeSize,
+                cornerRadius = CornerRadius(.42f * unit),
+                style = Stroke(width = .16f * unit),
+            )
+        }
         val centers = listOf(1.5f to 1.5f, 1.5f to 3.5f, 3.5f to 1.5f, 3.5f to 3.5f)
         centers.forEach { (dy, dx) ->
             drawCircle(Color(0xFFE8E5DF), .62f * unit, Offset((col + dx) * unit, (row + dy) * unit))
@@ -281,10 +306,10 @@ private fun DrawScope.drawToken(center: Offset, unit: Float, color: Color, movab
     )
     drawCircle(Color(0x55000000), radius, center + Offset(0f, .12f * visualUnit))
     val pin = Path().apply {
-        moveTo(center.x, center.y + .47f * visualUnit)
-        cubicTo(center.x - .1f * visualUnit, center.y + .19f * visualUnit, center.x - radius, center.y + .05f * visualUnit, center.x - radius, center.y - .08f * visualUnit)
+        moveTo(center.x, center.y + .57f * visualUnit)
+        cubicTo(center.x - .1f * visualUnit, center.y + .24f * visualUnit, center.x - radius, center.y + .08f * visualUnit, center.x - radius, center.y - .08f * visualUnit)
         cubicTo(center.x - radius, center.y - .48f * visualUnit, center.x + radius, center.y - .48f * visualUnit, center.x + radius, center.y - .08f * visualUnit)
-        cubicTo(center.x + radius, center.y + .05f * visualUnit, center.x + .1f * visualUnit, center.y + .19f * visualUnit, center.x, center.y + .47f * visualUnit)
+        cubicTo(center.x + radius, center.y + .08f * visualUnit, center.x + .1f * visualUnit, center.y + .24f * visualUnit, center.x, center.y + .57f * visualUnit)
         close()
     }
     drawPath(pin, Color(0xFF777777))

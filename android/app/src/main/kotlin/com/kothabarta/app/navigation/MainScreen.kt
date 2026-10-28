@@ -418,8 +418,18 @@ fun MainScreen(
                 composable(Routes.LUDO) { LudoHomeScreen(onNavigate = onNavigate) }
                 composable(Routes.LUDO_ONLINE) { LudoLobbyScreen(onNavigate = onNavigate) }
                 composable(Routes.LUDO_LOCAL) { LudoLocalModesScreen(onNavigate = onNavigate) }
-                composable(Routes.LUDO_LOCAL_GAME_PATTERN, arguments = listOf(navArgument(Routes.LUDO_LOCAL_MODE_ARG) { type = NavType.StringType })) { entry ->
-                    LudoLocalGameScreen(entry.arguments?.getString(Routes.LUDO_LOCAL_MODE_ARG).orEmpty(), onNavigate)
+                composable(
+                    Routes.LUDO_LOCAL_GAME_PATTERN,
+                    arguments = listOf(
+                        navArgument(Routes.LUDO_LOCAL_MODE_ARG) { type = NavType.StringType },
+                        navArgument(Routes.LUDO_LOCAL_PLAYER_COUNT_ARG) { type = NavType.IntType; defaultValue = 4 },
+                    ),
+                ) { entry ->
+                    LudoLocalGameScreen(
+                        modeId = entry.arguments?.getString(Routes.LUDO_LOCAL_MODE_ARG).orEmpty(),
+                        playerCount = entry.arguments?.getInt(Routes.LUDO_LOCAL_PLAYER_COUNT_ARG) ?: 4,
+                        onNavigate = onNavigate,
+                    )
                 }
                 composable(
                     Routes.LUDO_GAME_PATTERN,

@@ -11,5 +11,5 @@ val ludoFeatureModule = module {
     single { LudoRepository(api = get()) }
     viewModel { LudoLobbyViewModel(get(), get()) }
     viewModel { (gameId: String) -> LudoGameViewModel(gameId, get(), get(), get()) }
-    viewModel { (modeId: String) -> LocalLudoViewModel(modeId) }
+    viewModel { (modeId: String, playerCount: Int) -> LocalLudoViewModel(modeId, playerCount = playerCount) }
 }
