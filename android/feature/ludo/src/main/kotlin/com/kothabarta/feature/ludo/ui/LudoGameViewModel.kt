@@ -463,7 +463,7 @@ class LudoGameViewModel(
     internal fun onRollAnimationFinished(animationId: Long) {
         _uiState.update { state ->
             if (state.diceAnimationId != animationId) state
-            else state.copy(isDiceRevealAnimating = false, confirmedDiceValue = if (state.board?.phase == "MOVE") state.confirmedDiceValue else null)
+            else state.copy(isDiceRevealAnimating = false)
         }
     }
 

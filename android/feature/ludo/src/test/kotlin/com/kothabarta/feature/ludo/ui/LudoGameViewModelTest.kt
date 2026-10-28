@@ -251,7 +251,7 @@ class LudoGameViewModelTest {
     }
 
     @Test
-    fun `confirmed roll that immediately passes the turn animates on the roller then clears`() = runTest {
+    fun `confirmed roll that immediately passes the turn keeps its face for the next player`() = runTest {
         val viewModel = newViewModel()
         runCurrent()
         seedActive(viewModel, boardWith(turnSeat = 0, turnNumber = 1), mySeat = 0)
@@ -270,7 +270,8 @@ class LudoGameViewModelTest {
 
         viewModel.onRollAnimationFinished(viewModel.uiState.value.diceAnimationId)
 
-        assertNull(viewModel.uiState.value.confirmedDiceValue)
+        assertEquals(4, viewModel.uiState.value.confirmedDiceValue)
+        assertEquals(4, dicePresentationFace(1, 1, "ROLL", viewModel.uiState.value.diceRollSeat, viewModel.uiState.value.confirmedDiceValue, null))
         assertEquals(1L, diceAnimationIdForSeat(viewModel.uiState.value.diceAnimationId, viewModel.uiState.value.diceRollSeat, 0))
         assertFalse(viewModel.claimDiceAnimation(viewModel.uiState.value.diceAnimationId))
     }

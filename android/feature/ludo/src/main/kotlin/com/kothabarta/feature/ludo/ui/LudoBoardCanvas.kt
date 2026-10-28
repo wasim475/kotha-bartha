@@ -308,6 +308,13 @@ private fun DrawScope.drawToken(center: Offset, unit: Float, color: Color, movab
     val scale = when { selected -> 1.16f; movable -> pulse; else -> 1f }
     val visualUnit = unit * scale
     val radius = .32f * visualUnit
+    val highlight = Color(
+        red = color.red + (1f - color.red) * .48f,
+        green = color.green + (1f - color.green) * .48f,
+        blue = color.blue + (1f - color.blue) * .48f,
+        alpha = color.alpha,
+    )
+    val shade = Color(color.red * .62f, color.green * .62f, color.blue * .62f, color.alpha)
     if (movable || selected) drawCircle(
         if (selected) Color(0xFFE34AE6).copy(alpha = .22f + (pulse - .94f) * .45f) else Color.White.copy(alpha = .18f),
         radius = .69f * unit * pulse,
@@ -321,11 +328,23 @@ private fun DrawScope.drawToken(center: Offset, unit: Float, color: Color, movab
         cubicTo(center.x + radius, center.y + .08f * visualUnit, center.x + .1f * visualUnit, center.y + .24f * visualUnit, center.x, center.y + .57f * visualUnit)
         close()
     }
-    drawPath(pin, Color(0xFF777777))
-    drawPath(pin, color, style = Stroke(.07f * visualUnit))
-    drawCircle(color, radius * .78f, center - Offset(0f, .1f * unit))
-    drawCircle(Color.White.copy(alpha = .9f), radius * .78f, center - Offset(0f, .1f * unit), style = Stroke(.07f * unit))
-    drawCircle(Color.White.copy(alpha = .5f), radius * .2f, center - Offset(.12f * unit, .23f * unit))
+    drawPath(
+        pin,
+        Brush.linearGradient(
+            colors = listOf(highlight, color, shade),
+            start = Offset(center.x - radius, center.y - .48f * visualUnit),
+            end = Offset(center.x + radius, center.y + .57f * visualUnit),
+        ),
+    )
+    drawPath(pin, shade, style = Stroke(.07f * visualUnit))
+    val headCenter = center - Offset(0f, .1f * unit)
+    drawCircle(
+        Brush.radialGradient(listOf(highlight, color, shade), center = headCenter - Offset(.1f * unit, .12f * unit), radius = radius * 1.25f),
+        radius = radius * .78f,
+        center = headCenter,
+    )
+    drawCircle(Color.White.copy(alpha = .9f), radius * .78f, headCenter, style = Stroke(.07f * unit))
+    drawCircle(Color.White.copy(alpha = .58f), radius * .2f, center - Offset(.12f * unit, .23f * unit))
     if (selected) drawCircle(Color(0xFFE34AE6), .55f * unit, center, style = Stroke(.11f * unit))
     else if (movable) drawCircle(Color.White, .48f * unit * pulse, center, style = Stroke(.08f * unit))
 }
