@@ -46,6 +46,32 @@ class LudoDiceTargetTest {
     }
 
     @Test
+    fun `all participating dice show six initially without implying a confirmed roll`() {
+        assertEquals(
+            listOf(6, 6, 6, 6),
+            (0..3).map { seat ->
+                dicePresentationFace(seat, 0, "ROLL", null, null, null)
+            },
+        )
+    }
+
+    @Test
+    fun `last confirmed result is displayed for the next turn without changing roller identity`() {
+        val displayedSeats = listOf(3, 0, 2, 1)
+
+        assertEquals(
+            listOf(6, 4, 6, 4),
+            displayedSeats.map { seat -> dicePresentationFace(seat, 1, "ROLL", 0, 4, null) },
+        )
+        assertEquals(2, dicePresentationFace(2, 2, "ROLL", 2, 2, null))
+    }
+
+    @Test
+    fun `current legal-move phase uses the confirmed current die`() {
+        assertEquals(3, dicePresentationFace(1, 1, "MOVE", 1, 3, 3))
+    }
+
+    @Test
     fun `quick home entrance barrier follows the authoritative rule and finished phase`() {
         val activeQuick = LudoBoardStateDto(
             variantId = "QUICK_CAPTURE",

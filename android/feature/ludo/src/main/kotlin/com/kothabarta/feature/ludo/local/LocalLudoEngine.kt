@@ -70,6 +70,21 @@ class LocalLudoEngine(private val roller: DieRoller) {
         )
     }
 
+    fun rename(state: LocalLudoState, seat: Int, name: String): LocalLudoState {
+        val normalizedName = name.trim()
+        require(normalizedName.isNotEmpty()) { "Player name cannot be blank" }
+        require(normalizedName.length <= MAX_PLAYER_NAME_LENGTH) {
+            "Player name must be $MAX_PLAYER_NAME_LENGTH characters or fewer"
+        }
+        require(state.players.any { it.seat == seat }) { "Player is not part of this game" }
+        return state.copy(
+            players = state.players.map { player ->
+                if (player.seat == seat) player.copy(name = normalizedName) else player
+            },
+            version = state.version + 1,
+        )
+    }
+
     fun roll(state: LocalLudoState): LocalLudoState {
         check(state.phase == "ROLL") { "A roll is not expected now" }
         if (state.winnerSeat != null) return state
@@ -142,6 +157,7 @@ class LocalLudoEngine(private val roller: DieRoller) {
     }
 
     companion object {
+        const val MAX_PLAYER_NAME_LENGTH = 24
         const val IN_BASE = -1; const val FINISH = 56; const val LAST_TRACK_REL = 50
         val STARTS = listOf(0, 13, 26, 39)
         val SAFE_CELLS = setOf(0, 8, 13, 21, 26, 34, 39, 47)

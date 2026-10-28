@@ -126,10 +126,17 @@ internal fun LudoBoardCanvas(
             latestAnimationCallback(false)
         }
     }
-    val pulse by rememberInfiniteTransition(label = "ludo-token-pulse").animateFloat(
+    val highlightTransition = rememberInfiniteTransition(label = "ludo-active-highlight")
+    val pulse by highlightTransition.animateFloat(
         initialValue = .94f, targetValue = 1.06f,
         animationSpec = infiniteRepeatable(tween(650, easing = LinearEasing), RepeatMode.Reverse),
         label = "ludo-token-pulse-scale",
+    )
+    val highlightPhase by highlightTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1900), RepeatMode.Restart),
+        label = "ludo-home-highlight-phase",
     )
     val movable = highlightedLegalTokenIds(board, mySeat, allowMoves && !moveAnimating)
     Canvas(
@@ -151,7 +158,7 @@ internal fun LudoBoardCanvas(
     ) {
         val unit = size.width / 15f
         drawRect(Color(0xFFF6F2EA), size = size)
-        drawLudoBoard(unit, board, visualPositions, movable, board.turnSeat, selectedTokenId, selectedSeat, pulse, barrierVisibility)
+        drawLudoBoard(unit, board, visualPositions, movable, board.turnSeat, selectedTokenId, selectedSeat, pulse, highlightPhase, barrierVisibility)
     }
 }
 
@@ -164,6 +171,7 @@ private fun DrawScope.drawLudoBoard(
     selectedTokenId: Int?,
     selectedSeat: Int?,
     pulse: Float,
+    highlightPhase: Float,
     barrierVisibility: Float,
 ) {
     val line = Color(0x663B3630)
@@ -175,10 +183,11 @@ private fun DrawScope.drawLudoBoard(
         if (seat == activeSeat) {
             val topLeft = Offset((col + .12f) * unit, (row + .12f) * unit)
             val homeSize = Size(5.76f * unit, 5.76f * unit)
+            val gradientStart = Offset(topLeft.x + (highlightPhase - 1f) * homeSize.width, topLeft.y)
             val gradient = Brush.linearGradient(
                 colors = listOf(Color(0xFFE34263), Color(0xFF7653E8), Color(0xFFE34263)),
-                start = topLeft,
-                end = Offset(topLeft.x + homeSize.width, topLeft.y + homeSize.height),
+                start = gradientStart,
+                end = Offset(gradientStart.x + homeSize.width, topLeft.y + homeSize.height),
             )
             drawRoundRect(
                 color = Color(0xFFE34263).copy(alpha = .14f * pulse),

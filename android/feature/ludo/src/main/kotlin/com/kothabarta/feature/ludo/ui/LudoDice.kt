@@ -60,6 +60,20 @@ internal fun dicePresentationSeat(
     else -> turnSeat
 }
 
+internal fun dicePresentationFace(
+    seat: Int,
+    turnSeat: Int?,
+    phase: String,
+    lastRollSeat: Int?,
+    lastConfirmedValue: Int?,
+    currentDiceValue: Int?,
+): Int = when {
+    phase == "MOVE" && seat == turnSeat -> currentDiceValue ?: lastConfirmedValue ?: 6
+    phase == "ROLL" && seat == turnSeat -> lastConfirmedValue ?: 6
+    seat == lastRollSeat -> lastConfirmedValue ?: 6
+    else -> 6
+}
+
 @Composable
 internal fun LudoAnimatedDiceFace(
     value: Int?,
@@ -174,12 +188,15 @@ internal class LudoDiceTransferState(initialOwner: Int?) {
         private set
     var end by mutableStateOf<Offset?>(null)
         private set
+    var transferFace by mutableStateOf(6)
+        private set
     val progress = Animatable(1f)
     val isTransferring: Boolean get() = start != null && end != null
 
-    suspend fun transfer(owner: Int, from: Offset, to: Offset) {
+    suspend fun transfer(owner: Int, face: Int, from: Offset, to: Offset) {
         start = from
         end = to
+        transferFace = face
         progress.snapTo(0f)
         try {
             progress.animateTo(1f, tween(420, easing = FastOutSlowInEasing))
@@ -203,6 +220,7 @@ internal class LudoDiceTransferState(initialOwner: Int?) {
 @Composable
 internal fun rememberLudoDiceTransferState(
     ownerSeat: Int?,
+    face: Int,
     isBusy: Boolean,
     anchors: Map<Int, Offset>,
 ): LudoDiceTransferState {
@@ -214,7 +232,7 @@ internal fun rememberLudoDiceTransferState(
         val source = state.settledOwner
         val from = source?.let(anchorSnapshot::get)
         val to = anchorSnapshot[target]
-        if (from != null && to != null) state.transfer(target, from, to)
+        if (from != null && to != null) state.transfer(target, face.coerceIn(1, 6), from, to)
         else state.settle(target)
     }
     return state
@@ -234,7 +252,7 @@ internal fun LudoDiceTransferOverlay(
         val lift = sin(progress * PI.toFloat()) * size.minDimension * .055f
         val point = quadraticPoint(start, Offset((start.x + end.x) / 2f, minOf(start.y, end.y) - size.minDimension * .16f), end, progress)
         drawDiceCube(
-            value = 6,
+            value = transfer.transferFace,
             tint = tintBySeat[transfer.settledOwner] ?: Color(0xFFE34263),
             center = point.copy(y = point.y - lift),
             unit = 20.dp.toPx(),

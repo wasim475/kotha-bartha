@@ -1,9 +1,11 @@
 package com.kothabarta.feature.ludo.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,10 +41,21 @@ fun LudoLocalGameScreen(
     val selectedTokenId by viewModel.selectedTokenId.collectAsState()
     val selectedTokenSeat by viewModel.selectedTokenSeat.collectAsState()
     var exitDialogSeat by remember { mutableStateOf<Int?>(null) }
+    var renameDialogSeat by remember { mutableStateOf<Int?>(null) }
+    var selectedManagementSeat by remember { mutableIntStateOf(state.turnSeat) }
+    var nameDraft by remember { mutableStateOf("") }
+    var nameError by remember { mutableStateOf(false) }
     var rootOrigin by remember { mutableStateOf(Offset.Zero) }
     val diceAnchors = remember { mutableStateMapOf<Int, Offset>() }
     val board = state.toBoardDto()
     val players = board.players.associateBy { it.seat }
+    LaunchedEffect(state.players, state.turnSeat) {
+        if (state.players.any { it.seat == selectedManagementSeat }) return@LaunchedEffect
+        selectedManagementSeat = state.turnSeat.takeIf { seat -> state.players.any { it.seat == seat } }
+            ?: state.players.firstOrNull()?.seat
+            ?: -1
+    }
+    val selectedParticipant = state.players.firstOrNull { it.seat == selectedManagementSeat }
     val presentationSeat = dicePresentationSeat(
         state.turnSeat.takeIf { it >= 0 },
         state.lastRollSeat,
@@ -52,17 +65,17 @@ fun LudoLocalGameScreen(
     )
     val transfer = rememberLudoDiceTransferState(
         ownerSeat = presentationSeat,
+        face = state.lastRollValue ?: 6,
         isBusy = isRolling || isDiceRevealAnimating || isAnimatingMove,
         anchors = diceAnchors,
     )
-    val displayedOwner = transfer.settledOwner ?: presentationSeat
     Box(
         Modifier.fillMaxSize().onGloballyPositioned { rootOrigin = it.positionInRoot() },
     ) {
       Column(Modifier.fillMaxSize().background(Color(0xFF07529A)).padding(horizontal = 8.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            LocalSeatPanel(players[0], displayedOwner, transfer.isTransferring, rootOrigin, diceAnchors, state, isRolling, isDiceRevealAnimating, diceAnimationId, viewModel::roll, viewModel::claimDiceAnimation, viewModel::onRollAnimationFinished, Modifier.weight(1f))
-            LocalSeatPanel(players[1], displayedOwner, transfer.isTransferring, rootOrigin, diceAnchors, state, isRolling, isDiceRevealAnimating, diceAnimationId, viewModel::roll, viewModel::claimDiceAnimation, viewModel::onRollAnimationFinished, Modifier.weight(1f))
+            LocalSeatPanel(players[0], transfer.isTransferring, rootOrigin, diceAnchors, state, isRolling, isDiceRevealAnimating, diceAnimationId, viewModel::roll, viewModel::claimDiceAnimation, viewModel::onRollAnimationFinished, Modifier.weight(1f))
+            LocalSeatPanel(players[1], transfer.isTransferring, rootOrigin, diceAnchors, state, isRolling, isDiceRevealAnimating, diceAnimationId, viewModel::roll, viewModel::claimDiceAnimation, viewModel::onRollAnimationFinished, Modifier.weight(1f))
         }
         Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
             LudoBoardCanvas(
@@ -78,30 +91,67 @@ fun LudoLocalGameScreen(
             )
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            LocalSeatPanel(players[3], displayedOwner, transfer.isTransferring, rootOrigin, diceAnchors, state, isRolling, isDiceRevealAnimating, diceAnimationId, viewModel::roll, viewModel::claimDiceAnimation, viewModel::onRollAnimationFinished, Modifier.weight(1f))
-            LocalSeatPanel(players[2], displayedOwner, transfer.isTransferring, rootOrigin, diceAnchors, state, isRolling, isDiceRevealAnimating, diceAnimationId, viewModel::roll, viewModel::claimDiceAnimation, viewModel::onRollAnimationFinished, Modifier.weight(1f))
+            LocalSeatPanel(players[3], transfer.isTransferring, rootOrigin, diceAnchors, state, isRolling, isDiceRevealAnimating, diceAnimationId, viewModel::roll, viewModel::claimDiceAnimation, viewModel::onRollAnimationFinished, Modifier.weight(1f))
+            LocalSeatPanel(players[2], transfer.isTransferring, rootOrigin, diceAnchors, state, isRolling, isDiceRevealAnimating, diceAnimationId, viewModel::roll, viewModel::claimDiceAnimation, viewModel::onRollAnimationFinished, Modifier.weight(1f))
         }
         Surface(Modifier.fillMaxWidth(), color = Color(0xFF123D68), shape = RoundedCornerShape(14.dp)) {
-            Row(Modifier.padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                Text(
-                    when {
-                        board.phase == "FINISHED" && state.winnerSeat != null -> "${players[state.winnerSeat]?.color ?: "Player ${state.winnerSeat?.plus(1)}"} wins"
-                        board.phase == "FINISHED" -> "Game ended · no players remain"
-                        isRolling -> "ROLLING DICE"
-                        isDiceRevealAnimating -> "REVEALING DICE RESULT"
-                        isAnimatingMove -> "MOVING TOKEN"
-                        state.lastRollHadNoMoves -> "No moves available · turn passed"
-                        board.phase == "MOVE" -> "CHOOSE A HIGHLIGHTED TOKEN"
-                        else -> "${players[state.turnSeat]?.color} · ROLL DICE"
-                    },
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Text("${state.mode.title} · Turn ${state.turnNumber}", color = Color(0xFFCFDFF0), style = MaterialTheme.typography.labelSmall)
+            Column(Modifier.padding(horizontal = 10.dp, vertical = 5.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            when {
+                                board.phase == "FINISHED" && state.winnerSeat != null -> "${players[state.winnerSeat]?.color ?: "Player ${state.winnerSeat?.plus(1)}"} wins"
+                                board.phase == "FINISHED" -> "Game ended · no players remain"
+                                isRolling -> "ROLLING DICE"
+                                isDiceRevealAnimating -> "REVEALING DICE RESULT"
+                                isAnimatingMove -> "MOVING TOKEN"
+                                state.lastRollHadNoMoves -> "No moves available · turn passed"
+                                board.phase == "MOVE" -> "CHOOSE A HIGHLIGHTED TOKEN"
+                                else -> "${players[state.turnSeat]?.color} · ROLL DICE"
+                            },
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Text("${state.mode.title} · Turn ${state.turnNumber}", color = Color(0xFFCFDFF0), style = MaterialTheme.typography.labelSmall)
+                    }
                 }
-                if (state.players.isNotEmpty() && board.phase != "FINISHED") {
-                    TextButton(onClick = { exitDialogSeat = state.turnSeat }) { Text("Exit player") }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(
+                        Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        state.players.forEach { participant ->
+                            TextButton(
+                                onClick = { selectedManagementSeat = participant.seat },
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = if (participant.seat == selectedManagementSeat) Color.White else Color(0xFFCFDFF0),
+                                ),
+                            ) {
+                                Text(
+                                    participant.name,
+                                    maxLines = 1,
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                        }
+                    }
+                    TextButton(
+                        onClick = {
+                            selectedParticipant?.let {
+                                nameDraft = it.name
+                                nameError = false
+                                renameDialogSeat = it.seat
+                            }
+                        },
+                        enabled = selectedParticipant != null,
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                    ) { Text("Edit name") }
+                    TextButton(
+                        onClick = { selectedParticipant?.let { exitDialogSeat = it.seat } },
+                        enabled = selectedParticipant != null && board.phase != "FINISHED",
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                    ) { Text("Exit") }
                 }
             }
         }
@@ -127,12 +177,45 @@ fun LudoLocalGameScreen(
             dismissButton = { TextButton(onClick = { exitDialogSeat = null }) { Text("Cancel") } },
         )
     }
+    val renamingPlayer = state.players.firstOrNull { it.seat == renameDialogSeat }
+    if (renamingPlayer != null) {
+        AlertDialog(
+            onDismissRequest = { renameDialogSeat = null },
+            title = { Text("Edit player name") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                    OutlinedTextField(
+                        value = nameDraft,
+                        onValueChange = {
+                            nameDraft = it
+                            nameError = false
+                        },
+                        singleLine = true,
+                        label = { Text("Player name") },
+                        supportingText = {
+                            Text(if (nameError) "Enter 1–${LocalLudoEngine.MAX_PLAYER_NAME_LENGTH} characters." else "${nameDraft.trim().length}/${LocalLudoEngine.MAX_PLAYER_NAME_LENGTH}")
+                        },
+                        isError = nameError,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (viewModel.renamePlayer(renamingPlayer.seat, nameDraft)) {
+                        renameDialogSeat = null
+                    } else {
+                        nameError = true
+                    }
+                }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { renameDialogSeat = null }) { Text("Cancel") } },
+        )
+    }
 }
 
 @Composable
 private fun LocalSeatPanel(
     player: LudoPlayerDto?,
-    displayedOwner: Int?,
     transferIsAnimating: Boolean,
     rootOrigin: Offset,
     anchors: MutableMap<Int, Offset>,
@@ -151,7 +234,6 @@ private fun LocalSeatPanel(
     }
     LocalPlayerPanel(
         player,
-        displayedOwner,
         transferIsAnimating,
         rootOrigin,
         anchors,
@@ -169,7 +251,6 @@ private fun LocalSeatPanel(
 @Composable
 private fun LocalPlayerPanel(
     player: LudoPlayerDto,
-    displayedOwner: Int?,
     transferIsAnimating: Boolean,
     rootOrigin: Offset,
     anchors: MutableMap<Int, Offset>,
@@ -193,7 +274,7 @@ private fun LocalPlayerPanel(
     ) {
         Row(Modifier.fillMaxWidth().padding(5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             if (player.seat == 0 || player.seat == 3) {
-                LocalDiceButton(player, state, diceAnimationId, claimAnimation, onAnimationFinished, isRolling, isDiceRevealAnimating, transferIsAnimating, displayedOwner == player.seat, rootOrigin, anchors, onRoll)
+                LocalDiceButton(player, state, diceAnimationId, claimAnimation, onAnimationFinished, isRolling, isDiceRevealAnimating, transferIsAnimating, true, rootOrigin, anchors, onRoll)
             }
             Column(Modifier.weight(1f)) {
                 Text(player.color.orEmpty(), maxLines = 1, style = MaterialTheme.typography.labelMedium, color = Color(0xFF20252B))
@@ -212,7 +293,7 @@ private fun LocalPlayerPanel(
                 )
             }
             if (player.seat == 1 || player.seat == 2) {
-                LocalDiceButton(player, state, diceAnimationId, claimAnimation, onAnimationFinished, isRolling, isDiceRevealAnimating, transferIsAnimating, displayedOwner == player.seat, rootOrigin, anchors, onRoll)
+                LocalDiceButton(player, state, diceAnimationId, claimAnimation, onAnimationFinished, isRolling, isDiceRevealAnimating, transferIsAnimating, true, rootOrigin, anchors, onRoll)
             }
         }
     }
@@ -236,8 +317,14 @@ private fun LocalDiceButton(
     val board = state.toBoardDto()
     val color = when (player.seat) { 0 -> Color(0xFFED1C24); 1 -> Color(0xFF00A651); 2 -> Color(0xFFFFD814); else -> Color(0xFF168DD0) }
     val active = isActiveLudoPlayer(board.turnSeat, player.seat)
-    val diceValue = if (player.seat == state.lastRollSeat) state.lastRollValue
-    else if (active && board.phase == "MOVE") board.dice else null
+    val diceValue = dicePresentationFace(
+        seat = player.seat,
+        turnSeat = board.turnSeat,
+        phase = board.phase,
+        lastRollSeat = state.lastRollSeat,
+        lastConfirmedValue = state.lastRollValue,
+        currentDiceValue = board.dice,
+    )
     FilledTonalButton(
         onClick = onRoll,
         enabled = active && board.phase == "ROLL" && !isRolling && !isDiceRevealAnimating && !transferIsAnimating,
@@ -254,7 +341,7 @@ private fun LocalDiceButton(
             claimAnimation = claimAnimation,
             onAnimationFinished = onAnimationFinished,
             tint = color,
-            visible = visible && !transferIsAnimating,
+            visible = visible,
             onPositioned = { anchors[player.seat] = it - rootOrigin },
         )
     }

@@ -89,4 +89,16 @@ class LocalLudoViewModelTest {
         assertEquals(2L, viewModel.diceAnimationId.value)
         assertEquals(1, viewModel.state.value.lastRollSeat)
     }
+
+    @Test
+    fun `renaming a local participant preserves their seat and rejects invalid names`() = runTest {
+        val viewModel = LocalLudoViewModel("CLASSIC_RANKED", playerCount = 3)
+
+        assertTrue(viewModel.renamePlayer(1, "  Green Player  "))
+        assertEquals("Green Player", viewModel.state.value.players.first { it.seat == 1 }.name)
+        assertEquals(listOf(0, 1, 2), viewModel.state.value.players.map { it.seat })
+        assertFalse(viewModel.renamePlayer(1, " "))
+        assertFalse(viewModel.renamePlayer(1, "x".repeat(25)))
+        assertEquals("Green Player", viewModel.state.value.players.first { it.seat == 1 }.name)
+    }
 }

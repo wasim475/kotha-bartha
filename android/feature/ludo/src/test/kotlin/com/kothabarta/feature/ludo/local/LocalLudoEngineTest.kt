@@ -87,9 +87,35 @@ class LocalLudoEngineTest {
     @Test fun localSetupCreatesTheSelectedPlayerCountAtNonOverlappingSupportedSeats() {
         val e = engine(1)
 
-        assertEquals(listOf(0, 2), e.newGame(LocalLudoMode.CLASSIC, listOf("A", "B")).players.map { it.seat })
-        assertEquals(listOf(0, 1, 2), e.newGame(LocalLudoMode.CLASSIC, listOf("A", "B", "C")).players.map { it.seat })
-        assertEquals(listOf(0, 1, 2, 3), e.newGame(LocalLudoMode.CLASSIC).players.map { it.seat })
+        LocalLudoMode.entries.forEach { mode ->
+            assertEquals(listOf(0, 2), e.newGame(mode, listOf("A", "B")).players.map { it.seat })
+            assertEquals(listOf(0, 1, 2), e.newGame(mode, listOf("A", "B", "C")).players.map { it.seat })
+            assertEquals(listOf(0, 1, 2, 3), e.newGame(mode).players.map { it.seat })
+        }
+    }
+
+    @Test fun initialDefaultDiceFaceDoesNotAddAResultOrLegalMoves() {
+        val state = engine(1).newGame(LocalLudoMode.CLASSIC, listOf("A", "B"))
+
+        assertEquals("ROLL", state.phase)
+        assertNull(state.dice)
+        assertNull(state.lastRollValue)
+        assertTrue(state.legalMoves.isEmpty())
+    }
+
+    @Test fun renamingChangesOnlyTheSelectedPlayersDisplayNameAndValidatesInput() {
+        val e = engine(1)
+        val initial = e.newGame(LocalLudoMode.CLASSIC, listOf("A", "B", "C"))
+        val renamed = e.rename(initial, seat = 1, name = "  Player B  ")
+
+        assertEquals(listOf(0, 1, 2), renamed.players.map { it.seat })
+        assertEquals(listOf("A", "Player B", "C"), renamed.players.map { it.name })
+        assertEquals(listOf("A", "B", "C"), initial.players.map { it.name })
+        assertThrows(IllegalArgumentException::class.java) { e.rename(renamed, seat = 1, name = "   ") }
+        assertThrows(IllegalArgumentException::class.java) {
+            e.rename(renamed, seat = 1, name = "A".repeat(LocalLudoEngine.MAX_PLAYER_NAME_LENGTH + 1))
+        }
+        assertThrows(IllegalArgumentException::class.java) { e.rename(renamed, seat = 3, name = "New") }
     }
 
     @Test fun exitingTheActivePlayerAdvancesToTheNextConfiguredSeatAndRemovesTheirTokens() {

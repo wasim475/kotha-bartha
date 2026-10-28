@@ -112,7 +112,7 @@ private fun OnlineDiceButton(
             claimAnimation = viewModel::claimDiceAnimation,
             onAnimationFinished = viewModel::onRollAnimationFinished,
             tint = color,
-            visible = visible && !transferIsAnimating,
+            visible = visible,
             onPositioned = { anchors[player.seat] = it - rootOrigin },
         )
     }
@@ -200,18 +200,18 @@ private fun LudoActiveBoard(state: LudoGameUiState, viewModel: LudoGameViewModel
     )
     val transfer = rememberLudoDiceTransferState(
         ownerSeat = presentationSeat,
+        face = state.confirmedDiceValue ?: 6,
         isBusy = state.isRolling || state.isDiceRevealAnimating || state.isAnimatingMove,
         anchors = diceAnchors,
     )
-    val displayedOwner = transfer.settledOwner ?: presentationSeat
     Box(Modifier.fillMaxSize().onGloballyPositioned { rootOrigin = it.positionInRoot() }) {
       Column(
         modifier = Modifier.fillMaxSize().background(Color(0xFF07529A)).padding(horizontal = 8.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            LudoPlayerPanel(playerBySeat[0], displayedOwner, transfer.isTransferring, rootOrigin, diceAnchors, board, state, viewModel, Modifier.weight(1f))
-            LudoPlayerPanel(playerBySeat[1], displayedOwner, transfer.isTransferring, rootOrigin, diceAnchors, board, state, viewModel, Modifier.weight(1f))
+            LudoPlayerPanel(playerBySeat[0], transfer.isTransferring, rootOrigin, diceAnchors, board, state, viewModel, Modifier.weight(1f))
+            LudoPlayerPanel(playerBySeat[1], transfer.isTransferring, rootOrigin, diceAnchors, board, state, viewModel, Modifier.weight(1f))
         }
 
         Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
@@ -229,8 +229,8 @@ private fun LudoActiveBoard(state: LudoGameUiState, viewModel: LudoGameViewModel
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            LudoPlayerPanel(playerBySeat[3], displayedOwner, transfer.isTransferring, rootOrigin, diceAnchors, board, state, viewModel, Modifier.weight(1f))
-            LudoPlayerPanel(playerBySeat[2], displayedOwner, transfer.isTransferring, rootOrigin, diceAnchors, board, state, viewModel, Modifier.weight(1f))
+            LudoPlayerPanel(playerBySeat[3], transfer.isTransferring, rootOrigin, diceAnchors, board, state, viewModel, Modifier.weight(1f))
+            LudoPlayerPanel(playerBySeat[2], transfer.isTransferring, rootOrigin, diceAnchors, board, state, viewModel, Modifier.weight(1f))
         }
 
         Row(
@@ -267,7 +267,6 @@ private fun LudoActiveBoard(state: LudoGameUiState, viewModel: LudoGameViewModel
 @Composable
 private fun LudoPlayerPanel(
     player: com.kothabarta.core.network.ludo.LudoPlayerDto?,
-    displayedOwner: Int?,
     transferIsAnimating: Boolean,
     rootOrigin: Offset,
     anchors: MutableMap<Int, Offset>,
@@ -284,8 +283,14 @@ private fun LudoPlayerPanel(
     val active = isActiveLudoPlayer(board.turnSeat, player.seat)
     val canRoll = active && player.seat == state.mySeat && board.phase == "ROLL" && !state.isRolling && !state.isDiceRevealAnimating && !state.isAnimatingMove && state.movingTokenId == null && !state.isControlledElsewhere && !transferIsAnimating
     val diceAnimationId = diceAnimationIdForSeat(state.diceAnimationId, state.diceRollSeat, player.seat)
-    val shownDiceValue = if (active && board.phase == "MOVE") board.dice
-    else if (diceAnimationId > 0L) state.confirmedDiceValue else null
+    val shownDiceValue = dicePresentationFace(
+        seat = player.seat,
+        turnSeat = board.turnSeat,
+        phase = board.phase,
+        lastRollSeat = state.diceRollSeat,
+        lastConfirmedValue = state.confirmedDiceValue,
+        currentDiceValue = board.dice,
+    )
     val shape = RoundedCornerShape(12.dp)
     Card(
         modifier = modifier.heightIn(min = 68.dp)
@@ -295,7 +300,7 @@ private fun LudoPlayerPanel(
     ) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 5.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             if (player.seat == 0 || player.seat == 3) {
-                OnlineDiceButton(player, state, viewModel, canRoll, color, shownDiceValue, transferIsAnimating, displayedOwner == player.seat, rootOrigin, anchors)
+                OnlineDiceButton(player, state, viewModel, canRoll, color, shownDiceValue, transferIsAnimating, true, rootOrigin, anchors)
             }
             AvatarImage(avatarUrl = player.user?.avatar?.secureUrl, initials = player.user?.initials ?: player.color.orEmpty().take(2))
             Column(Modifier.weight(1f)) {
@@ -319,7 +324,7 @@ private fun LudoPlayerPanel(
                 )
             }
             if (player.seat == 1 || player.seat == 2) {
-                OnlineDiceButton(player, state, viewModel, canRoll, color, shownDiceValue, transferIsAnimating, displayedOwner == player.seat, rootOrigin, anchors)
+                OnlineDiceButton(player, state, viewModel, canRoll, color, shownDiceValue, transferIsAnimating, true, rootOrigin, anchors)
             }
         }
     }

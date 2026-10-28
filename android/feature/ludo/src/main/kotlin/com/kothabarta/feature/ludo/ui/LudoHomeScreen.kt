@@ -15,6 +15,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -90,6 +91,7 @@ private fun LudoModeEntryCard(title: String, subtitle: String, symbol: AppSymbol
 
 @Composable
 fun LudoLocalModesScreen(onNavigate: (NavigationEvent) -> Unit) {
+    var step by rememberSaveable { mutableIntStateOf(0) }
     var playerCount by rememberSaveable { mutableIntStateOf(4) }
     var mode by rememberSaveable { mutableStateOf(LocalLudoMode.CLASSIC.variantId) }
     val selectedMode = remember(mode) { LocalLudoMode.entries.first { it.variantId == mode } }
@@ -97,59 +99,79 @@ fun LudoLocalModesScreen(onNavigate: (NavigationEvent) -> Unit) {
         item {
             Column(modifier = Modifier.padding(bottom = Spacing.sm)) {
                 Text("Local game setup", style = MaterialTheme.typography.headlineSmall)
-                Text(
-                    "Choose a single-player game and how many people will share this device.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Text("Step ${step + 1} of 3", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        item {
-            Text("Game type", style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.padding(top = Spacing.xs)) {
-                SetupChoiceCard("Single Game", "Players compete individually", true, Modifier.weight(1f))
-                SetupChoiceCard("Team Game", "Unavailable until team rules are defined", false, Modifier.weight(1f), enabled = false)
-            }
-        }
-        item {
-            Text("Players", style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.padding(top = Spacing.xs)) {
-                (2..4).forEach { count ->
-                    SetupChoiceCard(
-                        "$count Players",
-                        if (count == playerCount) "Selected" else "Select",
-                        count == playerCount,
-                        Modifier.weight(1f),
-                        onClick = { playerCount = count },
-                    )
+        when (step) {
+            0 -> {
+                item { Text("Choose game mode", style = MaterialTheme.typography.titleMedium) }
+                items(LocalLudoMode.entries.toList(), key = { it.variantId }) { gameMode ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth().clickable { mode = gameMode.variantId },
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (mode == gameMode.variantId) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        ),
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(Spacing.md)) {
+                            Text(gameMode.title, style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                if (gameMode == LocalLudoMode.QUICK) "First capture wins. Tokens stay on the shared track."
+                                else "Bring all four tokens Home. Each player competes individually.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+                item {
+                    Button(onClick = { step = 1 }, modifier = Modifier.fillMaxWidth()) { Text("Continue") }
                 }
             }
-        }
-        items(LocalLudoMode.entries.toList(), key = { it.variantId }) { gameMode ->
-            Card(
-                modifier = Modifier.fillMaxWidth().clickable { mode = gameMode.variantId },
-                colors = CardDefaults.cardColors(
-                    containerColor = if (mode == gameMode.variantId) MaterialTheme.colorScheme.primaryContainer
-                    else MaterialTheme.colorScheme.surfaceContainerHigh,
-                ),
-            ) {
-                Column(modifier = Modifier.fillMaxWidth().padding(Spacing.md)) {
-                    Text(gameMode.title, style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        if (gameMode == LocalLudoMode.QUICK) "First capture wins. Tokens stay on the shared track."
-                        else "Bring all four tokens Home. Each player competes individually.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            1 -> {
+                item {
+                    Text("Choose game type", style = MaterialTheme.typography.titleMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.padding(top = Spacing.xs)) {
+                        SetupChoiceCard("Single Game", "Players compete individually", true, Modifier.weight(1f))
+                        SetupChoiceCard("Team Game", "Coming Soon", false, Modifier.weight(1f), enabled = false)
+                    }
+                }
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(onClick = { step = 0 }, modifier = Modifier.weight(1f)) { Text("Back") }
+                        Button(onClick = { step = 2 }, modifier = Modifier.weight(1f)) { Text("Continue") }
+                    }
                 }
             }
-        }
-        item {
-            Button(
-                onClick = { onNavigate(NavigationEvent.NavigateTo(Routes.ludoLocalGame(selectedMode.variantId, playerCount))) },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Start ${selectedMode.title} · $playerCount players")
+            else -> {
+                item {
+                    Text("Choose player count", style = MaterialTheme.typography.titleMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.padding(top = Spacing.xs)) {
+                        (2..4).forEach { count ->
+                            SetupChoiceCard(
+                                "$count Players",
+                                if (count == playerCount) "Selected" else "Select",
+                                count == playerCount,
+                                Modifier.weight(1f),
+                                onClick = { playerCount = count },
+                            )
+                        }
+                    }
+                }
+                item {
+                    Text("${selectedMode.title} · Single Game · $playerCount players", style = MaterialTheme.typography.bodyMedium)
+                }
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(onClick = { step = 1 }, modifier = Modifier.weight(1f)) { Text("Back") }
+                        Button(
+                            onClick = { onNavigate(NavigationEvent.NavigateTo(Routes.ludoLocalGame(selectedMode.variantId, playerCount))) },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("Start Game")
+                        }
+                    }
+                }
             }
         }
     }

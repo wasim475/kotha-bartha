@@ -110,6 +110,15 @@ class LocalLudoViewModel(
         _state.value = engine.leave(current, seat)
     }
 
+    fun renamePlayer(seat: Int, name: String): Boolean {
+        val normalizedName = name.trim()
+        if (normalizedName.isEmpty() || normalizedName.length > LocalLudoEngine.MAX_PLAYER_NAME_LENGTH) return false
+        val current = _state.value
+        if (current.players.none { it.seat == seat }) return false
+        _state.value = engine.rename(current, seat, normalizedName)
+        return true
+    }
+
     private fun tokensChanged(before: LocalLudoState, after: LocalLudoState) = before.players.any { old ->
         after.players.firstOrNull { it.seat == old.seat }?.tokens != old.tokens
     }
