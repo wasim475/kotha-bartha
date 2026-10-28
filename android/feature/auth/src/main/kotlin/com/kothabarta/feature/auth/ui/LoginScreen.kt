@@ -32,15 +32,12 @@ import kotlinx.coroutines.CancellationException
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
-import androidx.credentials.exceptions.GetCredentialCancellationException
-import androidx.credentials.exceptions.GetCredentialException
 import com.kothabarta.core.navigation.NavigationEvent
 import com.kothabarta.core.ui.components.AppPrimaryButton
 import com.kothabarta.core.ui.components.AppTextField
 import com.kothabarta.core.ui.theme.Spacing
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
-import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
@@ -102,6 +99,7 @@ fun LoginScreen(
 
         OutlinedButton(
             onClick = {
+                if (isGooglePickerLoading || state.isLoading) return@OutlinedButton
                 if (googleWebClientId.isBlank()) {
                     viewModel.showGoogleSignInError("Google sign-in is not configured for this build.")
                     return@OutlinedButton
@@ -127,16 +125,10 @@ fun LoginScreen(
                         } else {
                             viewModel.showGoogleSignInError("Choose a Google account to continue.")
                         }
-                    } catch (error: GetCredentialCancellationException) {
-                        // Closing the account picker is not an authentication error.
-                    } catch (error: GetCredentialException) {
-                        viewModel.showGoogleSignInError("Google sign-in failed. Check Google Play services and try again.")
-                    } catch (error: GoogleIdTokenParsingException) {
-                        viewModel.showGoogleSignInError("Google sign-in returned an invalid credential. Please try again.")
                     } catch (error: CancellationException) {
                         throw error
                     } catch (error: Exception) {
-                        viewModel.showGoogleSignInError("Google sign-in failed. Please try again.")
+                        googleSignInErrorMessage(error)?.let(viewModel::showGoogleSignInError)
                     } finally {
                         isGooglePickerLoading = false
                     }

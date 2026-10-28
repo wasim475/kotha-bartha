@@ -11,18 +11,6 @@ export default function AuthPage({ mode, onAuth }) {
     onAuth,
   });
 
-   const handleGoogleLogin = async (credentialResponse) => {
-    try {
-      const credential = credentialResponse.credential;
-
-      // Backend-এ পাঠাবে
-      console.log(credential);
-
-    } catch (error) {
-      console.error("Google login failed:", error);
-    }
-  };
-
   return (
     <main className="auth-page">
       <AuthArt />

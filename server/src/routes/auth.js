@@ -156,7 +156,7 @@ router.post("/google", async (req, res, next) => {
     const token = issueSession(res, user);
     return res.json({ data: user.toSafeJSON(), token });
   } catch (error) {
-    console.error("Google login error:", error);
+    console.error("Google login failed:", error?.constructor?.name || "Error");
     return res.status(401).json({
       error: {
         code: "GOOGLE_AUTH_FAILED",

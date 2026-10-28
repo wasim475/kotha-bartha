@@ -26,7 +26,7 @@ data class LoginUiState(
 
 class LoginViewModel(
     private val repository: AuthRepository,
-    private val preferences: AppPreferences,
+    private val preferences: AppPreferences? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
@@ -38,9 +38,11 @@ class LoginViewModel(
     init {
         // Non-sensitive convenience only — the token itself never lives here,
         // see core:security's TokenStore and core:datastore's AppPreferences doc.
-        viewModelScope.launch {
-            val lastEmail = preferences.lastUsedEmail.first()
-            if (!lastEmail.isNullOrBlank()) _uiState.update { it.copy(email = lastEmail) }
+        preferences?.let { appPreferences ->
+            viewModelScope.launch {
+                val lastEmail = appPreferences.lastUsedEmail.first()
+                if (!lastEmail.isNullOrBlank()) _uiState.update { it.copy(email = lastEmail) }
+            }
         }
     }
 
@@ -54,16 +56,17 @@ class LoginViewModel(
 
     fun submit() {
         val state = _uiState.value
+        if (state.isLoading) return
         if (state.email.isBlank() || state.password.isBlank()) {
             _uiState.update { it.copy(errorMessage = "Enter your email and password.") }
             return
         }
+        val email = state.email.trim()
+        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            val email = state.email.trim()
             when (val result = repository.login(email, state.password)) {
                 is ApiResult.Success -> {
-                    preferences.setLastUsedEmail(email)
+                    preferences?.setLastUsedEmail(email)
                     _uiState.update { it.copy(isLoading = false) }
                     _navigationEvents.emit(NavigationEvent.NavigateTo(Routes.MAIN, popUpToInclusive = Routes.LOGIN))
                 }
@@ -75,12 +78,13 @@ class LoginViewModel(
     }
 
     fun loginWithGoogle(credential: String) {
+        if (_uiState.value.isLoading) return
         if (credential.isBlank()) {
             _uiState.update { it.copy(errorMessage = "Google sign-in did not return a credential.") }
             return
         }
+        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             when (val result = repository.loginWithGoogle(credential)) {
                 is ApiResult.Success -> {
                     _uiState.update { it.copy(isLoading = false) }
