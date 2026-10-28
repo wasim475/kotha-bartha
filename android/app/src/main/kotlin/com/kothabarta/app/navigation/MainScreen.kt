@@ -97,6 +97,7 @@ import com.kothabarta.feature.leaderboard.ui.LeaderboardScreen
 import com.kothabarta.feature.ludo.ui.LudoGameScreen
 import com.kothabarta.feature.ludo.ui.LudoHomeScreen
 import com.kothabarta.feature.ludo.ui.LudoLocalModesScreen
+import com.kothabarta.feature.ludo.ui.LudoLocalGameScreen
 import com.kothabarta.feature.ludo.ui.LudoLobbyScreen
 import com.kothabarta.feature.messages.ui.ChatScreen
 import com.kothabarta.feature.messages.ui.ConversationsScreen
@@ -405,7 +406,10 @@ fun MainScreen(
                 }
                 composable(Routes.LUDO) { LudoHomeScreen(onNavigate = onNavigate) }
                 composable(Routes.LUDO_ONLINE) { LudoLobbyScreen(onNavigate = onNavigate) }
-                composable(Routes.LUDO_LOCAL) { LudoLocalModesScreen() }
+                composable(Routes.LUDO_LOCAL) { LudoLocalModesScreen(onNavigate = onNavigate) }
+                composable(Routes.LUDO_LOCAL_GAME_PATTERN, arguments = listOf(navArgument(Routes.LUDO_LOCAL_MODE_ARG) { type = NavType.StringType })) { entry ->
+                    LudoLocalGameScreen(entry.arguments?.getString(Routes.LUDO_LOCAL_MODE_ARG).orEmpty(), onNavigate)
+                }
                 composable(
                     Routes.LUDO_GAME_PATTERN,
                     arguments = listOf(navArgument(Routes.LUDO_GAME_ARG) { type = NavType.StringType }),

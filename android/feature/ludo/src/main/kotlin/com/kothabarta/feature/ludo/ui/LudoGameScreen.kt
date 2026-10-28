@@ -14,20 +14,12 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.Canvas
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -175,9 +167,13 @@ private fun LudoActiveBoard(state: LudoGameUiState, viewModel: LudoGameViewModel
             LudoBoardCanvas(
                 board,
                 state.mySeat,
-                allowMoves = !state.isControlledElsewhere && state.movingTokenId == null,
+                allowMoves = !state.isControlledElsewhere && state.movingTokenId == null && !state.isAnimatingMove && !state.isDiceRevealAnimating,
                 onMove = viewModel::moveToken,
                 modifier = Modifier.widthIn(max = 680.dp),
+                selectedTokenId = state.movingTokenId,
+                selectedSeat = state.mySeat,
+                holdMoveAnimations = state.isDiceRevealAnimating,
+                onMoveAnimationStateChanged = viewModel::onMoveAnimationStateChanged,
             )
         }
 
@@ -192,8 +188,20 @@ private fun LudoActiveBoard(state: LudoGameUiState, viewModel: LudoGameViewModel
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(if (isMyTurn) if (board.phase == "ROLL") "Your turn · roll" else "Your turn · move a token" else "Seat ${board.turnSeat ?: "-"}'s turn", color = Color.White, style = MaterialTheme.typography.titleSmall)
+                Text(
+                    when {
+                        state.isRolling -> "ROLLING DICE"
+                        state.isDiceRevealAnimating -> "REVEALING DICE RESULT"
+                        state.isAnimatingMove -> "MOVING TOKEN"
+                        isMyTurn && board.phase == "MOVE" -> "CHOOSE A HIGHLIGHTED TOKEN"
+                        isMyTurn -> "YOUR TURN · ROLL DICE"
+                        else -> "SEAT ${(board.turnSeat ?: -1) + 1} · WAITING"
+                    },
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleSmall,
+                )
                 Text("Turn ${board.turnNumber} · ${board.phase}", color = Color(0xFFCFDFF0), style = MaterialTheme.typography.labelSmall)
+                state.rollNotice?.let { Text(it, color = Color(0xFFFFE5A8), style = MaterialTheme.typography.labelSmall) }
             }
             TurnCountdown(board.turnDeadline)
         }
@@ -214,12 +222,21 @@ private fun LudoPlayerPanel(
     }
     val color = when (player.seat) { 0 -> Color(0xFFED1C24); 1 -> Color(0xFF00A651); 2 -> Color(0xFFFFD814); else -> Color(0xFF168DD0) }
     val active = board.turnSeat == player.seat
-    val canRoll = active && player.seat == state.mySeat && board.phase == "ROLL" && !state.isRolling && !state.isControlledElsewhere
+    val canRoll = active && player.seat == state.mySeat && board.phase == "ROLL" && !state.isRolling && !state.isDiceRevealAnimating && !state.isAnimatingMove && state.movingTokenId == null && !state.isControlledElsewhere
     val animateConfirmedDice = viewModel.shouldAnimateDice(player.seat, board.turnNumber)
     val shownDiceValue = if (active && board.phase == "MOVE") board.dice
     else if (animateConfirmedDice) state.confirmedDiceValue else null
+    val pulse by androidx.compose.animation.core.rememberInfiniteTransition(label = "online-active-player").animateFloat(
+        initialValue = .55f,
+        targetValue = 1f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(700), androidx.compose.animation.core.RepeatMode.Reverse),
+        label = "online-active-pulse",
+    )
+    val shape = RoundedCornerShape(12.dp)
     Card(
-        modifier = modifier.heightIn(min = 58.dp).border(if (active) 2.dp else 1.dp, color, RoundedCornerShape(12.dp)),
+        modifier = modifier.heightIn(min = 68.dp)
+            .then(if (active) Modifier.shadow(6.dp * pulse, shape) else Modifier)
+            .border(if (active) BorderStroke(2.dp, Brush.linearGradient(listOf(Color(0xFFE34263).copy(alpha = pulse), Color(0xFF7653E8)))) else BorderStroke(1.dp, color.copy(alpha = .5f)), shape),
         colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = Color(0xFFF9F6EF)),
         shape = RoundedCornerShape(12.dp),
     ) {
@@ -227,78 +244,38 @@ private fun LudoPlayerPanel(
             AvatarImage(avatarUrl = player.user?.avatar?.secureUrl, initials = player.user?.initials ?: player.color.orEmpty().take(2))
             Column(Modifier.weight(1f)) {
                 Text(player.user?.fullName ?: player.color ?: "Player ${player.seat + 1}", maxLines = 1, style = MaterialTheme.typography.labelMedium, color = Color(0xFF20252B))
-                Text(if (!player.connected) "Offline" else if (active) "Playing" else "Waiting", maxLines = 1, style = MaterialTheme.typography.labelSmall, color = if (!player.connected) Color(0xFFB3261E) else Color(0xFF66717C))
+                Text(
+                    when {
+                        !player.connected -> "OFFLINE"
+                        active && state.isRolling -> "ROLLING…"
+                        active && state.isDiceRevealAnimating -> "REVEALING RESULT"
+                        active && state.isAnimatingMove -> "MOVING TOKEN"
+                        active && board.phase == "MOVE" -> "CHOOSE TOKEN"
+                        active && canRoll -> "YOUR TURN · ROLL"
+                        active -> "YOUR TURN"
+                        else -> "WAITING"
+                    },
+                    maxLines = 1,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (active) Color(0xFF9B285D) else Color(0xFF66717C),
+                )
             }
             androidx.compose.material3.FilledTonalButton(
                 onClick = viewModel::rollDice,
                 enabled = canRoll,
-                modifier = Modifier.size(46.dp),
+                modifier = Modifier.size(60.dp),
                 contentPadding = PaddingValues(0.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(containerColor = color.copy(alpha = .22f), contentColor = color),
                 shape = RoundedCornerShape(10.dp),
             ) {
-                LudoDiceFace(
+                LudoAnimatedDiceFace(
                     value = shownDiceValue,
                     rolling = active && state.isRolling,
-                    animateConfirmed = animateConfirmedDice,
-                    animationId = state.diceAnimationId,
-                    turnNumber = board.turnNumber,
-                    claimAnimation = viewModel::claimDiceAnimation,
-                    onAnimationFinished = viewModel::finishDiceAnimation,
+                    animationId = if (player.seat == state.diceRollSeat || (active && state.isRolling)) state.rollAnimationId else 0L,
+                    claimAnimation = viewModel::claimRollAnimation,
+                    onAnimationFinished = viewModel::onRollAnimationFinished,
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun LudoDiceFace(
-    value: Int?,
-    rolling: Boolean,
-    animateConfirmed: Boolean,
-    animationId: Long,
-    turnNumber: Int,
-    claimAnimation: (Long) -> Boolean,
-    onAnimationFinished: (Long) -> Unit,
-) {
-    val confirmedRotation = remember { Animatable(0f) }
-    LaunchedEffect(animationId, turnNumber) {
-        if (animateConfirmed && claimAnimation(animationId)) {
-            confirmedRotation.snapTo(0f)
-            confirmedRotation.animateTo(720f, tween(durationMillis = 720, easing = FastOutSlowInEasing))
-            confirmedRotation.snapTo(0f)
-            onAnimationFinished(animationId)
-        } else {
-            confirmedRotation.snapTo(0f)
-        }
-    }
-    val pendingTransition = rememberInfiniteTransition(label = "ludo-dice-pending")
-    val pendingRotation by pendingTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = if (rolling) 360f else 0f,
-        animationSpec = infiniteRepeatable(tween(durationMillis = 600, easing = LinearEasing)),
-        label = "ludo-dice-pending-rotation",
-    )
-    val positions = when (value) {
-        1 -> listOf(4)
-        2 -> listOf(0, 8)
-        3 -> listOf(0, 4, 8)
-        4 -> listOf(0, 2, 6, 8)
-        5 -> listOf(0, 2, 4, 6, 8)
-        6 -> listOf(0, 2, 3, 5, 6, 8)
-        else -> emptyList()
-    }
-    Canvas(Modifier.size(34.dp).graphicsLayer {
-        rotationZ = if (rolling) pendingRotation else 0f
-        rotationY = if (animateConfirmed) confirmedRotation.value else 0f
-    }) {
-        drawRoundRect(Color.White, cornerRadius = CornerRadius(size.width * .18f))
-        drawRoundRect(Color(0xFF343A40), cornerRadius = CornerRadius(size.width * .18f), style = Stroke(size.width * .045f))
-        val step = size.width / 4f
-        positions.forEach { index ->
-            val x = (index % 3 + 1) * step
-            val y = (index / 3 + 1) * step
-            drawCircle(if (value == 1) Color(0xFFDD2525) else Color(0xFF28313A), size.width * .075f, Offset(x, y))
         }
     }
 }

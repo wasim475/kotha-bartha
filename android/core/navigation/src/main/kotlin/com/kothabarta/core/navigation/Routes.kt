@@ -88,6 +88,9 @@ object Routes {
     const val LUDO = "ludo"
     const val LUDO_ONLINE = "ludo/online"
     const val LUDO_LOCAL = "ludo/local"
+    const val LUDO_LOCAL_MODE_ARG = "modeId"
+    const val LUDO_LOCAL_GAME_PATTERN = "ludo/local/game/{$LUDO_LOCAL_MODE_ARG}"
+    fun ludoLocalGame(modeId: String) = "ludo/local/game/$modeId"
 
     const val QUIZ_CHAPTER_ARG = "chapterId"
     const val QUIZ_SET_ARG = "setNumber"

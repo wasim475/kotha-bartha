@@ -5,7 +5,23 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -20,6 +36,7 @@ import androidx.compose.ui.semantics.semantics
 import com.kothabarta.core.network.ludo.LudoBoardStateDto
 import com.kothabarta.core.network.ludo.LudoPlayerDto
 import kotlin.math.hypot
+import kotlinx.coroutines.delay
 
 private val seats = listOf(Color(0xFFED1C24), Color(0xFF00A651), Color(0xFFFFD814), Color(0xFF168DD0))
 private val trackCells = buildList {
@@ -39,31 +56,107 @@ private val trackCells = buildList {
 private val starts = listOf(0, 13, 26, 39)
 
 @Composable
-internal fun LudoBoardCanvas(board: LudoBoardStateDto, mySeat: Int?, allowMoves: Boolean, onMove: (Int) -> Unit, modifier: Modifier = Modifier) {
-    val movable = board.legal.filter { allowMoves && board.turnSeat == mySeat }.map { it.tokenId }.toSet()
+internal fun LudoBoardCanvas(
+    board: LudoBoardStateDto,
+    mySeat: Int?,
+    allowMoves: Boolean,
+    onMove: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    selectedTokenId: Int? = null,
+    selectedSeat: Int? = board.turnSeat,
+    holdMoveAnimations: Boolean = false,
+    onMoveAnimationStateChanged: (Boolean) -> Unit = {},
+) {
+    val visualPositions = remember(board.variantId) {
+        mutableStateMapOf<TokenKey, Pair<Float, Float>>().apply {
+            board.players.forEach { player -> player.tokens.forEach { token -> put(TokenKey(player.seat, token.id), ludoPosition(player.seat, token.pos, token.id)) } }
+        }
+    }
+    var previousPlayers by remember(board.variantId) { mutableStateOf(board.players) }
+    var moveAnimating by remember(board.variantId) { mutableStateOf(false) }
+    val latestPlayers by rememberUpdatedState(board.players)
+    val latestAnimationCallback by rememberUpdatedState(onMoveAnimationStateChanged)
+    val minimumTouchRadius = with(LocalDensity.current) { 22.dp.toPx() }
+    LaunchedEffect(board.players, holdMoveAnimations) {
+        if (holdMoveAnimations) return@LaunchedEffect
+        val prior = previousPlayers
+        previousPlayers = board.players
+        val changes = board.players.flatMap { player ->
+            val before = prior.firstOrNull { it.seat == player.seat }
+            player.tokens.mapNotNull { token ->
+                val from = before?.tokens?.firstOrNull { it.id == token.id }?.pos ?: token.pos
+                if (from == token.pos) null else TokenPositionChange(TokenKey(player.seat, token.id), from, token.pos)
+            }
+        }
+        if (changes.isEmpty()) {
+            board.players.forEach { player -> player.tokens.forEach { token -> visualPositions.putIfAbsent(TokenKey(player.seat, token.id), ludoPosition(player.seat, token.pos, token.id)) } }
+            moveAnimating = false
+            latestAnimationCallback(false)
+            return@LaunchedEffect
+        }
+        moveAnimating = true
+        latestAnimationCallback(true)
+        try {
+            // Move the active token first; captured tokens return to their bases after it lands.
+            changes.sortedBy { if (it.to == -1) 1 else 0 }.forEach { change ->
+                val start = visualPositions[change.key] ?: ludoPosition(change.key.seat, change.from, change.key.tokenId)
+                if (change.to == -1) {
+                    animateBetween(change.key, start, ludoPosition(change.key.seat, -1, change.key.tokenId), visualPositions, 260)
+                } else {
+                    tokenAnimationPositions(change.key.seat, change.from, change.to, change.key.tokenId).forEach { target ->
+                        val fromPosition = visualPositions[change.key] ?: start
+                        animateBetween(change.key, fromPosition, target, visualPositions, 95)
+                        delay(18)
+                    }
+                }
+            }
+        } finally {
+            // The latest server/local snapshot remains authoritative if an animation is interrupted.
+            visualPositions.clear()
+            latestPlayers.forEach { player -> player.tokens.forEach { token -> visualPositions[TokenKey(player.seat, token.id)] = ludoPosition(player.seat, token.pos, token.id) } }
+            moveAnimating = false
+            latestAnimationCallback(false)
+        }
+    }
+    val pulse by rememberInfiniteTransition(label = "ludo-token-pulse").animateFloat(
+        initialValue = .94f, targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(tween(650, easing = LinearEasing), RepeatMode.Reverse),
+        label = "ludo-token-pulse-scale",
+    )
+    val movable = highlightedLegalTokenIds(board, mySeat, allowMoves && !moveAnimating)
     Canvas(
         modifier = modifier.fillMaxWidth().aspectRatio(1f)
             .semantics { contentDescription = "Ludo board. Tap a highlighted token to move."; role = Role.Image }
-            .pointerInput(board.players, board.legal, board.turnSeat, mySeat, allowMoves) {
+            .pointerInput(board.players, board.legal, board.turnSeat, mySeat, allowMoves, moveAnimating) {
                 detectTapGestures { tap ->
+                    if (moveAnimating) return@detectTapGestures
                     val cell = size.width / 15f
                     val candidates = board.players.filter { it.seat == mySeat && it.seat == board.turnSeat }
                         .flatMap { player -> player.tokens.filter { it.id in movable }.map { token ->
-                            val center = ludoPosition(player.seat, token.pos, token.id)
+                            val center = tokenVisualCenter(board, player.seat, token.id, visualPositions)
                             Triple(token.id, (center.second * cell), (center.first * cell))
                         } }
                     val nearest = candidates.minByOrNull { (_, x, y) -> hypot((tap.x - x).toDouble(), (tap.y - y).toDouble()) }
-                    if (nearest != null && hypot((tap.x - nearest.second).toDouble(), (tap.y - nearest.third).toDouble()) < cell * 1.3) onMove(nearest.first)
+                    if (nearest != null && hypot((tap.x - nearest.second).toDouble(), (tap.y - nearest.third).toDouble()) < maxOf(cell * .78f, minimumTouchRadius)) onMove(nearest.first)
                 }
             },
     ) {
         val unit = size.width / 15f
         drawRect(Color(0xFFF6F2EA), size = size)
-        drawLudoBoard(unit, board)
+        drawLudoBoard(unit, board, visualPositions, movable, board.turnSeat, selectedTokenId, selectedSeat, pulse)
     }
 }
 
-private fun DrawScope.drawLudoBoard(unit: Float, board: LudoBoardStateDto) {
+private fun DrawScope.drawLudoBoard(
+    unit: Float,
+    board: LudoBoardStateDto,
+    visualPositions: Map<TokenKey, Pair<Float, Float>>,
+    movableTokens: Set<Int>,
+    activeSeat: Int?,
+    selectedTokenId: Int?,
+    selectedSeat: Int?,
+    pulse: Float,
+) {
     val line = Color(0x663B3630)
     fun cell(row: Int, col: Int, color: Color) = drawRect(color, Offset(col * unit, row * unit), Size(unit, unit), style = androidx.compose.ui.graphics.drawscope.Fill)
     val homes = listOf(0 to 0, 0 to 9, 9 to 9, 9 to 0)
@@ -108,9 +201,10 @@ private fun DrawScope.drawLudoBoard(unit: Float, board: LudoBoardStateDto) {
     }
     drawRect(line, Offset(6 * unit, 6 * unit), Size(3 * unit, 3 * unit), style = Stroke(.05f * unit))
     board.players.forEach { player -> player.tokens.forEach { token ->
-        val (row, col) = ludoPosition(player.seat, token.pos, token.id)
-        val movable = player.seat == board.turnSeat && board.legal.any { it.tokenId == token.id }
-        drawToken(Offset(col * unit, row * unit), unit, seats.getOrElse(player.seat) { Color.Gray }, movable)
+        val (row, col) = tokenVisualCenter(board, player.seat, token.id, visualPositions)
+        val movable = player.seat == activeSeat && token.id in movableTokens
+        val selected = player.seat == selectedSeat && token.id == selectedTokenId
+        drawToken(Offset(col * unit, row * unit), unit, seats.getOrElse(player.seat) { Color.Gray }, movable, selected, pulse)
     } }
 }
 
@@ -131,22 +225,81 @@ private fun ludoPosition(seat: Int, pos: Int, tokenId: Int): Pair<Float, Float> 
     return track.first + .5f to track.second + .5f
 }
 
-private fun DrawScope.drawToken(center: Offset, unit: Float, color: Color, movable: Boolean) {
-    val radius = .32f * unit
-    drawCircle(Color(0x55000000), radius, center + Offset(0f, .12f * unit))
+private fun DrawScope.drawToken(center: Offset, unit: Float, color: Color, movable: Boolean, selected: Boolean, pulse: Float) {
+    val scale = when { selected -> 1.16f; movable -> pulse; else -> 1f }
+    val visualUnit = unit * scale
+    val radius = .32f * visualUnit
+    if (movable || selected) drawCircle(
+        if (selected) Color(0xFFE34AE6).copy(alpha = .22f + (pulse - .94f) * .45f) else Color.White.copy(alpha = .18f),
+        radius = .69f * unit * pulse,
+        center = center,
+    )
+    drawCircle(Color(0x55000000), radius, center + Offset(0f, .12f * visualUnit))
     val pin = Path().apply {
-        moveTo(center.x, center.y + .47f * unit)
-        cubicTo(center.x - .1f * unit, center.y + .19f * unit, center.x - radius, center.y + .05f * unit, center.x - radius, center.y - .08f * unit)
-        cubicTo(center.x - radius, center.y - .48f * unit, center.x + radius, center.y - .48f * unit, center.x + radius, center.y - .08f * unit)
-        cubicTo(center.x + radius, center.y + .05f * unit, center.x + .1f * unit, center.y + .19f * unit, center.x, center.y + .47f * unit)
+        moveTo(center.x, center.y + .47f * visualUnit)
+        cubicTo(center.x - .1f * visualUnit, center.y + .19f * visualUnit, center.x - radius, center.y + .05f * visualUnit, center.x - radius, center.y - .08f * visualUnit)
+        cubicTo(center.x - radius, center.y - .48f * visualUnit, center.x + radius, center.y - .48f * visualUnit, center.x + radius, center.y - .08f * visualUnit)
+        cubicTo(center.x + radius, center.y + .05f * visualUnit, center.x + .1f * visualUnit, center.y + .19f * visualUnit, center.x, center.y + .47f * visualUnit)
         close()
     }
     drawPath(pin, Color(0xFF777777))
-    drawPath(pin, color, style = Stroke(.07f * unit))
+    drawPath(pin, color, style = Stroke(.07f * visualUnit))
     drawCircle(color, radius * .78f, center - Offset(0f, .1f * unit))
     drawCircle(Color.White.copy(alpha = .9f), radius * .78f, center - Offset(0f, .1f * unit), style = Stroke(.07f * unit))
     drawCircle(Color.White.copy(alpha = .5f), radius * .2f, center - Offset(.12f * unit, .23f * unit))
-    if (movable) drawCircle(Color.White, .48f * unit, center, style = Stroke(.07f * unit))
+    if (selected) drawCircle(Color(0xFFE34AE6), .55f * unit, center, style = Stroke(.11f * unit))
+    else if (movable) drawCircle(Color.White, .48f * unit * pulse, center, style = Stroke(.08f * unit))
+}
+
+private data class TokenKey(val seat: Int, val tokenId: Int)
+private data class TokenPositionChange(val key: TokenKey, val from: Int, val to: Int)
+
+internal fun tokenStackOffset(index: Int, count: Int): Pair<Float, Float> {
+    if (count < 2) return 0f to 0f
+    val grid = index.coerceIn(0, 15)
+    val row = grid / 4
+    val col = grid % 4
+    return (row - 1.5f) * .15f to (col - 1.5f) * .15f
+}
+
+internal fun highlightedLegalTokenIds(board: LudoBoardStateDto, seat: Int?, enabled: Boolean): Set<Int> =
+    if (!enabled || seat == null || board.turnSeat != seat) emptySet()
+    else board.legal.map { it.tokenId }.toSet()
+
+private fun tokenVisualCenter(
+    board: LudoBoardStateDto,
+    seat: Int,
+    tokenId: Int,
+    visualPositions: Map<TokenKey, Pair<Float, Float>>,
+): Pair<Float, Float> {
+    val key = TokenKey(seat, tokenId)
+    val position = visualPositions[key]
+        ?: ludoPosition(seat, board.players.firstOrNull { it.seat == seat }?.tokens?.firstOrNull { it.id == tokenId }?.pos ?: -1, tokenId)
+    val stacked = board.players.flatMap { player -> player.tokens.map { token ->
+        val tokenKey = TokenKey(player.seat, token.id)
+        tokenKey to (visualPositions[tokenKey] ?: ludoPosition(player.seat, token.pos, token.id))
+    } }.filter { it.second == position }.map { it.first }
+    if (stacked.size < 2) return position
+    val (rowOffset, colOffset) = tokenStackOffset(stacked.indexOf(key), stacked.size)
+    return position.first + rowOffset to position.second + colOffset
+}
+
+internal fun tokenAnimationPositions(seat: Int, from: Int, to: Int, tokenId: Int = 0): List<Pair<Float, Float>> =
+    if (from == -1) listOf(ludoPosition(seat, 0, tokenId))
+    else if (to > from) (from + 1..to).map { ludoPosition(seat, it, tokenId) }
+    else emptyList()
+
+private suspend fun animateBetween(
+    key: TokenKey,
+    from: Pair<Float, Float>,
+    to: Pair<Float, Float>,
+    positions: MutableMap<TokenKey, Pair<Float, Float>>,
+    durationMs: Int,
+) {
+    val progress = Animatable(0f)
+    progress.animateTo(1f, tween(durationMs, easing = LinearEasing)) {
+        positions[key] = from.first + (to.first - from.first) * value to from.second + (to.second - from.second) * value
+    }
 }
 
 private fun DrawScope.drawStar(center: Offset, radius: Float, color: Color) {

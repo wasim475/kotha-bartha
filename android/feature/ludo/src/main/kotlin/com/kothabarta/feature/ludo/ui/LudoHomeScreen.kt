@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +28,7 @@ import com.kothabarta.core.navigation.Routes
 import com.kothabarta.core.ui.components.AppIcon
 import com.kothabarta.core.ui.components.AppSymbol
 import com.kothabarta.core.ui.theme.Spacing
+import com.kothabarta.feature.ludo.local.LocalLudoMode
 
 @Composable
 fun LudoHomeScreen(onNavigate: (NavigationEvent) -> Unit) {
@@ -80,33 +82,34 @@ private fun LudoModeEntryCard(title: String, subtitle: String, symbol: AppSymbol
 }
 
 @Composable
-fun LudoLocalModesScreen() {
-    val modes = listOf(
-        "Quick" to "Quick local rules are not available on Android yet.",
-        "One Kill" to "One Kill local rules are not available on Android yet.",
-        "Classic" to "Classic local rules are not available on Android yet.",
-    )
+fun LudoLocalModesScreen(onNavigate: (NavigationEvent) -> Unit) {
     LazyColumn(contentPadding = PaddingValues(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         item {
             Column(modifier = Modifier.padding(bottom = Spacing.sm)) {
                 Text("Play Local", style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    "Offline Ludo gameplay is not implemented in this Android app yet. These modes cannot be started.",
+                    "Four players share this device. Local games work offline.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
-        items(modes.size) { index ->
-            val (title, description) = modes[index]
+        items(3) { index ->
+            val mode = when (index) { 0 -> LocalLudoMode.QUICK; 2 -> LocalLudoMode.CLASSIC; else -> null }
+            val title = mode?.title ?: "One Kill"
+            val description = when (mode) {
+                LocalLudoMode.QUICK -> "First capture wins. Tokens stay on the shared track."
+                LocalLudoMode.CLASSIC -> "Bring all four tokens Home; finishing order ranks players."
+                null -> "No authoritative One Kill rules are defined yet."
+            }
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                modifier = Modifier.fillMaxWidth().clickable(enabled = mode != null) { mode?.let { onNavigate(NavigationEvent.NavigateTo(Routes.ludoLocalGame(it.variantId))) } },
+                colors = CardDefaults.cardColors(containerColor = if (mode != null) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceVariant),
             ) {
                 Column(modifier = Modifier.fillMaxWidth().padding(Spacing.md)) {
                     Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("Coming soon", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xs))
+                    Text(if (mode != null) "Play offline" else "Unavailable · rules not documented", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = Spacing.xs))
                 }
             }
         }

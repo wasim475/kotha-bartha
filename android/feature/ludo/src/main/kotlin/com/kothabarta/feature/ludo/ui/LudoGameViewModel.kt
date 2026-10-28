@@ -61,13 +61,18 @@ data class LudoGameUiState(
     val isTogglingReady: Boolean = false,
     val isStarting: Boolean = false,
     val isRolling: Boolean = false,
+    val isDiceRevealAnimating: Boolean = false,
     val diceAnimationId: Long = 0,
+    val rollAnimationId: Long = 0,
     val confirmedDiceValue: Int? = null,
     val diceRollSeat: Int? = null,
     val diceRollTurnNumber: Int? = null,
     val lastDiceRollVersion: Int = -1,
     val pendingRollActionId: String? = null,
     val movingTokenId: Int? = null,
+    val pendingMoveActionId: String? = null,
+    val isAnimatingMove: Boolean = false,
+    val rollNotice: String? = null,
     val isRequestingRematch: Boolean = false,
     val rematchRequestSent: Boolean = false,
 ) {
@@ -92,6 +97,7 @@ private val REMATCH_LIFECYCLE_EVENTS = listOf(
 )
 
 private const val ROLL_ACK_TIMEOUT_MS = 12_000L
+private const val MOVE_ACK_TIMEOUT_MS = 12_000L
 
 /**
  * One online Ludo lobby+game, combined into a single screen/ViewModel per
@@ -124,6 +130,7 @@ class LudoGameViewModel(
     internal var joinCallCount = 0
         private set
     private var lastClaimedDiceAnimationId = 0L
+    private var lastClaimedRollAnimationId = 0L
 
     private val stateListener = Emitter.Listener { args -> args.firstOrNull()?.decodeSocketPayload<LudoStateEvent>()?.let(::applyStateEvent) }
     private val rollListener = Emitter.Listener { args -> args.firstOrNull()?.decodeSocketPayload<LudoStateEvent>()?.let(::onRollEvent) }
@@ -215,6 +222,12 @@ class LudoGameViewModel(
     internal fun applyLobbySnapshot(game: LudoGameDto) {
         if (game.id != gameId) return
         _uiState.update { state ->
+            val incoming = game.game
+            val pendingMoveResolved = state.pendingMoveActionId != null && incoming != null &&
+                incoming.version >= (state.board?.version ?: -1)
+            val moveChangedTokens = pendingMoveResolved && state.board?.players?.let { old ->
+                incoming!!.players.map { it.seat to it.tokens } != old.map { it.seat to it.tokens }
+            } == true
             state.copy(
                 isLoading = false,
                 error = null,
@@ -223,7 +236,10 @@ class LudoGameViewModel(
                 hostId = game.hostId,
                 members = game.members,
                 mySeat = game.mySeat ?: state.mySeat,
-                board = game.game ?: state.board,
+                board = incoming ?: state.board,
+                pendingMoveActionId = if (pendingMoveResolved) null else state.pendingMoveActionId,
+                movingTokenId = if (pendingMoveResolved) null else state.movingTokenId,
+                isAnimatingMove = if (pendingMoveResolved) moveChangedTokens else state.isAnimatingMove,
                 results = game.results ?: state.results,
             )
         }
@@ -246,20 +262,36 @@ class LudoGameViewModel(
             if (incoming != null && currentVersion != null && incoming.version < currentVersion) return@update state
             if (incoming == null && confirmedRoll != null && currentVersion != null && event.version < currentVersion) return@update state
             val newConfirmedRoll = confirmedRoll?.takeIf { event.version > state.lastDiceRollVersion }
+            val pendingMoveResolved = state.pendingMoveActionId != null && incoming != null &&
+                incoming.version > (state.board?.version ?: -1)
+            val moveChangedTokens = pendingMoveResolved && state.board?.players?.let { old ->
+                incoming!!.players.map { it.seat to it.tokens } != old.map { it.seat to it.tokens }
+            } == true
             state.copy(
                 isLoading = false,
                 board = incoming ?: state.board,
                 results = event.results ?: state.results,
                 status = event.status ?: state.status,
                 isRolling = if (newConfirmedRoll != null) false else state.isRolling,
+                isDiceRevealAnimating = if (newConfirmedRoll != null) true else state.isDiceRevealAnimating,
+                pendingMoveActionId = if (pendingMoveResolved) null else state.pendingMoveActionId,
+                movingTokenId = if (pendingMoveResolved) null else state.movingTokenId,
+                isAnimatingMove = if (pendingMoveResolved) moveChangedTokens else state.isAnimatingMove,
                 pendingRollActionId = if (newConfirmedRoll != null) null else state.pendingRollActionId,
                 diceAnimationId = if (newConfirmedRoll != null) state.diceAnimationId + 1 else state.diceAnimationId,
+                rollAnimationId = if (newConfirmedRoll != null && state.pendingRollActionId == null) state.rollAnimationId + 1 else state.rollAnimationId,
                 confirmedDiceValue = newConfirmedRoll?.value ?: state.confirmedDiceValue,
                 diceRollSeat = newConfirmedRoll?.seat ?: state.diceRollSeat,
                 diceRollTurnNumber = if (newConfirmedRoll != null) {
                     state.board?.takeIf { it.turnSeat == newConfirmedRoll.seat }?.turnNumber ?: incoming?.turnNumber
                 } else state.diceRollTurnNumber,
                 lastDiceRollVersion = if (newConfirmedRoll != null) event.version else state.lastDiceRollVersion,
+                rollNotice = if (newConfirmedRoll != null) when {
+                    event.events.any { it.type == "SIXES_LIMIT" } -> "Third six · turn passed"
+                    event.events.any { it.type == "NO_MOVES" } && event.events.any { it.type == "EXTRA_TURN" } -> "No moves available · roll again"
+                    event.events.any { it.type == "NO_MOVES" } -> "No moves available · turn passed"
+                    else -> null
+                } else state.rollNotice,
             )
         }
     }
@@ -390,10 +422,10 @@ class LudoGameViewModel(
     fun rollDice() {
         val state = _uiState.value
         val board = state.board ?: return
-        if (state.isControlledElsewhere || state.isRolling) return
+        if (state.isControlledElsewhere || state.isRolling || state.isDiceRevealAnimating || state.isAnimatingMove || state.movingTokenId != null) return
         if (state.mySeat == null || board.turnSeat != state.mySeat || board.phase != "ROLL") return
         val actionId = UUID.randomUUID().toString()
-        _uiState.update { it.copy(isRolling = true, error = null, pendingRollActionId = actionId) }
+        _uiState.update { it.copy(isRolling = true, isDiceRevealAnimating = false, rollAnimationId = it.rollAnimationId + 1, rollNotice = null, error = null, pendingRollActionId = actionId) }
         (rollEmitter ?: socketManager::emitWithAck).invoke(
             "ludo:roll",
             LudoRollRequest(gameId, board.version, actionId).encodeSocketPayload(),
@@ -418,7 +450,7 @@ class LudoGameViewModel(
             val wasStillPending = _uiState.value.pendingRollActionId == actionId && _uiState.value.isRolling
             _uiState.update {
                 if (wasStillPending) {
-                    it.copy(isRolling = false, pendingRollActionId = null, error = "Dice roll failed. Please try again.")
+                    it.copy(isRolling = false, isDiceRevealAnimating = false, pendingRollActionId = null, error = "Dice roll failed. Please try again.")
                 } else it
             }
             if (wasStillPending) {
@@ -459,23 +491,52 @@ class LudoGameViewModel(
         return true
     }
 
+    internal fun claimRollAnimation(animationId: Long): Boolean {
+        if (animationId <= lastClaimedRollAnimationId) return false
+        lastClaimedRollAnimationId = animationId
+        return true
+    }
+
+    internal fun onRollAnimationFinished(animationId: Long) {
+        _uiState.update { state ->
+            if (state.rollAnimationId != animationId) state
+            else state.copy(isDiceRevealAnimating = false, confirmedDiceValue = if (state.board?.phase == "MOVE") state.confirmedDiceValue else null)
+        }
+    }
+
     /** [tokenId] must be present in the current board's `legal` list — a tap on anything else is silently ignored, never sent. */
     fun moveToken(tokenId: Int) {
         val state = _uiState.value
         val board = state.board ?: return
-        if (state.isControlledElsewhere || state.movingTokenId != null) return
+        if (state.isControlledElsewhere || state.movingTokenId != null || state.isAnimatingMove || state.isDiceRevealAnimating || state.isRolling) return
         if (state.mySeat == null || board.turnSeat != state.mySeat) return
         if (board.legal.none { it.tokenId == tokenId }) return
-        _uiState.update { it.copy(movingTokenId = tokenId) }
+        val actionId = UUID.randomUUID().toString()
+        _uiState.update { it.copy(movingTokenId = tokenId, pendingMoveActionId = actionId, isAnimatingMove = true, error = null) }
         socketManager.emitWithAck(
             "ludo:move",
-            LudoMoveRequest(gameId, tokenId, board.version, UUID.randomUUID().toString()).encodeSocketPayload(),
+            LudoMoveRequest(gameId, tokenId, board.version, actionId).encodeSocketPayload(),
             Ack { args ->
                 val ack = args.firstOrNull()?.decodeSocketPayload<LudoBoardAck>()
-                _uiState.update { it.copy(movingTokenId = null) }
-                ack?.game?.let { applyStateEvent(LudoStateEvent(gameId = gameId, version = it.version, game = it)) }
+                if (ack?.ok == true && ack.game != null) {
+                    applyStateEvent(LudoStateEvent(gameId = gameId, version = ack.game.version, game = ack.game))
+                    _uiState.update { state -> if (state.pendingMoveActionId == actionId) state.copy(movingTokenId = null, pendingMoveActionId = null, isAnimatingMove = false) else state }
+                } else {
+                    _uiState.update { state -> if (state.pendingMoveActionId == actionId) state.copy(movingTokenId = null, pendingMoveActionId = null, isAnimatingMove = false, error = "Token move failed. Please try again.") else state }
+                }
             },
         )
+        viewModelScope.launch {
+            delay(MOVE_ACK_TIMEOUT_MS)
+            if (_uiState.value.pendingMoveActionId == actionId) {
+                _uiState.update { it.copy(error = "Move confirmation is taking longer than expected.") }
+                join() // Keep input locked until a fresh authoritative snapshot reconciles this move.
+            }
+        }
+    }
+
+    internal fun onMoveAnimationStateChanged(running: Boolean) {
+        _uiState.update { it.copy(isAnimatingMove = running) }
     }
 
     fun sendChat(text: String) {

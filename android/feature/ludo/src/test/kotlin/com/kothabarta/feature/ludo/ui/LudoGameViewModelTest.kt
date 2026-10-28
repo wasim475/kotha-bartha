@@ -204,6 +204,7 @@ class LudoGameViewModelTest {
         assertEquals(5, viewModel.uiState.value.board?.dice)
         assertEquals(5, viewModel.uiState.value.confirmedDiceValue)
         assertEquals(1L, viewModel.uiState.value.diceAnimationId)
+        assertEquals(1L, viewModel.uiState.value.rollAnimationId)
         assertTrue(viewModel.shouldAnimateDice(seat = 0, turnNumber = 1))
     }
 
@@ -224,6 +225,9 @@ class LudoGameViewModelTest {
         viewModel.onRollEvent(roll)
 
         assertEquals(1L, viewModel.uiState.value.diceAnimationId)
+        assertEquals(1L, viewModel.uiState.value.rollAnimationId)
+        assertTrue(viewModel.claimRollAnimation(1L))
+        assertFalse(viewModel.claimRollAnimation(1L))
         assertTrue(viewModel.claimDiceAnimation(1L))
         assertFalse(viewModel.claimDiceAnimation(1L))
     }
