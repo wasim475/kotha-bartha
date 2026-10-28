@@ -204,8 +204,9 @@ class LudoGameViewModelTest {
         assertEquals(5, viewModel.uiState.value.board?.dice)
         assertEquals(5, viewModel.uiState.value.confirmedDiceValue)
         assertEquals(1L, viewModel.uiState.value.diceAnimationId)
-        assertEquals(1L, viewModel.uiState.value.rollAnimationId)
-        assertTrue(viewModel.shouldAnimateDice(seat = 0, turnNumber = 1))
+        assertEquals(0, viewModel.uiState.value.diceRollSeat)
+        assertEquals(1L, diceAnimationIdForSeat(viewModel.uiState.value.diceAnimationId, viewModel.uiState.value.diceRollSeat, 0))
+        assertEquals(0L, diceAnimationIdForSeat(viewModel.uiState.value.diceAnimationId, viewModel.uiState.value.diceRollSeat, 1))
     }
 
     @Test
@@ -225,15 +226,12 @@ class LudoGameViewModelTest {
         viewModel.onRollEvent(roll)
 
         assertEquals(1L, viewModel.uiState.value.diceAnimationId)
-        assertEquals(1L, viewModel.uiState.value.rollAnimationId)
-        assertTrue(viewModel.claimRollAnimation(1L))
-        assertFalse(viewModel.claimRollAnimation(1L))
         assertTrue(viewModel.claimDiceAnimation(1L))
         assertFalse(viewModel.claimDiceAnimation(1L))
     }
 
     @Test
-    fun `turn change during a confirmed roll cancels its pending animation`() = runTest {
+    fun `turn change after a confirmed roll preserves the original roller animation target`() = runTest {
         val viewModel = newViewModel()
         runCurrent()
         seedActive(viewModel, boardWith(turnSeat = 0), mySeat = 0)
@@ -245,16 +243,15 @@ class LudoGameViewModelTest {
                 events = listOf(LudoGameEventDto(type = "DICE_ROLLED", seat = 0, value = 6)),
             ),
         )
-        assertTrue(viewModel.shouldAnimateDice(seat = 0, turnNumber = 1))
-
         viewModel.applyStateEvent(LudoStateEvent(gameId = "g1", version = 3, game = boardWith(version = 3, turnSeat = 1, turnNumber = 2)))
 
-        assertFalse(viewModel.shouldAnimateDice(seat = 0, turnNumber = 2))
+        assertEquals(1L, diceAnimationIdForSeat(viewModel.uiState.value.diceAnimationId, viewModel.uiState.value.diceRollSeat, 0))
+        assertEquals(0L, diceAnimationIdForSeat(viewModel.uiState.value.diceAnimationId, viewModel.uiState.value.diceRollSeat, 1))
         assertEquals(6, viewModel.uiState.value.confirmedDiceValue)
     }
 
     @Test
-    fun `confirmed roll that immediately passes the turn animates briefly then clears`() = runTest {
+    fun `confirmed roll that immediately passes the turn animates on the roller then clears`() = runTest {
         val viewModel = newViewModel()
         runCurrent()
         seedActive(viewModel, boardWith(turnSeat = 0, turnNumber = 1), mySeat = 0)
@@ -268,12 +265,14 @@ class LudoGameViewModelTest {
         )
 
         assertEquals(4, viewModel.uiState.value.confirmedDiceValue)
-        assertTrue(viewModel.shouldAnimateDice(seat = 0, turnNumber = 2))
+        assertEquals(1L, diceAnimationIdForSeat(viewModel.uiState.value.diceAnimationId, viewModel.uiState.value.diceRollSeat, 0))
+        assertTrue(viewModel.claimDiceAnimation(viewModel.uiState.value.diceAnimationId))
 
-        viewModel.finishDiceAnimation(viewModel.uiState.value.diceAnimationId)
+        viewModel.onRollAnimationFinished(viewModel.uiState.value.diceAnimationId)
 
         assertNull(viewModel.uiState.value.confirmedDiceValue)
-        assertFalse(viewModel.shouldAnimateDice(seat = 0, turnNumber = 2))
+        assertEquals(1L, diceAnimationIdForSeat(viewModel.uiState.value.diceAnimationId, viewModel.uiState.value.diceRollSeat, 0))
+        assertFalse(viewModel.claimDiceAnimation(viewModel.uiState.value.diceAnimationId))
     }
 
     @Test
@@ -313,18 +312,38 @@ class LudoGameViewModelTest {
         seedActive(viewModel, boardWith(turnSeat = 0), mySeat = 0)
 
         viewModel.rollDice()
-        val result = boardWith(version = 2, turnSeat = 0, phase = "MOVE", dice = 2)
+        val result = boardWith(
+            version = 2,
+            turnSeat = 0,
+            phase = "MOVE",
+            dice = 2,
+            players = listOf(playerSeat(2), playerSeat(0), playerSeat(1)),
+        )
+        val rolledEvent = LudoStateEvent(
+            gameId = "g1",
+            version = 2,
+            game = result,
+            events = listOf(LudoGameEventDto(type = "DICE_ROLLED", seat = 0, value = 2)),
+        )
         rollAck!!.call(
             LudoBoardAck(
                 ok = true,
                 game = result,
-                events = listOf(LudoGameEventDto(type = "DICE_ROLLED", seat = 0, value = 2)),
+                events = rolledEvent.events,
             ).encodeSocketPayload(),
         )
+
+        viewModel.onRollEvent(rolledEvent)
 
         assertEquals(2, viewModel.uiState.value.board?.dice)
         assertEquals(2, viewModel.uiState.value.confirmedDiceValue)
         assertEquals(1L, viewModel.uiState.value.diceAnimationId)
+        assertEquals(0, viewModel.uiState.value.diceRollSeat)
+        assertEquals(listOf(0L, 1L, 0L), listOf(2, 0, 1).map {
+            diceAnimationIdForSeat(viewModel.uiState.value.diceAnimationId, viewModel.uiState.value.diceRollSeat, it)
+        })
+        assertTrue(viewModel.claimDiceAnimation(viewModel.uiState.value.diceAnimationId))
+        assertFalse(viewModel.claimDiceAnimation(viewModel.uiState.value.diceAnimationId))
         assertFalse(viewModel.uiState.value.isRolling)
     }
 

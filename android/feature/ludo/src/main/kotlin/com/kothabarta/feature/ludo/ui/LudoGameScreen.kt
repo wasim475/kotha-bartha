@@ -14,12 +14,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -221,24 +217,17 @@ private fun LudoPlayerPanel(
         return
     }
     val color = when (player.seat) { 0 -> Color(0xFFED1C24); 1 -> Color(0xFF00A651); 2 -> Color(0xFFFFD814); else -> Color(0xFF168DD0) }
-    val active = board.turnSeat == player.seat
+    val active = isActiveLudoPlayer(board.turnSeat, player.seat)
     val canRoll = active && player.seat == state.mySeat && board.phase == "ROLL" && !state.isRolling && !state.isDiceRevealAnimating && !state.isAnimatingMove && state.movingTokenId == null && !state.isControlledElsewhere
-    val animateConfirmedDice = viewModel.shouldAnimateDice(player.seat, board.turnNumber)
+    val diceAnimationId = diceAnimationIdForSeat(state.diceAnimationId, state.diceRollSeat, player.seat)
     val shownDiceValue = if (active && board.phase == "MOVE") board.dice
-    else if (animateConfirmedDice) state.confirmedDiceValue else null
-    val pulse by androidx.compose.animation.core.rememberInfiniteTransition(label = "online-active-player").animateFloat(
-        initialValue = .55f,
-        targetValue = 1f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(700), androidx.compose.animation.core.RepeatMode.Reverse),
-        label = "online-active-pulse",
-    )
+    else if (diceAnimationId > 0L) state.confirmedDiceValue else null
     val shape = RoundedCornerShape(12.dp)
     Card(
         modifier = modifier.heightIn(min = 68.dp)
-            .then(if (active) Modifier.shadow(6.dp * pulse, shape) else Modifier)
-            .border(if (active) BorderStroke(2.dp, Brush.linearGradient(listOf(Color(0xFFE34263).copy(alpha = pulse), Color(0xFF7653E8)))) else BorderStroke(1.dp, color.copy(alpha = .5f)), shape),
+            .then(if (active) Modifier.ludoActivePlayerHighlight(active, 12.dp) else Modifier.border(androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = .5f)), shape)),
         colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = Color(0xFFF9F6EF)),
-        shape = RoundedCornerShape(12.dp),
+        shape = shape,
     ) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 5.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             AvatarImage(avatarUrl = player.user?.avatar?.secureUrl, initials = player.user?.initials ?: player.color.orEmpty().take(2))
@@ -248,7 +237,9 @@ private fun LudoPlayerPanel(
                     when {
                         !player.connected -> "OFFLINE"
                         active && state.isRolling -> "ROLLING…"
-                        active && state.isDiceRevealAnimating -> "REVEALING RESULT"
+                        player.seat == state.diceRollSeat && state.isDiceRevealAnimating -> "REVEALING RESULT"
+                        player.seat == state.diceRollSeat && !active -> "TURN COMPLETED"
+                        active && state.isDiceRevealAnimating -> "WAITING TO ROLL"
                         active && state.isAnimatingMove -> "MOVING TOKEN"
                         active && board.phase == "MOVE" -> "CHOOSE TOKEN"
                         active && canRoll -> "YOUR TURN · ROLL"
@@ -270,10 +261,12 @@ private fun LudoPlayerPanel(
             ) {
                 LudoAnimatedDiceFace(
                     value = shownDiceValue,
-                    rolling = active && state.isRolling,
-                    animationId = if (player.seat == state.diceRollSeat || (active && state.isRolling)) state.rollAnimationId else 0L,
-                    claimAnimation = viewModel::claimRollAnimation,
+                    animationId = state.diceAnimationId,
+                    rollerSeat = state.diceRollSeat,
+                    seat = player.seat,
+                    claimAnimation = viewModel::claimDiceAnimation,
                     onAnimationFinished = viewModel::onRollAnimationFinished,
+                    tint = color,
                 )
             }
         }

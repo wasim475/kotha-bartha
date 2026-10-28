@@ -1,5 +1,6 @@
 package com.kothabarta.app.navigation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.WindowInsets
@@ -149,6 +150,7 @@ fun MainScreen(
     val notificationPrivacy by appPreferences.messageNotificationPrivacy.collectAsState(initial = MessageNotificationPrivacy.SHOW_SENDER_ONLY)
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val ludoChromeController = remember(coroutineScope) { LudoGameChromeController(coroutineScope) }
     val unreadCount by notificationBadge.unreadCount.collectAsState()
     var ownProfile by remember { mutableStateOf<ProfileUiModel?>(null) }
     var showLogoutConfirmation by remember { mutableStateOf(false) }
@@ -235,6 +237,13 @@ fun MainScreen(
     }
 
     val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination?.route
+    val isLudoGameplay = isLudoGameplayRoute(currentRoute)
+    val gameChromeVisible by ludoChromeController.visible.collectAsState()
+    LaunchedEffect(ludoChromeController, backStackEntry?.id) { ludoChromeController.reset() }
+    DisposableEffect(ludoChromeController) {
+        onDispose { ludoChromeController.reset() }
+    }
     val isConversationOpen = backStackEntry?.destination?.route == Routes.CHAT_PATTERN
     val isImeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val activeConversationId = if (isConversationOpen) {
@@ -254,39 +263,41 @@ fun MainScreen(
 
     Scaffold(
         topBar = {
-            MainTopBar(
-                searchOpen = searchOpen,
-                searchQuery = searchQuery,
-                searchResults = searchResults,
-                searchLoading = searchLoading,
-                searchError = searchError,
-                onSearchOpen = { searchOpen = true },
-                onSearchClose = {
-                    searchOpen = false
-                    searchQuery = ""
-                },
-                onSearchQueryChange = { searchQuery = it },
-                onOpenProfile = { userId ->
-                    searchOpen = false
-                    searchQuery = ""
-                    navController.navigate(Routes.profile(userId))
-                },
-                onHome = { navigateToTopLevel(Routes.HOME) },
-                onStudy = { navigateToTopLevel(Routes.STUDY) },
-                onProfile = { navigateToTopLevel(Routes.MY_PROFILE) },
-                ownProfile = ownProfile,
-                onSettings = { navigateToTopLevel(Routes.SETTINGS) },
-                onRequestLogout = { showLogoutConfirmation = true },
-            )
+            if (!isLudoGameplay || gameChromeVisible) {
+                MainTopBar(
+                    searchOpen = searchOpen,
+                    searchQuery = searchQuery,
+                    searchResults = searchResults,
+                    searchLoading = searchLoading,
+                    searchError = searchError,
+                    onSearchOpen = { searchOpen = true },
+                    onSearchClose = {
+                        searchOpen = false
+                        searchQuery = ""
+                    },
+                    onSearchQueryChange = { searchQuery = it },
+                    onOpenProfile = { userId ->
+                        searchOpen = false
+                        searchQuery = ""
+                        navController.navigate(Routes.profile(userId))
+                    },
+                    onHome = { navigateToTopLevel(Routes.HOME) },
+                    onStudy = { navigateToTopLevel(Routes.STUDY) },
+                    onProfile = { navigateToTopLevel(Routes.MY_PROFILE) },
+                    ownProfile = ownProfile,
+                    onSettings = { navigateToTopLevel(Routes.SETTINGS) },
+                    onRequestLogout = { showLogoutConfirmation = true },
+                )
+            }
         },
         bottomBar = {
-            if (!isConversationOpen || !isImeVisible) {
-                val currentRoute = backStackEntry?.destination
+            if ((!isConversationOpen || !isImeVisible) && (!isLudoGameplay || gameChromeVisible)) {
+                val destination = backStackEntry?.destination
                 NavigationBar {
                     BOTTOM_NAV_ITEMS.forEach { item ->
-                        val selected = currentRoute?.hierarchy?.any { it.route == item.route } == true ||
-                            (item.route == Routes.MESSAGES && currentRoute?.route == Routes.MESSAGES_CALLS) ||
-                            (item.route == Routes.HOME && currentRoute?.route?.startsWith("post/") == true)
+                        val selected = destination?.hierarchy?.any { it.route == item.route } == true ||
+                            (item.route == Routes.MESSAGES && destination?.route == Routes.MESSAGES_CALLS) ||
+                            (item.route == Routes.HOME && destination?.route?.startsWith("post/") == true)
                         NavigationBarItem(
                             selected = selected,
                             onClick = { navigateToTopLevel(item.route) },
@@ -416,6 +427,11 @@ fun MainScreen(
                 ) { backStackEntry ->
                     val gameId = backStackEntry.arguments?.getString(Routes.LUDO_GAME_ARG).orEmpty()
                     LudoGameScreen(gameId = gameId, onNavigate = onNavigate)
+                }
+            }
+            BackHandler(enabled = isLudoGameplay) {
+                if (ludoChromeController.onBackPressed() == LudoBackAction.NAVIGATE_BACK) {
+                    navController.popBackStack()
                 }
             }
             CallGlobalHost(configuredCallIceServers())

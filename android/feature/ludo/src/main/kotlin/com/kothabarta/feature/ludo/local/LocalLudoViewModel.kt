@@ -16,31 +16,30 @@ class LocalLudoViewModel(modeId: String, roller: DieRoller = SecureDieRoller()) 
     val isRolling = _isRolling.asStateFlow()
     private val _isDiceRevealAnimating = MutableStateFlow(false)
     val isDiceRevealAnimating = _isDiceRevealAnimating.asStateFlow()
-    private val _rollAnimationId = MutableStateFlow(0L)
-    val rollAnimationId = _rollAnimationId.asStateFlow()
+    private val _diceAnimationId = MutableStateFlow(0L)
+    val diceAnimationId = _diceAnimationId.asStateFlow()
     private val _isAnimatingMove = MutableStateFlow(false)
     val isAnimatingMove = _isAnimatingMove.asStateFlow()
     private val _selectedTokenId = MutableStateFlow<Int?>(null)
     val selectedTokenId = _selectedTokenId.asStateFlow()
     private val _selectedTokenSeat = MutableStateFlow<Int?>(null)
     val selectedTokenSeat = _selectedTokenSeat.asStateFlow()
-    private var lastClaimedRollAnimationId = 0L
+    private var lastClaimedDiceAnimationId = 0L
 
-    fun claimRollAnimation(id: Long): Boolean {
-        if (id <= lastClaimedRollAnimationId) return false
-        lastClaimedRollAnimationId = id
+    fun claimDiceAnimation(id: Long): Boolean {
+        if (id <= lastClaimedDiceAnimationId) return false
+        lastClaimedDiceAnimationId = id
         return true
     }
 
     fun onRollAnimationFinished(id: Long) {
-        if (id == _rollAnimationId.value) _isDiceRevealAnimating.value = false
+        if (id == _diceAnimationId.value) _isDiceRevealAnimating.value = false
     }
 
     fun roll() {
         val current = _state.value
         if (_isRolling.value || _isDiceRevealAnimating.value || _isAnimatingMove.value || current.phase != "ROLL" || current.winnerSeat != null) return
         _isRolling.value = true
-        _rollAnimationId.value += 1
         viewModelScope.launch {
             delay(850)
             if (_state.value.phase != "ROLL") { _isRolling.value = false; return@launch }
@@ -52,8 +51,9 @@ class LocalLudoViewModel(modeId: String, roller: DieRoller = SecureDieRoller()) 
                     _selectedTokenId.value = changedTokenId(_state.value, next)
                     _selectedTokenSeat.value = _state.value.turnSeat
                 }
-                _isDiceRevealAnimating.value = true
                 _state.value = next
+                _diceAnimationId.value += 1
+                _isDiceRevealAnimating.value = true
             }.onFailure { _isDiceRevealAnimating.value = false }
             _isRolling.value = false
         }

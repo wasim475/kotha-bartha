@@ -63,10 +63,8 @@ data class LudoGameUiState(
     val isRolling: Boolean = false,
     val isDiceRevealAnimating: Boolean = false,
     val diceAnimationId: Long = 0,
-    val rollAnimationId: Long = 0,
     val confirmedDiceValue: Int? = null,
     val diceRollSeat: Int? = null,
-    val diceRollTurnNumber: Int? = null,
     val lastDiceRollVersion: Int = -1,
     val pendingRollActionId: String? = null,
     val movingTokenId: Int? = null,
@@ -130,7 +128,6 @@ class LudoGameViewModel(
     internal var joinCallCount = 0
         private set
     private var lastClaimedDiceAnimationId = 0L
-    private var lastClaimedRollAnimationId = 0L
 
     private val stateListener = Emitter.Listener { args -> args.firstOrNull()?.decodeSocketPayload<LudoStateEvent>()?.let(::applyStateEvent) }
     private val rollListener = Emitter.Listener { args -> args.firstOrNull()?.decodeSocketPayload<LudoStateEvent>()?.let(::onRollEvent) }
@@ -279,12 +276,8 @@ class LudoGameViewModel(
                 isAnimatingMove = if (pendingMoveResolved) moveChangedTokens else state.isAnimatingMove,
                 pendingRollActionId = if (newConfirmedRoll != null) null else state.pendingRollActionId,
                 diceAnimationId = if (newConfirmedRoll != null) state.diceAnimationId + 1 else state.diceAnimationId,
-                rollAnimationId = if (newConfirmedRoll != null && state.pendingRollActionId == null) state.rollAnimationId + 1 else state.rollAnimationId,
                 confirmedDiceValue = newConfirmedRoll?.value ?: state.confirmedDiceValue,
                 diceRollSeat = newConfirmedRoll?.seat ?: state.diceRollSeat,
-                diceRollTurnNumber = if (newConfirmedRoll != null) {
-                    state.board?.takeIf { it.turnSeat == newConfirmedRoll.seat }?.turnNumber ?: incoming?.turnNumber
-                } else state.diceRollTurnNumber,
                 lastDiceRollVersion = if (newConfirmedRoll != null) event.version else state.lastDiceRollVersion,
                 rollNotice = if (newConfirmedRoll != null) when {
                     event.events.any { it.type == "SIXES_LIMIT" } -> "Third six · turn passed"
@@ -425,7 +418,7 @@ class LudoGameViewModel(
         if (state.isControlledElsewhere || state.isRolling || state.isDiceRevealAnimating || state.isAnimatingMove || state.movingTokenId != null) return
         if (state.mySeat == null || board.turnSeat != state.mySeat || board.phase != "ROLL") return
         val actionId = UUID.randomUUID().toString()
-        _uiState.update { it.copy(isRolling = true, isDiceRevealAnimating = false, rollAnimationId = it.rollAnimationId + 1, rollNotice = null, error = null, pendingRollActionId = actionId) }
+        _uiState.update { it.copy(isRolling = true, isDiceRevealAnimating = false, rollNotice = null, error = null, pendingRollActionId = actionId) }
         (rollEmitter ?: socketManager::emitWithAck).invoke(
             "ludo:roll",
             LudoRollRequest(gameId, board.version, actionId).encodeSocketPayload(),
@@ -460,30 +453,6 @@ class LudoGameViewModel(
         }
     }
 
-    internal fun shouldAnimateDice(seat: Int, turnNumber: Int): Boolean {
-        val state = _uiState.value
-        val board = state.board
-        val isCurrentRoll = board != null && board.version == state.lastDiceRollVersion &&
-            board.turnSeat == seat && board.turnNumber == state.diceRollTurnNumber && board.turnNumber == turnNumber && board.phase == "MOVE"
-        val rollTurn = state.diceRollTurnNumber
-        val hasTransientConfirmedResult = board != null && rollTurn != null &&
-            board.version == state.lastDiceRollVersion && board.phase == "ROLL" && board.dice == null &&
-            board.turnNumber in rollTurn..(rollTurn + 1) && board.turnNumber == turnNumber &&
-            state.confirmedDiceValue?.let { it in 1..6 } == true
-        return state.diceAnimationId > 0 &&
-            state.diceRollSeat == seat &&
-            (isCurrentRoll || hasTransientConfirmedResult)
-    }
-
-    internal fun finishDiceAnimation(animationId: Long) {
-        _uiState.update { state ->
-            val board = state.board
-            if (state.diceAnimationId == animationId && board != null && board.phase != "MOVE") {
-                state.copy(confirmedDiceValue = null)
-            } else state
-        }
-    }
-
     /** A ViewModel-owned claim prevents the same confirmed result animating again after recomposition or screen recreation. */
     internal fun claimDiceAnimation(animationId: Long): Boolean {
         if (animationId <= lastClaimedDiceAnimationId) return false
@@ -491,15 +460,9 @@ class LudoGameViewModel(
         return true
     }
 
-    internal fun claimRollAnimation(animationId: Long): Boolean {
-        if (animationId <= lastClaimedRollAnimationId) return false
-        lastClaimedRollAnimationId = animationId
-        return true
-    }
-
     internal fun onRollAnimationFinished(animationId: Long) {
         _uiState.update { state ->
-            if (state.rollAnimationId != animationId) state
+            if (state.diceAnimationId != animationId) state
             else state.copy(isDiceRevealAnimating = false, confirmedDiceValue = if (state.board?.phase == "MOVE") state.confirmedDiceValue else null)
         }
     }

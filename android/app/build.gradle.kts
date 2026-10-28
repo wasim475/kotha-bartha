@@ -123,4 +123,5 @@ dependencies {
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 }

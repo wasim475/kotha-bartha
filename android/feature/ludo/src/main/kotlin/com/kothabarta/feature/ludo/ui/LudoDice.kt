@@ -2,10 +2,11 @@ package com.kothabarta.feature.ludo.ui
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
@@ -13,106 +14,298 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
-import kotlin.random.Random
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
-/** Visual dice only: [value] remains the engine/server result; random faces never leave this composable. */
+/** Returns the animation event only to the stable seat that rolled. */
+internal fun diceAnimationIdForSeat(animationId: Long, rollerSeat: Int?, seat: Int): Long =
+    if (animationId > 0L && rollerSeat == seat) animationId else 0L
+
+internal fun isActiveLudoPlayer(turnSeat: Int?, seat: Int): Boolean = turnSeat == seat
+
 @Composable
 internal fun LudoAnimatedDiceFace(
     value: Int?,
-    rolling: Boolean,
     animationId: Long,
+    rollerSeat: Int?,
+    seat: Int,
     claimAnimation: (Long) -> Boolean,
     onAnimationFinished: (Long) -> Unit = {},
+    tint: Color,
     modifier: Modifier = Modifier,
 ) {
-    val latestValue by rememberUpdatedState(value)
-    val latestRolling by rememberUpdatedState(rolling)
-    var shownValue by remember(animationId) { mutableIntStateOf(value ?: 1) }
-    var visualRolling by remember(animationId) { mutableStateOf(false) }
-    val flip = remember { Animatable(0f) }
-    LaunchedEffect(animationId) {
-        if (animationId <= 0L || !claimAnimation(animationId)) {
-            visualRolling = false
-            shownValue = latestValue ?: 1
-            if (animationId > 0L) onAnimationFinished(animationId)
+    val lift = remember { Animatable(0f) }
+    val rotationX = remember { Animatable(0f) }
+    val rotationY = remember { Animatable(0f) }
+    val rotationZ = remember { Animatable(0f) }
+    val latestOnFinished by rememberUpdatedState(onAnimationFinished)
+    val targetedAnimationId = diceAnimationIdForSeat(animationId, rollerSeat, seat)
+    LaunchedEffect(targetedAnimationId) {
+        if (targetedAnimationId <= 0L) return@LaunchedEffect
+        if (!claimAnimation(targetedAnimationId)) {
+            latestOnFinished(targetedAnimationId)
             return@LaunchedEffect
         }
-        visualRolling = true
-        val start = System.nanoTime()
         try {
-            while (latestRolling || (System.nanoTime() - start) / 1_000_000L < 820L) {
-                shownValue = Random.nextInt(1, 7)
-                delay(68)
+            coroutineScope {
+                launch {
+                    lift.animateTo(
+                        targetValue = 22f,
+                        animationSpec = tween(230, easing = FastOutSlowInEasing),
+                    )
+                    lift.animateTo(
+                        targetValue = 0f,
+                        animationSpec = keyframes {
+                            durationMillis = 590
+                            3f at 190 using FastOutSlowInEasing
+                            1f at 285 using FastOutSlowInEasing
+                            0f at 360 using FastOutSlowInEasing
+                        },
+                    )
+                }
+                launch { rotationX.animateTo(360f, tween(820, easing = FastOutSlowInEasing)) }
+                launch { rotationY.animateTo(360f, tween(820, easing = FastOutSlowInEasing)) }
+                launch {
+                    rotationZ.animateTo(
+                        targetValue = 0f,
+                        animationSpec = keyframes {
+                            durationMillis = 820
+                            8f at 260 using FastOutSlowInEasing
+                            (-3f) at 560 using FastOutSlowInEasing
+                        },
+                    )
+                }
             }
-            shownValue = latestValue ?: shownValue
-            flip.snapTo(0f)
-            flip.animateTo(360f, tween(260, easing = FastOutSlowInEasing))
-            flip.snapTo(0f)
         } finally {
-            visualRolling = false
-            onAnimationFinished(animationId)
-        }
-    }
-    LaunchedEffect(value, animationId) {
-        if (value != null && animationId <= 0L) shownValue = value
-    }
-    val transition = rememberInfiniteTransition(label = "ludo-dice-roll")
-    val turn by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = if (visualRolling) 360f else 0f,
-        animationSpec = infiniteRepeatable(tween(125, easing = FastOutSlowInEasing), RepeatMode.Restart),
-        label = "ludo-dice-turn",
-    )
-    val bounce by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = if (visualRolling) 1.06f else 1f,
-        animationSpec = infiniteRepeatable(tween(180, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "ludo-dice-bounce",
-    )
-    val pips = if (value == null && !visualRolling) emptyList() else when (shownValue) {
-        1 -> listOf(4)
-        2 -> listOf(0, 8)
-        3 -> listOf(0, 4, 8)
-        4 -> listOf(0, 2, 6, 8)
-        5 -> listOf(0, 2, 4, 6, 8)
-        else -> listOf(0, 2, 3, 5, 6, 8)
-    }
-    Canvas(
-        Modifier.size(46.dp)
-            .shadow(6.dp, RoundedCornerShape(10.dp))
-            .graphicsLayer {
-                rotationY = flip.value + if (visualRolling) turn else 0f
-                rotationX = if (visualRolling) turn * .55f else 0f
-                scaleX = if (visualRolling) bounce else 1f
-                scaleY = if (visualRolling) bounce else 1f
+            withContext(NonCancellable) {
+                lift.snapTo(0f)
+                rotationX.snapTo(0f)
+                rotationY.snapTo(0f)
+                rotationZ.snapTo(0f)
+                latestOnFinished(targetedAnimationId)
             }
-            .then(modifier),
-    ) {
-        drawRoundRect(
-            Brush.linearGradient(listOf(Color.White, Color(0xFFF1F2F6), Color.White), end = Offset(size.width, size.height)),
-            cornerRadius = CornerRadius(size.width * .2f),
-        )
-        drawRoundRect(Color(0xFF273044), cornerRadius = CornerRadius(size.width * .2f), style = Stroke(size.width * .045f))
-        val step = size.width / 4f
-        pips.forEach { index ->
-            val x = (index % 3 + 1) * step
-            val y = (index / 3 + 1) * step
-            drawCircle(if (shownValue == 1) Color(0xFFD52C5A) else Color(0xFF263247), size.width * .082f, Offset(x, y))
         }
+    }
+
+    Canvas(
+        Modifier.size(46.dp).then(modifier),
+    ) {
+        val maxDimension = size.minDimension
+        val liftPx = lift.value * density
+        val shadowScale = 1f - (lift.value / 22f) * .42f
+        drawOval(
+            color = Color(0x330D1A2B).copy(alpha = .2f + .2f * shadowScale),
+            topLeft = Offset(
+                (size.width - maxDimension * .34f * shadowScale) / 2f,
+                size.height * .76f,
+            ),
+            size = Size(maxDimension * .34f * shadowScale, maxDimension * .12f * shadowScale),
+        )
+        drawDiceCube(
+            value = value,
+            tint = tint,
+            center = Offset(size.width / 2f, size.height / 2f - liftPx),
+            unit = maxDimension * .4f,
+            rotationX = -12f + rotationX.value,
+            rotationY = 16f + rotationY.value,
+            rotationZ = rotationZ.value,
+        )
+    }
+}
+
+@Composable
+internal fun Modifier.ludoActivePlayerHighlight(
+    active: Boolean,
+    cornerRadius: Dp = 12.dp,
+): Modifier {
+    if (!active) return this
+    val transition = rememberInfiniteTransition(label = "ludo-active-player-border")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1900), RepeatMode.Restart),
+        label = "ludo-active-border-phase",
+    )
+    val pulse by transition.animateFloat(
+        initialValue = .45f,
+        targetValue = .9f,
+        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        label = "ludo-active-border-glow",
+    )
+    return graphicsLayer {
+        shadowElevation = (3f + pulse * 3f).dp.toPx()
+        clip = false
+    }.drawWithContent {
+        drawContent()
+        val radius = cornerRadius.toPx()
+        val borderWidth = 2.dp.toPx()
+        val travel = size.width * phase
+        val gradient = Brush.linearGradient(
+            colors = listOf(Color(0xFFE34263), Color(0xFF7653E8), Color(0xFFE34263)),
+            start = Offset(travel - size.width * .5f, 0f),
+            end = Offset(travel + size.width * .5f, size.height),
+        )
+        drawRoundRect(
+            color = Color(0xFFE34263).copy(alpha = pulse * .16f),
+            topLeft = Offset(borderWidth / 2f, borderWidth / 2f),
+            size = Size(size.width - borderWidth, size.height - borderWidth),
+            cornerRadius = CornerRadius(radius),
+            style = Stroke(width = 5.dp.toPx()),
+        )
+        drawRoundRect(
+            brush = gradient,
+            topLeft = Offset(borderWidth / 2f, borderWidth / 2f),
+            size = Size(size.width - borderWidth, size.height - borderWidth),
+            cornerRadius = CornerRadius(radius),
+            style = Stroke(width = borderWidth),
+        )
+    }
+}
+
+private data class Vector3(val x: Float, val y: Float, val z: Float) {
+    operator fun plus(other: Vector3) = Vector3(x + other.x, y + other.y, z + other.z)
+    operator fun times(scale: Float) = Vector3(x * scale, y * scale, z * scale)
+}
+
+private data class DiceFace(
+    val normal: Vector3,
+    val horizontal: Vector3,
+    val vertical: Vector3,
+    val value: Int,
+    val shade: Float,
+)
+
+private fun diceFaces(value: Int): List<DiceFace> = listOf(
+    DiceFace(Vector3(0f, 0f, 1f), Vector3(1f, 0f, 0f), Vector3(0f, -1f, 0f), value, 1f),
+    DiceFace(Vector3(0f, 0f, -1f), Vector3(-1f, 0f, 0f), Vector3(0f, -1f, 0f), 7 - value, .66f),
+    DiceFace(Vector3(1f, 0f, 0f), Vector3(0f, 0f, -1f), Vector3(0f, -1f, 0f), 2, .82f),
+    DiceFace(Vector3(-1f, 0f, 0f), Vector3(0f, 0f, 1f), Vector3(0f, -1f, 0f), 5, .76f),
+    DiceFace(Vector3(0f, -1f, 0f), Vector3(1f, 0f, 0f), Vector3(0f, 0f, 1f), 3, .92f),
+    DiceFace(Vector3(0f, 1f, 0f), Vector3(1f, 0f, 0f), Vector3(0f, 0f, -1f), 4, .58f),
+)
+
+private fun pipPositions(value: Int): List<Pair<Float, Float>> {
+    val left = -.39f
+    val right = .39f
+    val top = -.39f
+    val bottom = .39f
+    return when (value) {
+        1 -> listOf(0f to 0f)
+        2 -> listOf(left to top, right to bottom)
+        3 -> listOf(left to top, 0f to 0f, right to bottom)
+        4 -> listOf(left to top, right to top, left to bottom, right to bottom)
+        5 -> listOf(left to top, right to top, 0f to 0f, left to bottom, right to bottom)
+        else -> listOf(left to top, right to top, left to 0f, right to 0f, left to bottom, right to bottom)
+    }
+}
+
+private fun rotate(point: Vector3, rotationX: Float, rotationY: Float, rotationZ: Float): Vector3 {
+    val xAngle = rotationX * PI.toFloat() / 180f
+    val yAngle = rotationY * PI.toFloat() / 180f
+    val zAngle = rotationZ * PI.toFloat() / 180f
+    val afterX = Vector3(
+        point.x,
+        point.y * cos(xAngle) - point.z * sin(xAngle),
+        point.y * sin(xAngle) + point.z * cos(xAngle),
+    )
+    val afterY = Vector3(
+        afterX.x * cos(yAngle) + afterX.z * sin(yAngle),
+        afterX.y,
+        -afterX.x * sin(yAngle) + afterX.z * cos(yAngle),
+    )
+    return Vector3(
+        afterY.x * cos(zAngle) - afterY.y * sin(zAngle),
+        afterY.x * sin(zAngle) + afterY.y * cos(zAngle),
+        afterY.z,
+    )
+}
+
+private fun DrawScope.drawDiceCube(
+    value: Int?,
+    tint: Color,
+    center: Offset,
+    unit: Float,
+    rotationX: Float,
+    rotationY: Float,
+    rotationZ: Float,
+) {
+    val faces = diceFaces((value ?: 1).coerceIn(1, 6)).sortedBy { rotate(it.normal, rotationX, rotationY, rotationZ).z }
+    val half = .72f
+    val camera = 3.4f
+    fun project(point: Vector3): Offset {
+        val rotated = rotate(point, rotationX, rotationY, rotationZ)
+        val perspective = camera / (camera - rotated.z)
+        return Offset(center.x + rotated.x * unit * perspective, center.y + rotated.y * unit * perspective)
+    }
+    faces.forEach { face ->
+        val localCorners = listOf(
+            face.normal + face.horizontal * -half + face.vertical * -half,
+            face.normal + face.horizontal * half + face.vertical * -half,
+            face.normal + face.horizontal * half + face.vertical * half,
+            face.normal + face.horizontal * -half + face.vertical * half,
+        )
+        val corners = localCorners.map(::project)
+        val path = roundedPolygon(corners, .12f)
+        val brightness = face.shade
+        val faceColor = Color(
+            red = .985f * brightness,
+            green = .99f * brightness,
+            blue = 1f * brightness,
+            alpha = 1f,
+        )
+        drawPath(path, faceColor)
+        drawPath(path, Color(0xFF202A3A).copy(alpha = .78f), style = Stroke(width = size.minDimension * .018f))
+        if (value != null) {
+            pipPositions(face.value).forEach { (horizontal, vertical) ->
+                val pipPosition = face.normal +
+                    face.horizontal * horizontal +
+                    face.vertical * vertical +
+                    face.normal * .025f
+                val projected = project(pipPosition)
+                val depthScale = camera / (camera - rotate(pipPosition, rotationX, rotationY, rotationZ).z)
+                drawCircle(
+                    color = if (face.value == 1 || face.value == 6) tint else Color(0xFF293446),
+                    radius = size.minDimension * .052f * depthScale,
+                    center = projected,
+                )
+            }
+        }
+    }
+}
+
+private fun roundedPolygon(points: List<Offset>, cornerFraction: Float): Path {
+    fun between(from: Offset, to: Offset) =
+        Offset(from.x + (to.x - from.x) * cornerFraction, from.y + (to.y - from.y) * cornerFraction)
+
+    return Path().apply {
+        val incoming = points.indices.map { index -> between(points[index], points[(index + points.size - 1) % points.size]) }
+        val outgoing = points.indices.map { index -> between(points[index], points[(index + 1) % points.size]) }
+        moveTo(incoming[0].x, incoming[0].y)
+        points.indices.forEach { index ->
+            quadraticTo(points[index].x, points[index].y, outgoing[index].x, outgoing[index].y)
+            val next = incoming[(index + 1) % points.size]
+            lineTo(next.x, next.y)
+        }
+        close()
     }
 }

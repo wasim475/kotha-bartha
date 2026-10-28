@@ -19,6 +19,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -67,6 +68,11 @@ internal fun LudoBoardCanvas(
     holdMoveAnimations: Boolean = false,
     onMoveAnimationStateChanged: (Boolean) -> Unit = {},
 ) {
+    val barrierVisibility by animateFloatAsState(
+        targetValue = if (quickBarrierIsVisible(board)) 1f else 0f,
+        animationSpec = tween(420),
+        label = "quick-home-entrance-barrier",
+    )
     val visualPositions = remember(board.variantId) {
         mutableStateMapOf<TokenKey, Pair<Float, Float>>().apply {
             board.players.forEach { player -> player.tokens.forEach { token -> put(TokenKey(player.seat, token.id), ludoPosition(player.seat, token.pos, token.id)) } }
@@ -143,7 +149,7 @@ internal fun LudoBoardCanvas(
     ) {
         val unit = size.width / 15f
         drawRect(Color(0xFFF6F2EA), size = size)
-        drawLudoBoard(unit, board, visualPositions, movable, board.turnSeat, selectedTokenId, selectedSeat, pulse)
+        drawLudoBoard(unit, board, visualPositions, movable, board.turnSeat, selectedTokenId, selectedSeat, pulse, barrierVisibility)
     }
 }
 
@@ -156,6 +162,7 @@ private fun DrawScope.drawLudoBoard(
     selectedTokenId: Int?,
     selectedSeat: Int?,
     pulse: Float,
+    barrierVisibility: Float,
 ) {
     val line = Color(0x663B3630)
     fun cell(row: Int, col: Int, color: Color) = drawRect(color, Offset(col * unit, row * unit), Size(unit, unit), style = androidx.compose.ui.graphics.drawscope.Fill)
@@ -185,8 +192,12 @@ private fun DrawScope.drawLudoBoard(
         cell(row, col, seats[seat].copy(alpha = alpha))
         drawRect(line, Offset(col * unit, row * unit), Size(unit, unit), style = Stroke(.04f * unit))
         if (!board.rules.allowHomeEntry) {
-            drawLine(Color(0xFFD1352B), Offset((col + .3f) * unit, (row + .3f) * unit), Offset((col + .7f) * unit, (row + .7f) * unit), .1f * unit)
-            drawLine(Color(0xFFD1352B), Offset((col + .7f) * unit, (row + .3f) * unit), Offset((col + .3f) * unit, (row + .7f) * unit), .1f * unit)
+            if (board.variantId == "QUICK_CAPTURE") {
+                if (i == 0) drawQuickBlockSign(row, col, unit, barrierVisibility)
+            } else {
+                drawLine(Color(0xFFD1352B), Offset((col + .3f) * unit, (row + .3f) * unit), Offset((col + .7f) * unit, (row + .7f) * unit), .1f * unit)
+                drawLine(Color(0xFFD1352B), Offset((col + .7f) * unit, (row + .3f) * unit), Offset((col + .3f) * unit, (row + .7f) * unit), .1f * unit)
+            }
         }
     } }
     val triangles: List<Pair<Int, List<Offset>>> = listOf(
@@ -206,6 +217,40 @@ private fun DrawScope.drawLudoBoard(
         val selected = player.seat == selectedSeat && token.id == selectedTokenId
         drawToken(Offset(col * unit, row * unit), unit, seats.getOrElse(player.seat) { Color.Gray }, movable, selected, pulse)
     } }
+}
+
+internal fun quickBarrierIsVisible(board: LudoBoardStateDto): Boolean =
+    board.variantId == "QUICK_CAPTURE" &&
+        !board.rules.allowHomeEntry &&
+        board.phase != "FINISHED" &&
+        board.winnerSeat == null
+
+private fun DrawScope.drawQuickBlockSign(row: Int, col: Int, unit: Float, visibility: Float) {
+    if (visibility <= 0f) return
+    val center = Offset(
+        (col + .5f) * unit,
+        (row + .48f + (1f - visibility) * .32f) * unit,
+    )
+    val signWidth = .72f * unit * visibility
+    val signHeight = .58f * unit * visibility
+    val signTopLeft = Offset(center.x - signWidth / 2f, center.y - signHeight / 2f)
+    drawRoundRect(
+        color = Color(0xFF842B35).copy(alpha = visibility),
+        topLeft = signTopLeft + Offset(0f, .06f * unit),
+        size = Size(signWidth, signHeight),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(.1f * unit),
+    )
+    drawRoundRect(
+        color = Color(0xFFE44852).copy(alpha = visibility),
+        topLeft = signTopLeft,
+        size = Size(signWidth, signHeight),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(.1f * unit),
+    )
+    val insetX = signWidth * .28f
+    val insetY = signHeight * .24f
+    val crossColor = Color.White.copy(alpha = visibility)
+    drawLine(crossColor, Offset(center.x - insetX, center.y - insetY), Offset(center.x + insetX, center.y + insetY), .075f * unit * visibility)
+    drawLine(crossColor, Offset(center.x + insetX, center.y - insetY), Offset(center.x - insetX, center.y + insetY), .075f * unit * visibility)
 }
 
 // Relative positions are the same 52-cell clockwise route and five-cell home lanes used by the shared engine.
