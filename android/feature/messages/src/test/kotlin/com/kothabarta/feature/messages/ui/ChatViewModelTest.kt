@@ -6,8 +6,10 @@ import com.kothabarta.core.network.auth.GoogleLoginRequest
 import com.kothabarta.core.network.auth.LoginRequest
 import com.kothabarta.core.network.auth.RegisterRequest
 import com.kothabarta.core.network.auth.UserDto
+import com.kothabarta.core.network.messages.AttachmentDto
 import com.kothabarta.core.network.messages.ConversationDto
 import com.kothabarta.core.network.messages.CreateConversationRequest
+import com.kothabarta.core.network.messages.EncryptedPayloadDto
 import com.kothabarta.core.network.messages.MessageDto
 import com.kothabarta.core.network.messages.MessagesApi
 import com.kothabarta.core.network.messages.ReactionRequest
@@ -127,6 +129,42 @@ class ChatViewModelTest {
 
         assertTrue(viewModel.uiState.value.messages.isEmpty())
         assertEquals(null, api.lastSentBody)
+    }
+
+    @Test
+    fun `attachments are not uploaded without encrypted binary support`() = runTest {
+        val api = FakeMessagesApi(history = emptyList())
+        val viewModel = newViewModel(api)
+        advanceUntilIdle()
+
+        viewModel.sendAttachment(byteArrayOf(1, 2, 3), "photo.jpg", "image/jpeg")
+        advanceUntilIdle()
+
+        assertEquals(0, api.attachmentSendCount)
+        assertTrue(viewModel.uiState.value.messages.isEmpty())
+        assertFalse(viewModel.uiState.value.uploadingAttachment)
+        assertEquals(MEDIA_SHARING_UNAVAILABLE_MESSAGE, viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun `attachment previews are hidden when message has encrypted content`() {
+        val attachmentMessage = MessageDto(
+            id = "attachment",
+            type = "attachment",
+            attachment = AttachmentDto(url = "https://example.invalid/photo.jpg"),
+            createdAt = "now",
+            senderId = "peer-1",
+        )
+
+        assertTrue(canRenderAttachment(attachmentMessage))
+        assertFalse(canRenderAttachment(attachmentMessage.copy(encrypted = true)))
+        assertFalse(
+            canRenderAttachment(
+                attachmentMessage.copy(
+                    encryptedPayloads = listOf(EncryptedPayloadDto("device-1", "cipher", "iv")),
+                ),
+            ),
+        )
     }
 
     @Test
@@ -253,9 +291,15 @@ class ChatViewModelTest {
         var sendShouldFail: Boolean = false,
     ) : MessagesApi {
         var lastSentBody: String? = null
+        var attachmentSendCount = 0
 
-        override suspend fun getConversations() = notUsed()
+        override suspend fun getConversations(archived: Boolean) = notUsed()
+        override suspend fun getConversation(conversationId: String) = notUsed()
         override suspend fun createOrOpenConversation(body: CreateConversationRequest) = notUsed()
+        override suspend fun deleteConversation(conversationId: String) = notUsed()
+        override suspend fun archiveConversation(conversationId: String) = notUsed()
+        override suspend fun unarchiveConversation(conversationId: String) = notUsed()
+        override suspend fun getNotificationPreviewMessage(conversationId: String, messageId: String) = notUsed()
 
         override suspend fun getMessages(conversationId: String): Response<ApiEnvelope<List<MessageDto>>> =
             Response.success(ApiEnvelope(data = history))
@@ -270,7 +314,20 @@ class ChatViewModelTest {
             }
         }
 
-        override suspend fun sendAttachment(conversationId: String, file: MultipartBody.Part) = notUsed()
+        override suspend fun sendAttachment(conversationId: String, file: MultipartBody.Part): Response<ApiEnvelope<MessageDto>> {
+            attachmentSendCount++
+            return Response.success(
+                ApiEnvelope(
+                    data = MessageDto(
+                        id = "attachment-sent",
+                        conversationId = conversationId,
+                        body = "attachment",
+                        createdAt = "now",
+                        senderId = "me",
+                    ),
+                ),
+            )
+        }
         override suspend fun unsendMessage(conversationId: String, messageId: String) = notUsed()
         override suspend fun deleteForMe(conversationId: String, messageId: String) = notUsed()
         override suspend fun reactToMessage(conversationId: String, messageId: String, body: ReactionRequest) = notUsed()

@@ -54,6 +54,8 @@ data class ChatUiState(
 
 private const val TYPING_STOP_DELAY_MS = 2_500L
 private const val PEER_TYPING_SAFETY_CLEAR_MS = 4_000L
+internal const val MEDIA_SHARING_UNAVAILABLE_MESSAGE =
+    "Secure media sharing isn't available yet. Attachments and voice notes aren't uploaded."
 
 /**
  * One conversation's message thread. `peerId` (may be `null` if the caller
@@ -348,13 +350,10 @@ class ChatViewModel(
         _uiState.update { it.copy(messages = it.messages.filterNot { m -> m.id == tempId }, failedIds = it.failedIds - tempId) }
     }
 
+    @Suppress("UNUSED_PARAMETER")
     fun sendAttachment(bytes: ByteArray, fileName: String, mimeType: String) {
-        _uiState.update { it.copy(uploadingAttachment = true, error = null) }
-        viewModelScope.launch {
-            when (val result = repository.sendAttachment(conversationId, bytes, fileName, mimeType)) {
-                is ApiResult.Success -> _uiState.update { it.copy(uploadingAttachment = false, messages = it.messages + result.data) }
-                is ApiResult.Failure -> _uiState.update { it.copy(uploadingAttachment = false, error = result.error.message) }
-            }
+        _uiState.update {
+            it.copy(uploadingAttachment = false, error = MEDIA_SHARING_UNAVAILABLE_MESSAGE)
         }
     }
 

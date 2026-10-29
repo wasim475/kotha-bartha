@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kothabarta.core.network.messages.MessageDto
 import com.kothabarta.feature.messages.data.MessageDecryptionState
+import com.kothabarta.feature.messages.data.isEncryptedForDisplay
 import com.kothabarta.core.ui.components.NetworkImage
 import com.kothabarta.core.ui.components.AppIcon
 import com.kothabarta.core.ui.components.AppSymbol
@@ -91,7 +92,7 @@ fun MessageBubble(
                         )
                     }
                 }
-                message.attachment?.let { attachment ->
+                message.attachment?.takeIf { canRenderAttachment(message) }?.let { attachment ->
                     if (attachment.kind == "image") {
                         NetworkImage(
                             url = attachment.url,
@@ -185,6 +186,8 @@ fun MessageBubble(
         }
     }
 }
+
+internal fun canRenderAttachment(message: MessageDto): Boolean = !message.isEncryptedForDisplay()
 
 internal fun messageBodyText(message: MessageDto, state: MessageDecryptionState?): String {
     val isEncrypted = message.encrypted || message.encryptedPayloads?.isNotEmpty() == true || message.encryptedBody != null || message.senderPublicKey != null

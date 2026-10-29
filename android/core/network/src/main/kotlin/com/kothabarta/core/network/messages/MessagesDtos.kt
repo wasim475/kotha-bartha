@@ -22,6 +22,11 @@ data class ConversationDto(
     val unreadCount: Int = 0,
 )
 
+data class ConversationActionResponse(
+    val id: String,
+    val archived: Boolean? = null,
+)
+
 data class ConversationHeaderDto(
     val id: String,
     val isGroup: Boolean = false,

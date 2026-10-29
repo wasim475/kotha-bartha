@@ -12,7 +12,7 @@ import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
 
 val messagesFeatureModule = module {
-    single { MessagesRepository(messagesApi = get()) }
+    single { MessagesRepository(messagesApi = get(), usersApi = get(), friendsApi = get(), reportsApi = get()) }
     single<MessageDecrypting> { AndroidMessageDecryptor(get()) }
     single<MessageDeviceKeyRegistrar> { AndroidMessageDeviceKeyRegistrar(get(), get()) }
     single<ConversationLauncher> { get<MessagesRepository>() }

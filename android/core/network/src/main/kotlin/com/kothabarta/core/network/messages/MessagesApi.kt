@@ -17,13 +17,28 @@ import retrofit2.http.Query
 interface MessagesApi {
 
     @GET("conversations")
-    suspend fun getConversations(): Response<ApiEnvelope<List<ConversationDto>>>
+    suspend fun getConversations(@Query("archived") archived: Boolean = false): Response<ApiEnvelope<List<ConversationDto>>>
 
     @GET("conversations/{conversationId}")
     suspend fun getConversation(@Path("conversationId") conversationId: String): Response<ApiEnvelope<ConversationHeaderDto>>
 
     @POST("conversations")
     suspend fun createOrOpenConversation(@Body body: CreateConversationRequest): Response<ApiEnvelope<ConversationDto>>
+
+    @DELETE("conversations/{conversationId}")
+    suspend fun deleteConversation(
+        @Path("conversationId") conversationId: String,
+    ): Response<ApiEnvelope<ConversationActionResponse>>
+
+    @POST("conversations/{conversationId}/archive")
+    suspend fun archiveConversation(
+        @Path("conversationId") conversationId: String,
+    ): Response<ApiEnvelope<ConversationActionResponse>>
+
+    @POST("conversations/{conversationId}/unarchive")
+    suspend fun unarchiveConversation(
+        @Path("conversationId") conversationId: String,
+    ): Response<ApiEnvelope<ConversationActionResponse>>
 
     @GET("conversations/{conversationId}/messages")
     suspend fun getMessages(@Path("conversationId") conversationId: String): Response<ApiEnvelope<List<MessageDto>>>

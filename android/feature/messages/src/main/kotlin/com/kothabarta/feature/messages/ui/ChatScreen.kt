@@ -1,12 +1,5 @@
 package com.kothabarta.feature.messages.ui
 
-import android.Manifest
-import android.media.MediaRecorder
-import android.net.Uri
-import android.os.Build
-import android.provider.OpenableColumns
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,13 +8,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -34,7 +27,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -48,13 +40,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,11 +59,13 @@ import com.kothabarta.core.ui.components.EmptyState
 import com.kothabarta.core.ui.components.FullScreenError
 import com.kothabarta.core.ui.components.FullScreenLoading
 import com.kothabarta.core.ui.theme.Spacing
+import com.kothabarta.core.websocket.SocketConnectionState
+import com.kothabarta.core.websocket.SocketManager
 import kotlinx.coroutines.launch
-import java.io.File
-import java.io.IOException
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -97,14 +90,13 @@ fun ChatScreen(
     val state by viewModel.uiState.collectAsState()
     val chatPalette = chatPalette()
     val callLauncher = koinInject<CallLauncher>()
-    val context = LocalContext.current
+    val socketManager = koinInject<SocketManager>()
+    val connectionState by socketManager.connectionState.collectAsState()
     val listState = rememberLazyListState()
     val displayMessages = remember(state.messages) { state.messages.asReversed() }
     val coroutineScope = rememberCoroutineScope()
     var showEmojiPicker by remember { mutableStateOf(false) }
-    var voiceRecorder by remember { mutableStateOf<MediaRecorder?>(null) }
-    var voiceRecordingFile by remember { mutableStateOf<File?>(null) }
-    var voiceRecordingError by remember { mutableStateOf<String?>(null) }
+    var mediaSharingMessage by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(state.isLoading, targetMessageId, state.messages) {
         if (state.isLoading || targetMessageId.isNullOrBlank()) return@LaunchedEffect
@@ -128,102 +120,6 @@ fun ChatScreen(
         if (isNearBottom) newMessageBannerVisible = false
     }
 
-    val attachmentPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        coroutineScope.launch {
-            val resolver = context.contentResolver
-            val mimeType = resolver.getType(uri) ?: "application/octet-stream"
-            val fileName = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-                ?.use { cursor ->
-                    if (cursor.moveToFirst()) cursor.getString(0) else null
-                }
-                ?: uri.lastPathSegment?.substringAfterLast('/')?.takeIf(String::isNotBlank)
-                ?: "attachment"
-            val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: return@launch
-            viewModel.sendAttachment(bytes, fileName, mimeType)
-        }
-    }
-
-    fun startVoiceRecording() {
-        val file = try {
-            File.createTempFile("voice-note-", ".m4a", context.cacheDir)
-        } catch (error: IOException) {
-            voiceRecordingError = "Couldn't prepare voice recording."
-            return
-        }
-        @Suppress("DEPRECATION")
-        val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            MediaRecorder(context)
-        } else {
-            MediaRecorder()
-        }
-        try {
-            recorder.setAudioSource(MediaRecorder.AudioSource.MIC)
-            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            recorder.setOutputFile(file.absolutePath)
-            recorder.prepare()
-            recorder.start()
-            voiceRecordingFile = file
-            voiceRecorder = recorder
-            voiceRecordingError = null
-        } catch (error: IOException) {
-            recorder.release()
-            file.delete()
-            voiceRecordingError = "Couldn't start voice recording."
-        } catch (error: IllegalStateException) {
-            recorder.release()
-            file.delete()
-            voiceRecordingError = "Couldn't start voice recording."
-        } catch (error: SecurityException) {
-            recorder.release()
-            file.delete()
-            voiceRecordingError = "Microphone permission is required to record a voice message."
-        }
-    }
-
-    fun stopAndSendVoice() {
-        val recorder = voiceRecorder ?: return
-        val file = voiceRecordingFile
-        try {
-            recorder.stop()
-            recorder.release()
-            voiceRecorder = null
-            voiceRecordingFile = null
-            if (file != null && file.exists() && file.length() > 0) {
-                viewModel.sendAttachment(file.readBytes(), "voice-note.m4a", "audio/mp4")
-            }
-            file?.delete()
-            voiceRecordingError = null
-        } catch (error: IllegalStateException) {
-            recorder.release()
-            voiceRecorder = null
-            voiceRecordingFile = null
-            file?.delete()
-            voiceRecordingError = "Voice recording was too short. Please try again."
-        } catch (error: IOException) {
-            recorder.release()
-            voiceRecorder = null
-            voiceRecordingFile = null
-            file?.delete()
-            voiceRecordingError = "Couldn't read the recorded voice message."
-        }
-    }
-
-    val microphonePermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        if (granted) startVoiceRecording()
-        else voiceRecordingError = "Microphone permission is required to record a voice message."
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            voiceRecorder?.release()
-            voiceRecordingFile?.delete()
-        }
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -242,6 +138,23 @@ fun ChatScreen(
                 onAudioCall = { peerId?.let { callLauncher.startCall(it, peerName.orEmpty(), peerAvatarUrl, false) } },
                 onVideoCall = { peerId?.let { callLauncher.startCall(it, peerName.orEmpty(), peerAvatarUrl, true) } },
             )
+
+            if (connectionState == SocketConnectionState.DISCONNECTED) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Spacing.md, vertical = Spacing.xs),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(14.dp),
+                ) {
+                    Text(
+                        text = "Live updates are disconnected",
+                        modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
 
             if (targetMessageMissing) {
                 Text(
@@ -276,25 +189,32 @@ fun ChatScreen(
                             val olderMessage = displayMessages.getOrNull(index + 1)
                             val groupedWithNewer = newerMessage?.let { messagesBelongToSameGroup(message, it) } == true
                             val groupedWithOlder = olderMessage?.let { messagesBelongToSameGroup(message, it) } == true
-                            MessageBubble(
-                                message = message,
-                                isOwn = message.senderId == state.myUserId,
-                                isPending = message.id in state.pendingIds,
-                                isFailed = message.id in state.failedIds,
-                                onReply = { viewModel.setReplyTarget(message) },
-                                onReact = { emoji -> viewModel.react(message.id, emoji) },
-                                onUnsend = { viewModel.unsend(message.id) },
-                                onDeleteForMe = { viewModel.deleteForMe(message.id) },
-                                onRetry = { viewModel.retrySend(message.id) },
-                                onDiscard = { viewModel.discardFailed(message.id) },
-                                modifier = Modifier.padding(
-                                    vertical = if (groupedWithNewer || groupedWithOlder) 0.dp else 2.dp,
-                                ),
-                                decryptionState = state.decryptionStates[message.id],
-                                palette = chatPalette,
-                                groupedWithNewer = groupedWithNewer,
-                                groupedWithOlder = groupedWithOlder,
-                            )
+                            Column {
+                                val messageDate = messageLocalDate(message.createdAt)
+                                val olderDate = olderMessage?.let { messageLocalDate(it.createdAt) }
+                                if (messageDate != null && (olderMessage == null || messageDate != olderDate)) {
+                                    DateSeparator(messageDate)
+                                }
+                                MessageBubble(
+                                    message = message,
+                                    isOwn = message.senderId == state.myUserId,
+                                    isPending = message.id in state.pendingIds,
+                                    isFailed = message.id in state.failedIds,
+                                    onReply = { viewModel.setReplyTarget(message) },
+                                    onReact = { emoji -> viewModel.react(message.id, emoji) },
+                                    onUnsend = { viewModel.unsend(message.id) },
+                                    onDeleteForMe = { viewModel.deleteForMe(message.id) },
+                                    onRetry = { viewModel.retrySend(message.id) },
+                                    onDiscard = { viewModel.discardFailed(message.id) },
+                                    modifier = Modifier.padding(
+                                        vertical = if (groupedWithNewer || groupedWithOlder) 0.dp else 2.dp,
+                                    ),
+                                    decryptionState = state.decryptionStates[message.id],
+                                    palette = chatPalette,
+                                    groupedWithNewer = groupedWithNewer,
+                                    groupedWithOlder = groupedWithOlder,
+                                )
+                            }
                         }
                     }
                 }
@@ -317,24 +237,39 @@ fun ChatScreen(
             }
 
             state.replyingTo?.let { reply ->
-                Row(
+                Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = Spacing.md),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                        .padding(horizontal = Spacing.md, vertical = Spacing.xs),
+                    color = chatPalette.header,
+                    shape = RoundedCornerShape(16.dp),
                 ) {
-                    Text(
-                        "Replying to: ${if (reply.encrypted) "Encrypted message" else reply.body.orEmpty()}",
-                        style = MaterialTheme.typography.labelMedium,
-                        maxLines = 1,
-                    )
-                    TextButton(onClick = { viewModel.setReplyTarget(null) }) { Text("Cancel") }
+                    Row(
+                        modifier = Modifier.padding(start = Spacing.md, end = Spacing.xs),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(vertical = Spacing.sm)) {
+                            Text(
+                                "Replying to message",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = chatPalette.primaryText,
+                            )
+                            Text(
+                                if (reply.encrypted) "🔒 Encrypted message" else reply.body.orEmpty(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = chatPalette.secondaryText,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        TextButton(onClick = { viewModel.setReplyTarget(null) }) { Text("Cancel") }
+                    }
                 }
             }
 
-            voiceRecordingError?.let { error ->
+            mediaSharingMessage?.let { message ->
                 Text(
-                    text = error,
+                    text = message,
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs),
@@ -345,23 +280,24 @@ fun ChatScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
-                shape = RoundedCornerShape(28.dp),
+                shape = RoundedCornerShape(24.dp),
                 color = chatPalette.header,
+                tonalElevation = 2.dp,
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 2.dp, vertical = 2.dp),
+                        .padding(horizontal = 4.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(48.dp)
                             .clickable(
                                 role = Role.Button,
-                                onClick = { attachmentPicker.launch("*/*") },
+                                onClick = { mediaSharingMessage = MEDIA_SHARING_UNAVAILABLE_MESSAGE },
                             )
-                            .semantics { contentDescription = "Attach a file" },
+                            .semantics { contentDescription = "Attachments unavailable until secure media sharing is supported" },
                         contentAlignment = Alignment.Center,
                     ) {
                         AppIcon(
@@ -375,7 +311,7 @@ fun ChatScreen(
                     Box {
                         Box(
                             modifier = Modifier
-                                .size(44.dp)
+                                .size(48.dp)
                                 .clickable(
                                     role = Role.Button,
                                     onClick = { showEmojiPicker = true },
@@ -430,46 +366,37 @@ fun ChatScreen(
                         BasicTextField(
                             value = state.composerText,
                             onValueChange = viewModel::onComposerTextChange,
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            enabled = voiceRecorder == null,
-                            textStyle = TextStyle(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 24.dp, max = 120.dp),
+                                    maxLines = 5,
+                                textStyle = TextStyle(
                                 color = chatPalette.primaryText,
                                 fontSize = 16.sp,
-                            ),
-                            cursorBrush = SolidColor(chatPalette.online),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                            keyboardActions = KeyboardActions(onSend = { viewModel.sendText() }),
+                                    lineHeight = 22.sp,
+                                ),
+                                cursorBrush = SolidColor(chatPalette.online),
+                                keyboardOptions = KeyboardOptions.Default,
                         )
                     }
 
                     val hasMessage = state.composerText.isNotBlank()
                     Box(
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(48.dp)
                             .then(
                                 if (hasMessage) Modifier
                                     .background(chatPalette.outgoingBubble, CircleShape)
                                     .clickable(onClick = viewModel::sendText)
-                                else if (voiceRecorder != null) Modifier
-                                    .background(MaterialTheme.colorScheme.error, CircleShape)
-                                    .clickable(onClick = ::stopAndSendVoice)
                                 else Modifier.clickable {
-                                    if (
-                                        context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
-                                        android.content.pm.PackageManager.PERMISSION_GRANTED
-                                    ) {
-                                        startVoiceRecording()
-                                    } else {
-                                        microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
-                                    }
+                                    mediaSharingMessage = MEDIA_SHARING_UNAVAILABLE_MESSAGE
                                 },
                             )
                             .semantics {
+                                role = Role.Button
                                 contentDescription = when {
                                     hasMessage -> "Send message"
-                                    voiceRecorder != null -> "Send voice message"
-                                    else -> "Record a voice message"
+                                    else -> "Voice messages unavailable until secure media sharing is supported"
                                 }
                             },
                         contentAlignment = Alignment.Center,
@@ -477,12 +404,11 @@ fun ChatScreen(
                         AppIcon(
                             symbol = when {
                                 hasMessage -> AppSymbol.SEND
-                                voiceRecorder != null -> AppSymbol.MIC_OFF
                                 else -> AppSymbol.MIC
                             },
                             contentDescription = null,
                             modifier = Modifier.size(24.dp),
-                            tint = if (hasMessage || voiceRecorder != null) Color.White else chatPalette.primaryText,
+                            tint = if (hasMessage) Color.White else chatPalette.primaryText,
                         )
                     }
                 }
@@ -593,6 +519,38 @@ private fun ChatHeader(
             }
         }
     }
+}
+
+private fun messageLocalDate(createdAt: String): LocalDate? = runCatching {
+    Instant.parse(createdAt).atZone(ZoneId.systemDefault()).toLocalDate()
+}.getOrNull()
+
+@Composable
+private fun DateSeparator(date: LocalDate) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = Spacing.sm),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = CircleShape,
+        ) {
+            Text(
+                text = formatMessageDate(date),
+                modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+internal fun formatMessageDate(date: LocalDate, today: LocalDate = LocalDate.now()): String = when (date) {
+    today -> "Today"
+    today.minusDays(1) -> "Yesterday"
+    else -> date.format(DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.getDefault()))
 }
 
 internal fun formatLastSeenForChat(lastSeenAt: String?, now: ZonedDateTime = ZonedDateTime.now()): String? {
